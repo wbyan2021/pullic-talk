@@ -1,0 +1,16 @@
+{
+  "name": "ai-ops-deck",
+  "version": "2.0.0",
+  "description": "AI·OPS DECK — 桌面 AI 工具控制中心：工具清单 / 一键启动 / 内嵌终端 / 多 AI 群聊",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "scan": "node scripts/scan-tools.js",
+    "postinstall": "node scripts/fix-node-pty.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "node-pty": "^1.1.0",
+    "ws": "^8.21.1"
+  }
+}

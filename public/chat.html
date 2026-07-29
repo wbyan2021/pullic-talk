@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>AI 群聊</title>
+  <link id="hljs-theme" rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css">
+  <link rel="stylesheet" href="/css/chat.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
+</head>
+<body>
+
+<div id="sidebar-overlay" onclick="toggleSidebar()"></div>
+<div id="sidebar">
+  <div class="sidebar-header">
+    <span>📋 历史会话</span>
+    <button onclick="toggleSidebar()">✕</button>
+  </div>
+  <div id="history-list"></div>
+  <div class="sidebar-footer">
+    <button onclick="newSession()">+ 新建会话</button>
+    <button onclick="exportSession()" title="导出当前会话为 Markdown">⬇ 导出</button>
+  </div>
+</div>
+
+<div id="main">
+  <header>
+    <div class="logo">
+      <span class="logo-icon" onclick="toggleSidebar()">☰</span>
+      <span class="logo-icon" onclick="toggleTheme()" title="切换主题">🌓</span>
+      <span id="logo-text">🤖 AI 群聊</span>
+    </div>
+    <div class="controls">
+      <div class="selector">
+        <label>🔀</label>
+        <select id="mode-select" onchange="changeMode(this.value)">
+          <option value="parallel">并行</option>
+          <option value="collaborate">协作</option>
+        </select>
+      </div>
+      <div class="selector">
+        <label>🧠</label>
+        <select id="thinking-mode" onchange="changeThinking(this.value)">
+          <option value="off">关闭</option>
+          <option value="low">低</option>
+          <option value="medium">中</option>
+          <option value="high">高</option>
+          <option value="max">最大</option>
+        </select>
+      </div>
+      <div class="selector">
+        <label>🔁</label>
+        <select id="rounds-select" onchange="changeRounds(this.value)">
+          <option value="1">1 轮</option>
+          <option value="2">2 轮</option>
+          <option value="3">3 轮</option>
+          <option value="4">4 轮</option>
+          <option value="5">5 轮</option>
+        </select>
+      </div>
+      <div id="agent-toggles" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+  </header>
+
+  <div id="messages">
+    <div id="welcome"></div>
+  </div>
+
+  <div class="input-bar">
+    <div class="status-bar" id="status-bar"></div>
+    <div class="input-wrap">
+      <textarea id="input" rows="1" placeholder="输入消息… @ 可定向发言，Shift+Enter 换行"></textarea>
+      <button id="send" onclick="sendMessage()">发送</button>
+      <button id="stop" onclick="stopGeneration()">⏹ 停止</button>
+    </div>
+  </div>
+</div>
+
+<div id="mention-popup"></div>
+
+<script src="/js/chat.js"></script>
+
+</body>
+</html>

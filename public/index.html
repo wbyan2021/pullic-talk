@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI·OPS DECK — 工具控制中心</title>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=jetbrains-mono@400,500,600&f[]=switzer@400,500&display=swap">
+<link rel="stylesheet" href="/css/index.css">
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="brand">
+    <div class="mark">◉</div>
+    <div class="txt">
+      <div class="name">AI·<b>OPS</b></div>
+      <div class="sub">tool control deck</div>
+    </div>
+  </div>
+
+  <div id="search">
+    <span class="ic">⌕</span>
+    <input id="search-input" type="text" placeholder="搜索工具 / 命令…" autocomplete="off" spellcheck="false">
+    <span class="kbd">/</span>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="leds" id="leds"></div>
+  <div id="clock">--:--:--</div>
+  <button id="procs-btn" class="icon-btn hide" onclick="togglePopover(event)">▤ 后台 <span class="badge" id="procs-badge">0</span></button>
+  <button class="term-btn" id="term-btn" title="打开全屏终端 ( ` )" onclick="openTerminal()">▸_ 终端</button>
+  <button class="icon-btn" id="scan-btn" title="重新扫描本机工具" onclick="rescan()">⟳</button>
+  <button class="icon-btn" id="theme-btn" title="切换主题" onclick="toggleTheme()">◐</button>
+</div>
+
+<!-- SUB BAR -->
+<div id="subbar">
+  <div class="tabs">
+    <button class="tab active" data-view="console" onclick="switchView('console')"><span class="g">⊞</span> 控制台</button>
+    <button class="tab" data-view="chat" onclick="switchView('chat')"><span class="g">◧</span> 群聊</button>
+  </div>
+  <div class="filters" id="filters"></div>
+</div>
+
+<!-- VIEWS -->
+<div id="views">
+  <div class="view active" id="console-view">
+    <div id="launchpad-wrap">
+      <div id="launchpad"></div>
+      <div id="empty">
+        <div class="big">没有匹配的工具</div>
+        <div>换个关键词，或按 <span class="mono">⟳</span> 重新扫描本机</div>
+      </div>
+    </div>
+  </div>
+  <div class="view" id="chat-view">
+    <iframe id="chat-frame" data-src="/chat" title="AI 群聊"></iframe>
+  </div>
+</div>
+
+<!-- POPOVER -->
+<div id="popover">
+  <div class="ph">后台进程</div>
+  <div class="plist" id="plist"></div>
+</div>
+
+<div id="toast"></div>
+
+<script src="/js/index.js"></script>
+</body>
+</html>

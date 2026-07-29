@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terminal — AI·OPS DECK</title>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=jetbrains-mono@400,500,600&f[]=switzer@400,500&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+<link rel="stylesheet" href="/css/terminal.css">
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.js"></script>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── 顶栏 ── -->
+  <header id="bar">
+    <a class="brand" href="/" title="返回控制台">
+      <span class="mark">◉</span>
+      <span class="txt">
+        <span class="name">AI·<b>OPS</b></span>
+        <span class="sub">terminal</span>
+      </span>
+    </a>
+
+    <div class="sep"></div>
+
+    <div class="stat" id="conn" data-state="connecting">
+      <span class="led"></span><span id="conn-label">连接中</span>
+    </div>
+
+    <div class="badge" id="shell-badge" title="Shell 进程">zsh</div>
+    <div class="badge dim" id="pid-badge" title="进程 PID">pid —</div>
+
+    <div class="spacer"></div>
+
+    <div class="meta" id="dims">—×—</div>
+    <div class="meta" id="uptime" title="会话时长">⏱ 00:00</div>
+    <div class="meta" id="clock">--:--:--</div>
+  </header>
+
+  <!-- ── 终端主体 ── -->
+  <main id="stage">
+    <div id="term"></div>
+
+    <!-- 覆盖层：连接中 / 会话结束 -->
+    <div id="overlay">
+      <div class="ov-card">
+        <div class="ov-icon" id="ov-icon">◉</div>
+        <div class="ov-title" id="ov-title">正在建立终端会话…</div>
+        <div class="ov-sub" id="ov-sub">连接到本地 shell</div>
+        <button class="ov-btn" id="ov-btn" onclick="restart()">重 启 会 话</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── 底部状态栏 ── -->
+  <footer id="status">
+    <div class="mode" id="mode">SHELL</div>
+    <div class="cwd" id="cwd">~</div>
+
+    <div class="spacer"></div>
+
+    <div class="acts">
+      <button class="act" onclick="zoom(-1)" title="缩小字号 (⌘-)">A−</button>
+      <button class="act" onclick="zoom(1)" title="放大字号 (⌘+)">A＋</button>
+      <button class="act" onclick="copyAll()" title="复制全部">⧉ 复制</button>
+      <button class="act" onclick="clearTerm()" title="清屏 (⌘K)">⌫ 清屏</button>
+      <button class="act warn" onclick="restart()" title="重启会话 (⌘R)">⟳ 重启</button>
+    </div>
+
+    <div class="hints">
+      <span><kbd>⌘K</kbd> 清屏</span>
+      <span><kbd>⌘R</kbd> 重启</span>
+      <span><kbd>⌘±</kbd> 字号</span>
+    </div>
+  </footer>
+
+</div>
+
+<div id="toast"></div>
+
+<script src="/js/terminal.js"></script>
+</body>
+</html>
