@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "scan": "node scripts/scan-tools.js",
+    "setup": "bash scripts/setup.sh",
     "postinstall": "node scripts/fix-node-pty.js"
   },
   "dependencies": {

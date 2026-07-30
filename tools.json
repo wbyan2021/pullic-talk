@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-07-30T10:04:26.349Z",
+  "updatedAt": "2026-07-30T10:25:23.127Z",
   "services": {
     "ollama": {
       "port": 11434,
