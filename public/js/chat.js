@@ -298,7 +298,9 @@
     // 按长度降序，避免短 key 优先误匹配（如 open vs opencode）
     const agentKeys = Object.keys(AGENT_INFO).filter(k => k !== "user").sort((a, b) => b.length - a.length);
     if (agentKeys.length === 0) return { cleaned: text.trim(), targets: [] };
-    const pattern = new RegExp(`@(${agentKeys.join("|")}|all)(?![a-z0-9_-])`, "gi");
+    // key 需转义后再拼正则，避免含特殊字符（如 . + ）时匹配错乱
+    const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`@(${agentKeys.map(escRe).join("|")}|all)(?![a-z0-9_-])`, "gi");
     const cleaned = text.replace(pattern, (m, name) => {
       mentions.push(name.toLowerCase());
       return "";

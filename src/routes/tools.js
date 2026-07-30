@@ -41,11 +41,18 @@ export default function toolsRoutes(app) {
   app.post("/api/tools/scan", (req, res) => {
     const proc = spawn("node", [join(ROOT, "scripts", "scan-tools.js")], { cwd: ROOT });
     let out = "", err = "";
+    // 超时保护：脚本挂起时杀掉，避免请求永远挂起
+    const killer = setTimeout(() => {
+      try { proc.kill("SIGTERM"); } catch {}
+    }, 90_000);
     proc.stdout.on("data", (d) => (out += d));
     proc.stderr.on("data", (d) => (err += d));
     proc.on("close", (code) => {
+      clearTimeout(killer);
       if (code === 0) res.json({ ok: true, output: out });
-      else res.status(500).json({ ok: false, output: out, error: err });
+      else res.status(500).json({ ok: false, output: out, error: err || `扫描进程退出码 ${code}（可能超时）` });
     });
+    // 客户端断开时杀掉扫描进程
+    res.on("close", () => { if (!res.writableEnded) { clearTimeout(killer); try { proc.kill("SIGTERM"); } catch {} } });
   });
 }

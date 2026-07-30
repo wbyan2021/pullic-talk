@@ -44,7 +44,7 @@ const CATALOG = [
     detect: { commands: ["pi"] },
     launch: { type: "terminal", command: "pi" },
     quickActions: [
-      { label: "pi --web", command: "pi --web", openUrl: "http://localhost:4321", openDelay: 2500 },
+      { label: "pi --web", command: "pi --web", openUrl: "http://127.0.0.1:8192/", openDelay: 2500 },
     ],
   },
   {

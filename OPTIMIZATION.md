@@ -88,7 +88,24 @@
 
 ---
 
-## 六、使用提示
+## 六、Bug 修复与加固 · 2026-07-30
+
+| 问题 | 修复 |
+|---|---|
+| 首次打开聊天页欢迎屏不渲染（chat.html 预置空 `#welcome` div，`showWelcome()` 误判已存在直接 return） | 移除空占位 div |
+| 危险命令规则 `\bformat\b` 误杀 `npm run format` / `prettier`（macOS 无 format 危险命令） | 移除该规则，改加 `diskutil erase`、`shutdown`、`reboot`、`> /dev/disk` 等 macOS 真实危险模式 |
+| `/api/launch` app 名以 `-` 开头可被解析为 open 的额外参数 | 校验拦截 |
+| 端口占用时 WSS 转发 error 事件无人监听，进程崩溃且看不到友好提示 | `wss.on("error", ()=>{})`，恢复 EADDRINUSE 友好提示 |
+| CLI 输出无上限，失控进程可撑爆内存 | 单进程 stdout 上限 512KB（超限截断+SIGTERM），stderr 上限 64KB |
+| 速率限制 Map 只增不减（内存泄漏） | 每分钟定期清理过期条目 |
+| `/api/tools/scan` 无超时，脚本挂起则请求永远挂起 | 90s 超时杀进程 + 客户端断开联动终止 |
+| run-debate.js 报错提示 `node server.js`（入口实为 src/server.js） | 改为 `npm start` |
+| @mention 正则直接拼接 agent key，含特殊字符会匹配错乱 | key 转义后再拼正则 |
+| 终端页 copyAll 死代码、控制台 activeElement 空值风险 | 清理 / 可选链防护 |
+
+---
+
+## 七、使用提示
 
 - 启动：`npm start`（或 `PORT=8080 node server.js` 换端口）
 - 运行辩论：`node run-debate.js`（需先启动 server；结果存于 `debates/`）

@@ -26,7 +26,7 @@ async function checkServer() {
     return data.agents || [];
   } catch {
     console.error(`\n❌ 无法连接服务器 ${SERVER}`);
-    console.error(`   请先运行: node server.js\n`);
+    console.error(`   请先运行: npm start  （或 node src/server.js）\n`);
     process.exit(1);
   }
 }

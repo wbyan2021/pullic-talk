@@ -38,6 +38,13 @@ app.use((req, res, next) => {
 
 // 简易速率限制：每 IP 每分钟最多 200 次请求
 const _rateLimitMap = new Map();
+// 定期清理过期条目，防止 Map 无界增长（内存泄漏）
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of _rateLimitMap) {
+    if (now - entry.start > 60_000) _rateLimitMap.delete(ip);
+  }
+}, 60_000).unref();
 app.use((req, res, next) => {
   const ip = req.ip;
   const now = Date.now();
@@ -137,6 +144,9 @@ const wss = new WebSocketServer({ server, path: "/ws/terminal", verifyClient: (i
   cb(ok, ok ? undefined : 403, "Forbidden");
 }});
 setupTerminal(wss);
+// WSS 会把 HTTP server 的 error（如 EADDRINUSE）转发为自身 error，
+// 没有监听者会 crash 并掩盖下面 server.on("error") 的友好提示
+wss.on("error", () => {});
 
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {

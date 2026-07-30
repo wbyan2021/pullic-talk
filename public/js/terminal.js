@@ -160,10 +160,7 @@ function zoom(dir){
 }
 
 function copyAll(){
-  const text = term.buffer.active.getLine(0)
-    ? term.getSelection() || term.buffer.active.translateToString(true)
-    : term.getSelection();
-  // 汇总全部滚动缓冲
+  // 有选中内容复制选中，否则汇总全部滚动缓冲
   let all = "";
   const buf = term.buffer.active;
   for (let i = 0; i <= buf.cursorY + buf.baseY; i++){

@@ -64,9 +64,8 @@
     </div>
   </header>
 
-  <div id="messages">
-    <div id="welcome"></div>
-  </div>
+  <!-- 注意：不要预置空的 #welcome 占位 div，否则 showWelcome() 会因检测到已存在而跳过渲染 -->
+  <div id="messages"></div>
 
   <div class="input-bar">
     <div class="status-bar" id="status-bar"></div>

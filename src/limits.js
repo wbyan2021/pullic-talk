@@ -12,3 +12,6 @@ export const LIMITS = {
 
 export const VALID_THINKING = new Set(["off", "low", "medium", "high", "max"]);
 export const VALID_MODES = new Set(["parallel", "collaborate"]);
+
+// 单个 CLI 进程输出上限（防失控进程撑爆内存）
+export const MAX_OUTPUT_BYTES = 512 * 1024; // 512 KB

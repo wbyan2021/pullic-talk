@@ -176,13 +176,15 @@ document.addEventListener("click", e=>{ if(!$("#popover").contains(e.target) && 
 
 /* ---------- 扫描 ---------- */
 async function rescan(){
-  const b = $("#scan-btn"); b.classList.add("spin"); toast("正在扫描本机工具…");
+  const b = $("#scan-btn"); const mb = $("#scan-main-btn");
+  b && b.classList.add("spin"); mb && mb.classList.add("spin");
+  toast("正在扫描本机工具…");
   try {
     const r = await fetch("/api/tools/scan",{method:"POST"}); const d = await r.json();
     if (!d.ok) throw new Error(d.error||"扫描失败");
     await loadTools(); toast("扫描完成");
   } catch(e){ toast("扫描失败: "+e.message, true); }
-  finally { b.classList.remove("spin"); }
+  finally { b && b.classList.remove("spin"); mb && mb.classList.remove("spin"); }
 }
 
 /* ---------- Toast ---------- */
@@ -197,10 +199,10 @@ function toast(msg, err=false){
 /* ---------- 搜索 & 快捷键 ---------- */
 $("#search-input").addEventListener("input", e=>{ state.query = e.target.value.trim(); renderGrid(); });
 document.addEventListener("keydown", e=>{
-  const typing = /INPUT|TEXTAREA/.test(document.activeElement.tagName);
+  const typing = /INPUT|TEXTAREA/.test(document.activeElement?.tagName || "");
   if (e.key==="/" && !typing){ e.preventDefault(); $("#search-input").focus(); }
   else if (e.key==="`" && !typing){ e.preventDefault(); openTerminal(); }
-  else if (e.key==="Escape"){ if(typing){ document.activeElement.blur(); state.query=""; $("#search-input").value=""; renderGrid(); } $("#popover").classList.remove("show"); }
+  else if (e.key==="Escape"){ if(typing){ document.activeElement?.blur(); state.query=""; $("#search-input").value=""; renderGrid(); } $("#popover").classList.remove("show"); }
 });
 
 /* ---------- 启动 ---------- */

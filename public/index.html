@@ -48,6 +48,13 @@
 <div id="views">
   <div class="view active" id="console-view">
     <div id="launchpad-wrap">
+      <div id="scan-bar">
+        <div class="sb-left">
+          <span class="sb-ic">⟳</span>
+          <span class="sb-txt">发现新工具没显示？点击右侧按钮重新扫描本机</span>
+        </div>
+        <button id="scan-main-btn" onclick="rescan()">⟳ 重新扫描</button>
+      </div>
       <div id="launchpad"></div>
       <div id="empty">
         <div class="big">没有匹配的工具</div>

@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
 import { AGENTS } from "./config.js";
-import { LIMITS, VALID_THINKING, VALID_MODES } from "./limits.js";
+import { LIMITS, VALID_THINKING, VALID_MODES, MAX_OUTPUT_BYTES } from "./limits.js";
 import { activeProcs } from "./utils/process-registry.js";
 import { log } from "./utils/log.js";
 
@@ -53,6 +53,16 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
     let fullText = "";
     let stderrText = "";
     let timedOut = false;
+    let outputExceeded = false;
+
+    // 输出超过上限时截断，并杀进程防内存爆炸
+    const trackOutput = (s) => {
+      if (fullText.length + buffer.length > MAX_OUTPUT_BYTES && !outputExceeded) {
+        outputExceeded = true;
+        log(`⚠️ ${agentKey} 输出超过 ${MAX_OUTPUT_BYTES / 1024}KB，已截断并终止`);
+        try { proc.kill("SIGTERM"); } catch {}
+      }
+    };
 
     const timeoutMs = cli.timeoutMs || LIMITS.procTimeoutMs;
     const killer = setTimeout(() => {
@@ -78,6 +88,7 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
 
     proc.stdout.on("data", (data) => {
       const raw = data.toString();
+      trackOutput(raw);
       switch (cli.parseMode) {
         case "ndjson":
           buffer += raw;
@@ -95,7 +106,10 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
       }
     });
 
-    proc.stderr.on("data", (data) => { stderrText += data.toString(); });
+    proc.stderr.on("data", (data) => {
+      // stderr 同样截断，避免无界增长
+      if (stderrText.length < 64 * 1024) stderrText += data.toString();
+    });
 
     proc.on("close", () => {
       clearTimeout(killer);
@@ -114,7 +128,10 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
           else { onChunk(`⚠️ ${agent.name} 错误: ${stderrText.slice(0, 200)}\n`); resolve(""); }
         }
       } else {
-        if (timedOut && !fullText) {
+        if (outputExceeded) {
+          onChunk(`\n⚠️ 输出过长，已截断\n`);
+          fullText += "\n\n（输出过长已截断）";
+        } else if (timedOut && !fullText) {
           onChunk(`⚠️ ${agent.name} 响应超时（${timeoutMs / 1000}s）\n`);
         } else if (!fullText && stderrText) {
           onChunk(`⚠️ ${agent.name} 错误: ${stderrText.slice(0, 200)}\n`);

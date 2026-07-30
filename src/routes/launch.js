@@ -4,7 +4,9 @@ import { bgProcs, nextBgId } from "../utils/process-registry.js";
 import { log } from "../utils/log.js";
 
 // 危险命令模式：阻止可能造成不可逆损害的操作
-const DANGEROUS_PATTERNS = [/\brm\s+-rf\b/, /\bmkfs\b/, /\bdd\s+if=/, /\bformat\b/, />\s*\/dev\/sda/];
+// 注意：不要加 \bformat\b 之类的宽泛词 —— 会误杀 npm run format / prettier 等正常命令
+// （format 是 Windows cmd 的命令，macOS 上不存在该危险命令）
+const DANGEROUS_PATTERNS = [/\brm\s+-rf\b/, /\bmkfs\b/, /\bdd\s+if=/, />\s*\/dev\/(sda|disk)/, /\bdiskutil\s+(erase|partition|apfs\s+delete)/, /\bshutdown\b/, /\breboot\b/];
 
 export default function launchRoutes(app) {
   // 启动: app(打开桌面应用) / command(后台运行命令)
@@ -13,6 +15,8 @@ export default function launchRoutes(app) {
 
     if (type === "app") {
       if (typeof appName !== "string" || !appName.trim()) return res.status(400).json({ error: "app 名称不能为空" });
+      // 防止以 - 开头的名称被 open 解析为额外参数
+      if (appName.trim().startsWith("-")) return res.status(400).json({ error: "app 名称非法" });
       try {
         const p = spawn("open", ["-a", appName.trim()], { stdio: "ignore" });
         p.on("error", (e) => log(`⚠️ 打开 ${appName} 失败: ${e.message}`));
