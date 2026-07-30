@@ -112,12 +112,28 @@ const CATALOG = [
     launch: { type: "terminal", command: "goose" },
   },
   {
-    id: "qoder", name: "Qoder", kind: "cli", category: "agent",
+    id: "qoder", name: "Qoder", kind: "app", category: "editor",
     icon: "Q", color: "#6366f1",
-    description: "AI 编码代理",
-    tags: ["coding", "agent"],
-    detect: { commands: ["qoder"] },
-    launch: { type: "terminal", command: "qoder" },
+    description: "AI 编码 IDE",
+    tags: ["editor", "ai", "ide"],
+    detect: { apps: ["Qoder.app"], commands: ["qoder"] },
+    launch: { type: "app", app: "Qoder" },
+  },
+  {
+    id: "marvis", name: "Marvis", kind: "app", category: "chat",
+    icon: "🎙", color: "#f43f5e",
+    description: "AI 语音助手",
+    tags: ["chat", "voice", "ai"],
+    detect: { apps: ["Marvis.app"] },
+    launch: { type: "app", app: "Marvis" },
+  },
+  {
+    id: "workbuddy", name: "WorkBuddy", kind: "app", category: "utility",
+    icon: "🤝", color: "#0ea5e9",
+    description: "AI 办公助手",
+    tags: ["utility", "ai", "productivity"],
+    detect: { apps: ["WorkBuddy.app"] },
+    launch: { type: "app", app: "WorkBuddy" },
   },
 
   // ── 本地模型 ──
@@ -433,11 +449,53 @@ async function main() {
 
   const catalogIds = new Set(CATALOG.map((c) => c.id));
   for (const t of oldTools) {
-    if (!catalogIds.has(t.id) && t.installed) {
-      // 用户手动添加的自定义工具，保留
-      tools.push(t);
-      console.log(`  ✓ ${t.name}  →  ${t.path || "(自定义)"}  [保留]`);
+    if (catalogIds.has(t.id)) continue;
+    if (t.autoDiscovered) continue; // 自动发现的不保留，重扫时重新判断
+    if (!t.installed) continue;
+    // 真正手动添加的自定义工具，保留
+    tools.push(t);
+    console.log(`  ✓ ${t.name}  →  ${t.path || "(自定义)"}  [保留]`);
+  }
+
+  // 5) 启发式发现：名字包含强 AI 特征词，且不在白名单、不在黑名单的 App
+  // 词边界匹配，避免 WeChat / Assistant / 智能客服 等误伤
+  const AI_HINT_RE = /(?:^|[\s_.\-])(AI|GPT|LLM|Copilot|Claude|Gemini|Doubao|Ollama|Anthropic|OpenAI|Marvis|WorkBuddy|Agent|Prompt|Cursor|Qoder|Trae)(?:$|[\s_.\-])/i;
+  const AI_BLACKLIST_RE = /(WeChat|Weixin|BaiduNetdisk|Synology|腾讯|微信|百度网盘|有赞)/i;
+  const catalogAppNames = new Set();
+  for (const c of CATALOG) for (const a of (c.detect?.apps || [])) catalogAppNames.add(a);
+  const userToolIds = new Set(tools.map((t) => t.id));
+
+  for (const appName of installedApps) {
+    if (catalogAppNames.has(appName)) continue;
+    if (AI_BLACKLIST_RE.test(appName)) continue;
+    if (!AI_HINT_RE.test(appName)) continue;
+    const displayName = appName.replace(/\.app$/, "");
+    const id = "auto-" + displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    if (userToolIds.has(id)) continue;
+
+    // 定位完整路径
+    let fullPath = null;
+    for (const dir of ["/Applications", join(process.env.HOME || "", "Applications")]) {
+      const full = join(dir, appName);
+      if (existsSync(full)) { fullPath = full; break; }
     }
+
+    tools.push({
+      id,
+      name: displayName,
+      kind: "app",
+      category: "chat",
+      icon: "◆",
+      color: "#94a3b8",
+      description: "自动发现的 AI 应用",
+      tags: ["auto-discovered", "ai"],
+      detect: { apps: [appName] },
+      launch: { type: "app", app: displayName },
+      installed: true,
+      path: fullPath,
+      autoDiscovered: true,
+    });
+    console.log(`  ✓ ${displayName}  →  ${fullPath}  [自动发现]`);
   }
 
   // 按分类排序

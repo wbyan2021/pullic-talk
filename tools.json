@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-07-30T10:25:23.127Z",
+  "updatedAt": "2026-07-30T10:30:58.660Z",
   "services": {
     "ollama": {
       "port": 11434,
@@ -283,6 +283,31 @@
       "path": "/Applications/Claude.app"
     },
     {
+      "id": "auto-claude-code-url-handler",
+      "name": "Claude Code URL Handler",
+      "kind": "app",
+      "category": "chat",
+      "icon": "◆",
+      "color": "#94a3b8",
+      "description": "自动发现的 AI 应用",
+      "tags": [
+        "auto-discovered",
+        "ai"
+      ],
+      "detect": {
+        "apps": [
+          "Claude Code URL Handler.app"
+        ]
+      },
+      "launch": {
+        "type": "app",
+        "app": "Claude Code URL Handler"
+      },
+      "installed": true,
+      "path": "/Users/bz01/Applications/Claude Code URL Handler.app",
+      "autoDiscovered": true
+    },
+    {
       "id": "copilot-app",
       "name": "GitHub Copilot",
       "kind": "app",
@@ -305,6 +330,31 @@
       },
       "installed": true,
       "path": "/Applications/GitHub Copilot.app"
+    },
+    {
+      "id": "marvis",
+      "name": "Marvis",
+      "kind": "app",
+      "category": "chat",
+      "icon": "🎙",
+      "color": "#f43f5e",
+      "description": "AI 语音助手",
+      "tags": [
+        "chat",
+        "voice",
+        "ai"
+      ],
+      "detect": {
+        "apps": [
+          "Marvis.app"
+        ]
+      },
+      "launch": {
+        "type": "app",
+        "app": "Marvis"
+      },
+      "installed": true,
+      "path": "/Applications/Marvis.app"
     },
     {
       "id": "minimax",
@@ -425,6 +475,34 @@
       "path": "/Applications/Obsidian.app"
     },
     {
+      "id": "qoder",
+      "name": "Qoder",
+      "kind": "app",
+      "category": "editor",
+      "icon": "Q",
+      "color": "#6366f1",
+      "description": "AI 编码 IDE",
+      "tags": [
+        "editor",
+        "ai",
+        "ide"
+      ],
+      "detect": {
+        "apps": [
+          "Qoder.app"
+        ],
+        "commands": [
+          "qoder"
+        ]
+      },
+      "launch": {
+        "type": "app",
+        "app": "Qoder"
+      },
+      "installed": true,
+      "path": "/Applications/Qoder.app"
+    },
+    {
       "id": "trae",
       "name": "Trae",
       "kind": "app",
@@ -521,6 +599,31 @@
       },
       "installed": true,
       "path": "/Library/Frameworks/Python.framework/Versions/3.13/bin/uv"
+    },
+    {
+      "id": "workbuddy",
+      "name": "WorkBuddy",
+      "kind": "app",
+      "category": "utility",
+      "icon": "🤝",
+      "color": "#0ea5e9",
+      "description": "AI 办公助手",
+      "tags": [
+        "utility",
+        "ai",
+        "productivity"
+      ],
+      "detect": {
+        "apps": [
+          "WorkBuddy.app"
+        ]
+      },
+      "launch": {
+        "type": "app",
+        "app": "WorkBuddy"
+      },
+      "installed": true,
+      "path": "/Applications/WorkBuddy.app"
     }
   ]
 }
