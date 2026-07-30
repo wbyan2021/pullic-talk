@@ -19,7 +19,7 @@ tick(); setInterval(tick, 1000);
 /* ---------- 数据加载 ---------- */
 async function loadTools(){
   try {
-    const r = await fetch("/api/tools"); const d = await r.json();
+    const r = await OPS.api("/api/tools"); const d = await r.json();
     state.tools = d.tools || []; state.services = d.services || {};
     renderLeds(); renderFilters(); renderGrid();
   } catch(e){ toast("加载工具失败: "+e.message, true); }
@@ -116,7 +116,7 @@ async function runAction(action, tool){
   // 桌面 App
   if (action.type==="app" || action.app){
     const app = action.app;
-    const r = await fetch("/api/launch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"app",app})});
+    const r = await OPS.api("/api/launch",{method:"POST",json:{type:"app",app}});
     const d = await r.json();
     if (d.ok) toast(`启动 ${app}`); else toast("失败: "+(d.error||""), true);
     return;
@@ -133,7 +133,7 @@ async function runAction(action, tool){
       }
     }
     if (action.background){
-      const r = await fetch("/api/launch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"command",command:action.command})});
+      const r = await OPS.api("/api/launch",{method:"POST",json:{type:"command",command:action.command}});
       const d = await r.json();
       if (d.ok){ toast(`后台运行 ${action.command}`); refreshProcs(); } else toast("失败: "+(d.error||""), true);
       if (action.openUrl) setTimeout(()=>window.open(action.openUrl,"_blank"), action.openDelay||2000);
@@ -168,14 +168,86 @@ function switchView(v){
   state.view = v;
   $$(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view===v));
   $("#console-view").classList.toggle("active", v==="console");
+  $("#install-view").classList.toggle("active", v==="install");
   $("#chat-view").classList.toggle("active", v==="chat");
+  if (v==="install") loadInstallCatalog();
   if (v==="chat"){ const f=$("#chat-frame"); if(!f.src) f.src = f.dataset.src; }
+}
+
+/* ---------- 快捷安装 ---------- */
+let installEntries = [];
+
+async function loadInstallCatalog(){
+  try {
+    const r = await OPS.api("/api/install/catalog");
+    const d = await r.json();
+    installEntries = d.entries || [];
+    $("#brew-warn").style.display = d.brewAvailable ? "none" : "block";
+    renderInstallGrid();
+  } catch(e){ toast("加载安装目录失败: "+e.message, true); }
+}
+
+const INST_GROUPS = { chat:"💬 AI 对话应用", editor:"📝 编辑器 / 终端", cli:"⌨️ 编码 CLI（装完自动进群聊）", runtime:"🧰 运行环境" };
+
+function renderInstallGrid(){
+  const wrap = $("#install-grid");
+  wrap.innerHTML = "";
+  for (const [group, title] of Object.entries(INST_GROUPS)){
+    const items = installEntries.filter(e=>e.group===group);
+    if (!items.length) continue;
+    const sec = document.createElement("div");
+    sec.className = "inst-section";
+    sec.innerHTML = `<div class="inst-sec-tt">${title}</div><div class="inst-cards"></div>`;
+    const cards = $(".inst-cards", sec);
+    for (const e of items) cards.appendChild(installCard(e));
+    wrap.appendChild(sec);
+  }
+}
+
+function installCard(e){
+  const el = document.createElement("div");
+  el.className = "inst-card-item" + (e.installed ? " installed" : "");
+  el.style.setProperty("--ic", e.color || "#8a93a3");
+  const btn = e.installed
+    ? `<span class="inst-done">✓ 已安装</span>`
+    : (e.method === "manual"
+        ? `<button class="inst-go" data-home="1">官网 ↗</button>`
+        : `<button class="inst-go" data-install="1">⬇ 安装</button>`);
+  el.innerHTML = `
+    <span class="ici-icon">${esc(e.icon||"◆")}</span>
+    <div class="ici-meta">
+      <div class="ici-name">${esc(e.name)}${e.agentKey?` <span class="ici-chat" title="安装后可加入 AI 群聊">◧</span>`:""}</div>
+      <div class="ici-desc">${esc(e.description||"")}</div>
+      <div class="ici-method">${e.installed ? "" : esc(e.methodLabel||"")}</div>
+    </div>
+    ${btn}`;
+  const go = $(".inst-go", el);
+  if (go){
+    go.onclick = () => {
+      if (go.dataset.home) { window.open(e.homepage, "_blank"); return; }
+      installEntry(e);
+    };
+  }
+  return el;
+}
+
+function installEntry(e){
+  Installer.install(e.id, {
+    name: e.name, icon: e.icon,
+    onDone: () => { loadInstallCatalog(); loadTools(); toast(`${e.name} 安装完成，工具列表已刷新`); },
+  });
+}
+
+// 供 HTML inline 调用（brew-warn 按钮）
+function installById(id){
+  const e = installEntries.find(x=>x.id===id);
+  if (e) installEntry(e); else loadInstallCatalog().then(()=>{ const x = installEntries.find(y=>y.id===id); if (x) installEntry(x); });
 }
 
 /* ---------- 后台进程 ---------- */
 async function refreshProcs(){
   try {
-    const r = await fetch("/api/procs"); const list = await r.json();
+    const r = await OPS.api("/api/procs"); const list = await r.json();
     $("#procs-btn").classList.toggle("hide", list.length===0);
     $("#procs-badge").textContent = list.length;
     const pl = $("#plist");
@@ -188,7 +260,7 @@ async function refreshProcs(){
   } catch{}
 }
 async function killProc(id){
-  await fetch("/api/procs/kill",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});
+  await OPS.api("/api/procs/kill",{method:"POST",json:{id}});
   toast("已终止 "+id); refreshProcs();
 }
 function togglePopover(e){ e.stopPropagation(); $("#popover").classList.toggle("show"); refreshProcs(); }
@@ -200,7 +272,7 @@ async function rescan(){
   b && b.classList.add("spin"); mb && mb.classList.add("spin");
   toast("正在扫描本机工具…");
   try {
-    const r = await fetch("/api/tools/scan",{method:"POST"}); const d = await r.json();
+    const r = await OPS.api("/api/tools/scan",{method:"POST"}); const d = await r.json();
     if (!d.ok) throw new Error(d.error||"扫描失败");
     await loadTools(); toast("扫描完成");
   } catch(e){ toast("扫描失败: "+e.message, true); }
@@ -230,3 +302,16 @@ loadTools();
 refreshProcs();
 setInterval(refreshProcs, 8000);
 setInterval(()=>{ if(state.view==="console") loadTools(); }, 30000); // 定期刷新服务状态
+
+// 支持从群聊页跳转过来直接开装：/?install=cursor
+(function(){
+  const id = new URLSearchParams(location.search).get("install");
+  if (!id) return;
+  switchView("install");
+  loadInstallCatalog().then(()=>{
+    const e = installEntries.find(x=>x.id===id);
+    if (e && !e.installed) installEntry(e);
+    else if (e && e.installed) toast(`${e.name} 已经安装`, false);
+  });
+  history.replaceState(null, "", "/");
+})();

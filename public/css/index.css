@@ -286,3 +286,55 @@ button { font-family: inherit; cursor:pointer; border:none; background:none; col
   .brand .txt .sub, #clock, .leds { display:none; }
   #search { max-width:none; }
 }
+
+/* ═══ 快捷安装视图 ═══ */
+#install-view { overflow-y:auto; }
+#install-wrap { max-width:1080px; margin:0 auto; padding:26px 28px 60px; }
+#install-head { margin-bottom:18px; }
+.ih-tt { font-family:var(--font-d); font-size:22px; font-weight:600; letter-spacing:.02em; }
+.ih-sub { color:var(--dim); font-size:13px; margin-top:6px; }
+#brew-warn {
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  background:rgba(255,210,63,.08); border:1px solid rgba(255,210,63,.35);
+  color:var(--text); font-size:13px;
+  border-radius:10px; padding:12px 16px; margin-bottom:18px;
+}
+.brew-fix {
+  background:var(--lime); color:#0a0c10; font-weight:600; font-size:12.5px;
+  padding:6px 14px; border-radius:7px;
+}
+.brew-fix:hover { filter:brightness(1.08); }
+
+.inst-section { margin-bottom:26px; }
+.inst-sec-tt {
+  font-family:var(--font-d); font-size:14px; font-weight:600;
+  color:var(--dim); letter-spacing:.04em; margin-bottom:12px;
+}
+.inst-cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; }
+
+.inst-card-item {
+  display:flex; align-items:center; gap:12px;
+  background:var(--bg-2); border:1px solid var(--line);
+  border-radius:12px; padding:14px 16px;
+  transition:border-color .15s, transform .15s;
+}
+.inst-card-item:hover { border-color:var(--ic, var(--line-2)); transform:translateY(-1px); }
+.inst-card-item.installed { opacity:.62; }
+.ici-icon {
+  flex:none; width:40px; height:40px; border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:19px;
+  background:color-mix(in srgb, var(--ic) 12%, transparent);
+  border:1px solid color-mix(in srgb, var(--ic) 45%, transparent);
+}
+.ici-meta { flex:1; min-width:0; }
+.ici-name { font-size:14px; font-weight:600; }
+.ici-chat { color:var(--c-chat); font-size:12px; }
+.ici-desc { font-size:12px; color:var(--dim); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ici-method { font-family:var(--font-m); font-size:10.5px; color:var(--faint); margin-top:4px; }
+.inst-go {
+  flex:none; background:var(--accent); color:#0a0c10;
+  font-size:12.5px; font-weight:600; padding:8px 16px; border-radius:8px;
+}
+.inst-go:hover { filter:brightness(1.1); }
+.inst-done { flex:none; color:var(--lime); font-size:12.5px; font-weight:600; }

@@ -4,12 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Terminal — AI·OPS DECK</title>
+<!--OPS:TOKEN-->
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=jetbrains-mono@400,500,600&f[]=switzer@400,500&display=swap">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+<link rel="stylesheet" href="/vendor/xterm.css">
 <link rel="stylesheet" href="/css/terminal.css">
-<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.js"></script>
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/xterm-addon-fit.js"></script>
+<script src="/vendor/xterm-addon-web-links.js"></script>
 </head>
 <body>
 
@@ -54,6 +55,20 @@
         <button class="ov-btn" id="ov-btn" onclick="restart()">重 启 会 话</button>
       </div>
     </div>
+
+    <!-- 命令注入确认层（?run= 参数必须先经用户确认，防恶意链接 RCE） -->
+    <div id="run-confirm">
+      <div class="rc-card">
+        <div class="rc-icon">⚠️</div>
+        <div class="rc-title">即将在终端执行以下命令</div>
+        <pre class="rc-cmd" id="rc-cmd"></pre>
+        <div class="rc-sub">来自 URL 参数，请确认来源可信</div>
+        <div class="rc-btns">
+          <button class="rc-btn ghost" id="rc-cancel">取 消</button>
+          <button class="rc-btn" id="rc-ok">✓ 执 行</button>
+        </div>
+      </div>
+    </div>
   </main>
 
   <!-- ── 底部状态栏 ── -->
@@ -82,6 +97,7 @@
 
 <div id="toast"></div>
 
+<script src="/js/ops.js"></script>
 <script src="/js/terminal.js"></script>
 </body>
 </html>

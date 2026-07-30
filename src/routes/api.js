@@ -1,20 +1,37 @@
-import { AGENTS } from "../config.js";
+import { AGENTS, getAvailability } from "../config.js";
 import { activeProcs } from "../utils/process-registry.js";
+import { findInstallIdForAgent } from "../install-catalog.js";
 import { log } from "../utils/log.js";
 import { sanitizeChatRequest, callAgent, buildPrompt } from "../agent-caller.js";
 
 export default function apiRoutes(app) {
   // 返回所有 agent 信息（前端动态渲染）
+  // available=false 的 agent 本机未安装对应 CLI，前端应灰显并提供安装入口
   app.get("/api/models", (req, res) => {
+    const avail = getAvailability();
     const out = {};
     for (const [key, agent] of Object.entries(AGENTS)) {
-      out[key] = { name: agent.name, model: agent.model, role: agent.role, color: agent.color, avatar: agent.avatar, models: Array.isArray(agent.models) ? agent.models : null };
+      const a = avail.get(key) || { available: false, path: null };
+      out[key] = {
+        name: agent.name, model: agent.model, role: agent.role,
+        color: agent.color, avatar: agent.avatar,
+        models: Array.isArray(agent.models) ? agent.models : null,
+        source: agent.source || "user",
+        available: a.available, path: a.path,
+        installId: a.available ? null : findInstallIdForAgent(key, agent.cli.command),
+      };
     }
     res.json(out);
   });
 
   app.get("/api/health", (req, res) => {
-    res.json({ ok: true, agents: Object.keys(AGENTS), activeProcs: activeProcs.size });
+    const avail = getAvailability();
+    res.json({
+      ok: true,
+      agents: [...avail.entries()].filter(([, v]) => v.available).map(([k]) => k),
+      configured: Object.keys(AGENTS),
+      activeProcs: activeProcs.size,
+    });
   });
 
   /**

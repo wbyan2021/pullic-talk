@@ -32,52 +32,68 @@
   const agentModels = {}; // 每个 agent 当前选中的模型
 
   const HLJS_THEMES = {
-    dark: "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css",
-    light: "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css",
+    dark: "/vendor/hljs-github-dark.min.css",
+    light: "/vendor/hljs-github.min.css",
   };
 
   // ===== 动态渲染 agent 按钮 =====
   async function loadAgents() {
     try {
-      const res = await fetch("/api/models");
+      const res = await OPS.api("/api/models");
       const agents = await res.json();
       const container = document.getElementById("agent-toggles");
       container.innerHTML = "";
+      selectedAgents.clear();
 
       for (const [key, info] of Object.entries(agents)) {
         const bgColor = hexToRgba(info.color, 0.08);
 
-        // 注册 agent 信息
-        AGENT_INFO[key] = { name: info.name, role: info.role, avatar: info.avatar, model: info.model, color: info.color };
-        selectedAgents.add(key);
+        // 注册 agent 信息（含可用性：换电脑后本机没装的 CLI 会 available=false）
+        AGENT_INFO[key] = { name: info.name, role: info.role, avatar: info.avatar, model: info.model, color: info.color, available: info.available, installId: info.installId };
 
         // 创建 toggle 按钮
         const el = document.createElement("div");
-        el.className = "agent-toggle active";
         el.dataset.agent = key;
-        el.onclick = () => toggleAgent(key);
-        el.innerHTML = `
-          <div class="agent-toggle-row">
-            <span class="agent-dot" style="background:${info.color}"></span> ${info.avatar}
-          </div>
-        `;
-        el.appendChild(buildModelControl(key, info));
-        el.style.borderColor = info.color;
-        el.style.color = info.color;
-        el.style.background = bgColor;
+
+        if (info.available) {
+          selectedAgents.add(key);
+          el.className = "agent-toggle active";
+          el.onclick = () => toggleAgent(key);
+          el.innerHTML = `
+            <div class="agent-toggle-row">
+              <span class="agent-dot" style="background:${info.color}"></span> ${info.avatar}
+            </div>
+          `;
+          el.appendChild(buildModelControl(key, info));
+          el.style.borderColor = info.color;
+          el.style.color = info.color;
+          el.style.background = bgColor;
+        } else {
+          // 未安装：灰显 + 点击一键安装（或提示手动安装）
+          el.className = "agent-toggle unavailable";
+          el.title = `本机未安装 ${info.name} 的 CLI，点击安装`;
+          el.innerHTML = `
+            <div class="agent-toggle-row">
+              <span class="agent-dot"></span> ${info.avatar}
+            </div>
+            <div class="model-badge missing">未安装 ⬇</div>
+          `;
+          el.onclick = () => installAgent(key, info);
+        }
         container.appendChild(el);
       }
 
-      // logo 显示 agent 数量
-      const n = Object.keys(agents).length;
+      // logo 显示可用 agent 数量
+      const n = [...Object.values(AGENT_INFO)].filter(a => a.available !== false && a.name !== "你").length;
       document.getElementById("logo-text").textContent = `🤖 AI 群聊 × ${n}`;
       document.title = `AI 群聊 × ${n}`;
 
-      // 动态生成状态栏指示器
+      // 状态栏只列可用 agent
       const statusBar = document.getElementById("status-bar");
       if (statusBar) {
         statusBar.innerHTML = "";
         for (const [key, info] of Object.entries(agents)) {
+          if (!info.available) continue;
           const item = document.createElement("div");
           item.className = "status-item";
           item.id = `status-${key}`;
@@ -90,7 +106,19 @@
       showWelcome();
     } catch (e) {
       console.error("加载 agent 失败:", e);
-      addSystemMessage("⚠️ 无法连接服务器，请确认 server.js 已启动后刷新页面");
+      addSystemMessage("⚠️ 无法连接服务器，请确认 npm start 已启动后刷新页面");
+    }
+  }
+
+  // 未安装 agent 的一键安装入口
+  function installAgent(key, info) {
+    if (info.installId && window.Installer) {
+      Installer.install(info.installId, {
+        name: info.name, icon: info.avatar,
+        onDone: () => { addSystemMessage(`✓ ${info.name} 安装完成，正在刷新…`); setTimeout(loadAgents, 800); },
+      });
+    } else {
+      addSystemMessage(`⚠️ ${info.name} 暂无自动安装方式，请手动安装其 CLI 后刷新页面（或去控制台「快捷安装」看看）`);
     }
   }
 
@@ -268,9 +296,9 @@
     if (next === "dark") root.removeAttribute("data-theme");
     else root.setAttribute("data-theme", "light");
     document.getElementById("hljs-theme").href = HLJS_THEMES[next];
-    localStorage.setItem("tri-theme", next);
+    localStorage.setItem("ops-theme", next); // 与控制台/终端页统一 key，主题真正同步
   }
-  const savedTheme = localStorage.getItem("tri-theme");
+  const savedTheme = localStorage.getItem("ops-theme") || localStorage.getItem("tri-theme");
   if (savedTheme === "light") {
     document.documentElement.setAttribute("data-theme", "light");
     document.getElementById("hljs-theme").href = HLJS_THEMES.light;
@@ -309,7 +337,8 @@
     if (mentions.length === 0 || mentions.includes("all")) {
       targets = Array.from(selectedAgents);
     } else {
-      targets = [...new Set(mentions)].filter(m => AGENT_INFO[m]);
+      // 只保留本机可用的 agent（@了未安装的直接忽略）
+      targets = [...new Set(mentions)].filter(m => AGENT_INFO[m] && AGENT_INFO[m].available !== false);
     }
     return { cleaned, targets };
   }
@@ -388,19 +417,25 @@
     const m = document.getElementById("messages");
     if (m.querySelector("#welcome")) return;
     const agentKeys = Object.keys(AGENT_INFO).filter(k => k !== "user");
+    const availableKeys = agentKeys.filter(k => AGENT_INFO[k].available !== false);
     const cards = agentKeys.map(key => {
       const a = AGENT_INFO[key];
       const color = a.color || "var(--text-dim)";
-      return `<div class="agent-card">
+      const missing = a.available === false;
+      return `<div class="agent-card${missing ? " missing" : ""}">
         <div class="agent-icon" style="background:${hexToRgba(color, 0.08)};color:${color};border:1px solid ${color};">${a.avatar || "?"}</div>
-        <span class="agent-name">${a.name || key}</span>
+        <span class="agent-name">${a.name || key}${missing ? " · 未安装" : ""}</span>
         <span class="agent-role">${a.role || ""}</span>
       </div>`;
     }).join("");
-    const mentionHint = agentKeys.map(k => `<code>@${k}</code>`).join(" ");
+    const mentionHint = availableKeys.map(k => `<code>@${k}</code>`).join(" ") || "<code>（暂无可用）</code>";
+    const noAgentHint = availableKeys.length === 0
+      ? `<div class="welcome-warn">⚠️ 本机未检测到任何可用的 AI CLI。<br>去控制台 <a href="/">「快捷安装」</a> 一键装上 Codex / Claude Code / Gemini 等 CLI 后再来。</div>`
+      : "";
     m.innerHTML = `<div id="welcome">
       <h2>AI 群聊</h2>
       <p>输入消息，所有 AI 会在同一个聊天里回复。<br>用 ${mentionHint} 定向发言，<code>@all</code> 发给全部。</p>
+      ${noAgentHint}
       <div class="agents">${cards}</div>
     </div>`;
   }
@@ -586,18 +621,17 @@
 
     abortController = new AbortController();
     try {
-      const response = await fetch("/api/chat", {
+      const response = await OPS.api("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        signal: abortController.signal,
+        json: {
           message: text, targets,
-          history: history.slice(-6),
+          history: history.slice(-12), // 与服务端上限（20 条）对齐，保留更多上下文
           thinking: thinkingMode,
           mode: chatMode,
           rounds,
           models: agentModels,
-        }),
-        signal: abortController.signal,
+        },
       });
 
       if (!response.ok) {

@@ -35,15 +35,16 @@ export function setupTerminal(wss) {
       let msg;
       try { msg = JSON.parse(raw); } catch { return; }
       switch (msg.type) {
-        case "input": if (typeof msg.data === "string") term.write(msg.data); break;
+        // 单条输入限长 64KB，防恶意大 payload 冲击 pty
+        case "input": if (typeof msg.data === "string" && msg.data.length <= 65536) term.write(msg.data); break;
         case "resize":
           if (Number.isFinite(msg.cols) && Number.isFinite(msg.rows)) {
             try { term.resize(Math.max(2, msg.cols | 0), Math.max(2, msg.rows | 0)); } catch {}
           }
           break;
         case "run":
-          // 在终端中执行一条命令（用于"一键启动"注入）
-          if (typeof msg.command === "string") term.write(msg.command + "\n");
+          // 在终端中执行一条命令（用于"一键启动"注入，前端已做用户确认）
+          if (typeof msg.command === "string" && msg.command.length <= 32768) term.write(msg.command + "\n");
           break;
         case "reset":
           try { term.kill(); } catch {}

@@ -304,3 +304,21 @@
       .input-bar { padding: 8px 12px 12px; }
       #input { font-size: 16px; }
     }
+
+    /* ═══ 未安装 agent（灰显 + 一键安装）═══ */
+    .agent-toggle.unavailable {
+      opacity: .55; filter: grayscale(.8);
+      border: 1px dashed var(--border) !important;
+      color: var(--text-dim) !important;
+      background: transparent !important;
+    }
+    .agent-toggle.unavailable:hover { opacity: .9; filter: grayscale(.2); }
+    .model-badge.missing { color: var(--text-dim); font-size: 9px; }
+    #welcome .agent-card.missing { opacity: .5; filter: grayscale(.7); }
+    .welcome-warn {
+      margin: 14px 0 4px; padding: 12px 16px;
+      background: rgba(245, 158, 11, .08);
+      border: 1px solid rgba(245, 158, 11, .35);
+      border-radius: 10px; font-size: 13.5px; line-height: 1.7;
+    }
+    .welcome-warn a { color: #f59e0b; font-weight: 600; }

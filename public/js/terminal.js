@@ -56,7 +56,8 @@ function connect(){
   showOverlay("connecting");
 
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${proto}://${location.host}/ws/terminal`);
+  const token = encodeURIComponent((window.OPS && OPS.TOKEN) || "");
+  ws = new WebSocket(`${proto}://${location.host}/ws/terminal?token=${token}`);
 
   ws.onopen = () => {
     ready = true;
@@ -67,11 +68,10 @@ function connect(){
     // 冲刷缓存输入
     const buf = pendingInput; pendingInput = [];
     buf.forEach(m => send(m));
-    // 注入待执行命令
+    // 注入待执行命令：必须先弹框让用户确认（防恶意链接借 ?run= 执行任意命令）
     if (pendingRun){
       const cmd = pendingRun; pendingRun = null;
-      setTimeout(() => send({ type:"run", command: cmd }), 150);
-      toast(`执行 ${cmd}`);
+      askRunConfirm(cmd);
     }
     term.focus();
   };
@@ -115,6 +115,21 @@ term.onData(d => send({ type:"input", data:d }));
 
 /* 尺寸自适应 */
 new ResizeObserver(() => { if (ready){ fit.fit(); sendDims(); } }).observe($("#stage"));
+
+/* ---------- ?run= 命令确认 ---------- */
+function askRunConfirm(cmd){
+  const ov = $("#run-confirm");
+  $("#rc-cmd").textContent = cmd;
+  ov.classList.add("show");
+  const ok = $("#rc-ok"), cancel = $("#rc-cancel");
+  const close = () => { ov.classList.remove("show"); ok.onclick = cancel.onclick = null; term.focus(); };
+  ok.onclick = () => {
+    close();
+    send({ type:"run", command: cmd });
+    toast(`执行 ${cmd.length > 60 ? cmd.slice(0, 60) + "…" : cmd}`);
+  };
+  cancel.onclick = close;
+}
 
 /* ---------- 覆盖层 ---------- */
 function showOverlay(kind, code){

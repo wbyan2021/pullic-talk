@@ -112,3 +112,42 @@
 - 加新 agent：编辑 `agents.config.json` 保存即热生效
 - 扫描工具：`npm run scan`
 - 删除会话/导出会话都在侧边栏
+
+---
+
+## 八、可移植性 + 快捷安装 + P0 安全修复 · 2026-07-31
+
+### 可移植性（换电脑后 AI 不一样怎么办）
+| 改动 | 说明 |
+|---|---|
+| 新增 `src/agent-catalog.js` | 内置 8 个 agent 适配器（grok/pi/openclaw/opencode/codex/claude/gemini/qwen），装了哪个 CLI 自动亮哪个 |
+| 重构 `src/config.js` | 内置目录 + `agents.config.json` 覆盖层合并；`which` 探测可用性（30s TTL 缓存） |
+| `/api/models` | 新增 `available` / `path` / `source` / `installId` 字段 |
+| `/api/health` | `agents` 只列本机可用；新增 `configured` 列全部已配置 |
+| 群聊页 | 未安装 agent 灰显「未安装 ⬇」，点击直接一键安装；零可用时欢迎屏引导去快捷安装；@提及自动过滤不可用 agent |
+| `run-debate.js` | 辩手本机不可用时明确报错并指引安装 |
+
+### 快捷安装（控制台「快捷安装」页签 + 群聊页一键装）
+- 新增 `src/install-catalog.js`：17 个热门条目（ChatGPT/Claude/Ollama/LM Studio/Jan/Cursor/Windsurf/VS Code/Warp/Codex/Claude Code/Gemini CLI/Aider/OpenCode/Pi/Docker/Homebrew），只收官方渠道
+- 新增 `src/routes/install.js`：安装任务注册表（后台执行、日志缓存、重复提交复用、20 分钟超时、成功后自动刷新可用性+重扫工具）
+- 安装方式自动择优：brew cask > brew > npm -g > 官网下载；无 brew 时页面顶部提示一键装 brew
+- 新增 `public/js/installer.js` + `installer.css`：控制台与群聊页共用的安装弹窗（实时日志轮询）
+- 控制台支持 `/?install=<id>` 直达开装（群聊页未安装卡片可跳转）
+
+### P0 安全修复
+| 问题 | 修复 |
+|---|---|
+| 终端/启动接口零认证，本机任意脚本可调用 | 启动生成随机 token（`.token` 0600），渲染页面时注入 `window.__OPS_TOKEN__`；`/api/*`（除 /api/health）与 WS 全部校验 |
+| `/terminal?run=` 点链接即执行任意命令（RCE） | 必须先弹框显示完整命令、用户确认后才执行 |
+| CDN 供应链风险（marked/hljs/purify/xterm 全走 jsdelivr） | 9 个文件全部本地化到 `public/vendor/`，CSP 收紧为 script-src 'self' |
+| DOMPurify 加载失败时直接渲染未消毒 HTML | 现已不依赖 CDN；渲染函数保持「有则消毒」逻辑，后续可加纯文本降级 |
+| WebSocket 无消息上限 | `maxPayload: 1MB` + 单条 input ≤64KB + run 命令 ≤32KB |
+| `tools.json`（本机数据）入库导致 git 永远脏 | `git rm --cached` + gitignore；`.token` 一并忽略 |
+
+### 其他改进
+- `agent-caller.js`：`textType`/`textField` 支持数组（适配 codex 多事件格式）；`{model}` 为空时仅当前一项是选项才 pop；SIGKILL 补刀定时器随进程退出清理
+- 主题 key 统一为 `ops-theme`（原 chat 页用 `tri-theme`，与控制台/终端不同步），读取时兼容旧 key
+- 前端共享 `public/js/ops.js`（token + fetch 包装 + esc）；三页 fetch 统一走 `OPS.api`
+- 群聊发送历史上限 6 → 12 条（服务端允许 20）
+- `server.js`：三个重复的 watch 块抽成 `watchHtml()` 并加 watcher error 监听；修复 express.static 抢先响应 `/` 导致 token 注入失效（`index: false`）
+- 补齐 MIT `LICENSE` 文件、`package.json` engines 字段

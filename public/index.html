@@ -4,8 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI·OPS DECK — 工具控制中心</title>
+<!--OPS:TOKEN-->
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=jetbrains-mono@400,500,600&f[]=switzer@400,500&display=swap">
 <link rel="stylesheet" href="/css/index.css">
+<link rel="stylesheet" href="/css/installer.css">
 </head>
 <body>
 
@@ -39,6 +41,7 @@
 <div id="subbar">
   <div class="tabs">
     <button class="tab active" data-view="console" onclick="switchView('console')"><span class="g">⊞</span> 控制台</button>
+    <button class="tab" data-view="install" onclick="switchView('install')"><span class="g">⬇</span> 快捷安装</button>
     <button class="tab" data-view="chat" onclick="switchView('chat')"><span class="g">◧</span> 群聊</button>
   </div>
   <div class="filters" id="filters"></div>
@@ -62,6 +65,19 @@
       </div>
     </div>
   </div>
+  <div class="view" id="install-view">
+    <div id="install-wrap">
+      <div id="install-head">
+        <div class="ih-tt">⬇ 快捷安装</div>
+        <div class="ih-sub">热门 AI 应用 / 编码 CLI — 官方渠道，一键安装（优先 Homebrew，无 brew 时走 npm / 官网下载）</div>
+      </div>
+      <div id="brew-warn" style="display:none">
+        ⚠️ 未检测到 Homebrew — 应用类（.app）无法一键安装。先装 brew，或点条目右侧「官网」手动下载。
+        <button class="brew-fix" onclick="installById('homebrew')">安装 Homebrew</button>
+      </div>
+      <div id="install-grid"></div>
+    </div>
+  </div>
   <div class="view" id="chat-view">
     <iframe id="chat-frame" data-src="/chat" title="AI 群聊"></iframe>
   </div>
@@ -75,6 +91,8 @@
 
 <div id="toast"></div>
 
+<script src="/js/ops.js"></script>
+<script src="/js/installer.js"></script>
 <script src="/js/index.js"></script>
 </body>
 </html>

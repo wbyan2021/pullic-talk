@@ -8,6 +8,16 @@ const __dirname = dirname(__filename);
 const SERVER = process.env.SERVER || "http://localhost:3210";
 const DIVIDER = "─".repeat(60);
 
+// 认证 token：服务端启动时写入 .token（0600）
+let TOKEN = "";
+try {
+  TOKEN = readFileSync(join(__dirname, ".token"), "utf-8").trim();
+} catch {
+  console.error("⚠️ 未找到 .token 文件，请先运行 npm start 启动服务（token 由服务端自动生成）");
+  process.exit(1);
+}
+const HEADERS = { "Content-Type": "application/json", "x-auth-token": TOKEN };
+
 // 加载辩论配置
 const debateConfig = JSON.parse(readFileSync(join(__dirname, "debate.json"), "utf-8")).debate;
 
@@ -67,7 +77,7 @@ async function callAgent(agentKey, prompt) {
   try {
     const response = await fetch(`${SERVER}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: HEADERS,
       body: JSON.stringify({
         message: prompt,
         targets: [agentKey],
@@ -141,14 +151,13 @@ function appendToFile(text) {
 async function runDebate() {
   const availableAgents = await checkServer();
 
-  // 校验辩论双方 agent 是否存在
+  // 校验辩论双方 agent 在本机可用（/api/health 只返回装了 CLI 的 agent）
   for (const [side, role] of Object.entries(debateConfig.roles)) {
-    if (!agentConfig[role.agent]) {
-      console.error(`❌ ${side} agent "${role.agent}" 不在 agents.config.json 中`);
-      process.exit(1);
-    }
     if (!availableAgents.includes(role.agent)) {
-      console.error(`⚠️ ${side} agent "${role.agent}" 未在服务器注册（配置热加载可能未生效）`);
+      console.error(`❌ ${side} agent "${role.agent}" 本机不可用（未安装对应 CLI，或配置未加载）`);
+      console.error(`   可用 agent: ${availableAgents.join(", ") || "（无）"}`);
+      console.error(`   去控制台「快捷安装」装上对应 CLI: ${SERVER}/`);
+      process.exit(1);
     }
   }
 

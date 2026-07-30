@@ -220,3 +220,40 @@ button { font-family: inherit; cursor:pointer; border:none; background:none; col
   .brand .txt .sub, #clock, #uptime, .hints { display:none; }
   .cwd { max-width:30%; }
 }
+
+/* ---------- ?run= 命令确认层 ---------- */
+#run-confirm {
+  position:absolute; inset:0; z-index:60;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(5,7,10,.78); backdrop-filter:blur(6px);
+  opacity:0; pointer-events:none; transition:opacity .2s;
+}
+#run-confirm.show { opacity:1; pointer-events:auto; }
+.rc-card {
+  width:min(560px, 92vw); text-align:center;
+  background:var(--panel, #10141a); border:1px solid rgba(255,107,53,.4);
+  border-radius:14px; padding:26px 28px;
+  box-shadow:0 24px 60px -20px rgba(0,0,0,.7);
+  animation:rise .3s cubic-bezier(.2,.7,.3,1) both;
+}
+.rc-icon { font-size:30px; }
+.rc-title { margin:8px 0 14px; font-size:15px; font-weight:600; }
+.rc-cmd {
+  text-align:left; white-space:pre-wrap; word-break:break-all;
+  max-height:180px; overflow:auto;
+  background:#07090c; border:1px solid #2a3140; border-radius:8px;
+  padding:12px 14px; margin:0 0 10px;
+  font-family:"JetBrains Mono", ui-monospace, monospace; font-size:12.5px;
+  color:#ffd23f;
+}
+.rc-sub { font-size:12px; color:var(--text-dim, #8a93a3); margin-bottom:18px; }
+.rc-btns { display:flex; gap:10px; justify-content:center; }
+.rc-btn {
+  padding:9px 26px; border-radius:8px; border:0; cursor:pointer;
+  font-size:13.5px; font-weight:600;
+  background:var(--accent, #ff6b35); color:#0a0c10;
+  transition:filter .15s, transform .15s;
+}
+.rc-btn:hover { filter:brightness(1.1); transform:translateY(-1px); }
+.rc-btn.ghost { background:transparent; color:var(--text-dim, #8a93a3); border:1px solid #2a3140; }
+.rc-btn.ghost:hover { color:#fff; border-color:#586174; }

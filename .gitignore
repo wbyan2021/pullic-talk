@@ -6,3 +6,8 @@ __pycache__/
 debates/
 *.log
 .env
+
+# 本机相关（每台电脑不同，不入库）
+tools.json
+.token
+logs/

@@ -24,7 +24,8 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
     if (a === "{prompt}") { args.push(prompt); continue; }
     if (a === "{model}") {
       if (modelValue) args.push(modelValue);
-      else args.pop();
+      // 无模型值时删掉配套的 flag：仅当前一个是选项（以 - 开头）才 pop，避免误删位置参数
+      else if (args.length && args[args.length - 1].startsWith("-")) args.pop();
       continue;
     }
     args.push(a);
@@ -54,6 +55,7 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
     let stderrText = "";
     let timedOut = false;
     let outputExceeded = false;
+    let killTimer = null; // SIGTERM 后补 SIGKILL 的定时器（需随进程退出清理）
 
     // 输出超过上限时截断，并杀进程防内存爆炸
     const trackOutput = (s) => {
@@ -69,16 +71,21 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
       timedOut = true;
       log(`⏰ ${agentKey} 超时（${timeoutMs / 1000}s），强制终止`);
       try { proc.kill("SIGTERM"); } catch {}
-      setTimeout(() => { try { proc.kill("SIGKILL"); } catch {} }, 3000);
+      killTimer = setTimeout(() => { try { proc.kill("SIGKILL"); } catch {} }, 3000);
     }, timeoutMs);
 
+    // textType / textField(s) 均支持字符串或数组（数组按序尝试）
+    const textTypes = cli.textType ? [cli.textType].flat() : null;
+    const textFields = [cli.textField || cli.textFields || []].flat().filter(Boolean);
     const consumeNdjsonLine = (line) => {
       const trimmed = line.trim();
       if (!trimmed) return;
       try {
         const evt = JSON.parse(trimmed);
-        if (cli.textType && evt.type !== cli.textType) return;
-        const text = getNestedValue(evt, cli.textField) || evt.text || evt.data || "";
+        if (textTypes && !textTypes.includes(evt.type)) return;
+        let text = "";
+        for (const f of textFields) { text = getNestedValue(evt, f); if (text) break; }
+        text = text || evt.text || evt.data || "";
         if (text) { fullText += text; onChunk(text); }
       } catch {
         fullText += trimmed;
@@ -113,6 +120,7 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
 
     proc.on("close", () => {
       clearTimeout(killer);
+      if (killTimer) clearTimeout(killTimer);
       if (cli.parseMode === "ndjson" && buffer.trim()) {
         consumeNdjsonLine(buffer);
         buffer = "";
@@ -142,6 +150,7 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
 
     proc.on("error", (err) => {
       clearTimeout(killer);
+      if (killTimer) clearTimeout(killTimer);
       const reason = err.code === "ENOENT" ? "CLI 未安装或不在 PATH" : err.message;
       onChunk(`⚠️ ${agent.name} 不可用（${reason}）\n`);
       resolve("");

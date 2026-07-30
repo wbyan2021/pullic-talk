@@ -1,0 +1,57 @@
+/* ═══ 快捷安装弹窗（控制台 & 群聊页共用）═══ */
+#installer-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(5, 7, 10, .72); backdrop-filter: blur(6px);
+  opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+#installer-overlay.show { opacity: 1; pointer-events: auto; }
+
+.inst-card {
+  width: min(640px, 94vw); max-height: 84vh;
+  display: flex; flex-direction: column;
+  background: #10141a; color: #d7dee8;
+  border: 1px solid #2a3140; border-radius: 14px;
+  box-shadow: 0 30px 80px -24px rgba(0, 0, 0, .75);
+  overflow: hidden;
+  animation: inst-rise .28s cubic-bezier(.2, .7, .3, 1) both;
+}
+@keyframes inst-rise { from { transform: translateY(14px) scale(.98); opacity: 0; } }
+
+.inst-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid #1c222c; }
+.inst-icon { font-size: 24px; }
+.inst-tt { flex: 1; min-width: 0; }
+.inst-name { font-size: 15px; font-weight: 600; }
+.inst-cmd {
+  font-size: 11.5px; color: #8a93a3; margin-top: 3px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.inst-x {
+  background: none; border: 0; color: #8a93a3; font-size: 15px;
+  cursor: pointer; padding: 4px 8px; border-radius: 6px;
+}
+.inst-x:hover { color: #fff; background: #1c222c; }
+
+.inst-log {
+  flex: 1; min-height: 220px; max-height: 46vh; overflow: auto;
+  margin: 0; padding: 14px 18px;
+  background: #07090c;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px; line-height: 1.65; color: #9fb0c3;
+  white-space: pre-wrap; word-break: break-all;
+}
+
+.inst-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px; border-top: 1px solid #1c222c;
+}
+.inst-state { font-size: 13px; color: #8a93a3; }
+.inst-state[data-state="run"] { color: #ffd23f; }
+.inst-state[data-state="ok"] { color: #b8f24e; font-weight: 600; }
+.inst-state[data-state="err"] { color: #ff5f57; font-weight: 600; }
+.inst-btn {
+  padding: 8px 24px; border: 0; border-radius: 8px; cursor: pointer;
+  background: #b8f24e; color: #0a0c10; font-size: 13px; font-weight: 600;
+}
+.inst-btn:hover { filter: brightness(1.08); }

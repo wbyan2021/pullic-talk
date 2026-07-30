@@ -5,12 +5,14 @@ import { dirname, join } from "path";
 import { WebSocketServer } from "ws";
 
 import { log } from "./utils/log.js";
+import { TOKEN, tokenOk, authGate } from "./utils/auth.js";
 import { activeProcs } from "./utils/process-registry.js";
 import { AGENTS } from "./config.js";
 import { setupTerminal, getActivePtys } from "./terminal.js";
 import apiRoutes from "./routes/api.js";
 import toolsRoutes from "./routes/tools.js";
 import launchRoutes from "./routes/launch.js";
+import installRoutes from "./routes/install.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,14 +24,16 @@ const PORT = process.env.PORT || 3210;
 const HOST = process.env.HOST || "127.0.0.1";
 
 // ===== 安全加固 =====
-// CSP 头：限制资源来源，防止 XSS
+// CSP 头：第三方库已全部本地化（public/vendor/），不再依赖 CDN。
+// 注：script-src 暂保留 'unsafe-inline'（前端仍有 inline onclick），
+// 待前端模块化重构（P2）后可移除。
 app.use((req, res, next) => {
   res.setHeader("Content-Security-Policy",
     "default-src 'self'; " +
-    "script-src 'self' https://cdn.jsdelivr.net https://api.fontshare.com 'unsafe-inline'; " +
-    "style-src 'self' https://cdn.jsdelivr.net https://api.fontshare.com 'unsafe-inline'; " +
-    "font-src 'self' https://cdn.jsdelivr.net https://api.fontshare.com; " +
-    "connect-src 'self' ws://127.0.0.1:* ws://localhost:*; " +
+    "script-src 'self' 'unsafe-inline'; " +
+    "style-src 'self' https://api.fontshare.com 'unsafe-inline'; " +
+    "font-src 'self' https://api.fontshare.com; " +
+    "connect-src 'self'; " +
     "img-src 'self' data:; " +
     "frame-src 'self'"
   );
@@ -67,7 +71,10 @@ app.use(express.json({ limit: "2mb" }));
 
 // 静态文件：CSS / JS / 图片等
 // 本地开发面板，禁用浏览器缓存，保证改动后刷新即见最新
+// index: false —— 禁止 static 自动把 public/index.html 响应给 /，
+// 否则会绕过下面 serveHtml() 的 token 注入
 app.use(express.static(join(ROOT, "public"), {
+  index: false,
   etag: false,
   lastModified: false,
   setHeaders: (res) => res.setHeader("Cache-Control", "no-store, must-revalidate"),
@@ -80,53 +87,50 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-// ===== 静态 HTML 页面（带热加载缓存） =====
-let _htmlCache = readFileSync(join(ROOT, "public", "index.html"), "utf-8");
-watch(join(ROOT, "public", "index.html"), () => {
-  try {
-    _htmlCache = readFileSync(join(ROOT, "public", "index.html"), "utf-8");
-    log("✓ index.html reloaded");
-  } catch {}
-});
+// ===== 静态 HTML 页面（带热加载缓存 + 响应时注入 token） =====
+// 页面里的 <!--OPS:TOKEN--> 占位符会在响应时替换为 window.__OPS_TOKEN__，
+// 这样 token 不落盘到 public/ 目录，也不进 git。
+const TOKEN_SNIPPET = `<script>window.__OPS_TOKEN__=${JSON.stringify(TOKEN)};</script>`;
+const injectToken = (html) => html.replace("<!--OPS:TOKEN-->", TOKEN_SNIPPET);
 
-let _chatCache = readFileSync(join(ROOT, "public", "chat.html"), "utf-8");
-watch(join(ROOT, "public", "chat.html"), () => {
-  try {
-    _chatCache = readFileSync(join(ROOT, "public", "chat.html"), "utf-8");
-    log("✓ chat.html reloaded");
-  } catch {}
-});
+function watchHtml(name) {
+  const file = join(ROOT, "public", name);
+  let cache = readFileSync(file, "utf-8");
+  const watcher = watch(file, () => {
+    try {
+      cache = readFileSync(file, "utf-8");
+      log(`✓ ${name} reloaded`);
+    } catch (e) {
+      log(`⚠️ ${name} 热加载失败: ${e.message}`);
+    }
+  });
+  watcher.on("error", (e) => log(`⚠️ ${name} watcher 错误: ${e.message}`));
+  return () => cache;
+}
 
-let _termCache = readFileSync(join(ROOT, "public", "terminal.html"), "utf-8");
-watch(join(ROOT, "public", "terminal.html"), () => {
-  try {
-    _termCache = readFileSync(join(ROOT, "public", "terminal.html"), "utf-8");
-    log("✓ terminal.html reloaded");
-  } catch {}
-});
+const getIndexHtml = watchHtml("index.html");
+const getChatHtml = watchHtml("chat.html");
+const getTermHtml = watchHtml("terminal.html");
 
-app.get("/", (req, res) => {
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store, must-revalidate");
-  res.send(_htmlCache);
-});
+function serveHtml(getHtml) {
+  return (req, res) => {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store, must-revalidate");
+    res.send(injectToken(getHtml()));
+  };
+}
 
-app.get("/chat", (req, res) => {
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store, must-revalidate");
-  res.send(_chatCache);
-});
-
-app.get("/terminal", (req, res) => {
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store, must-revalidate");
-  res.send(_termCache);
-});
+app.get("/", serveHtml(getIndexHtml));
+app.get("/chat", serveHtml(getChatHtml));
+app.get("/terminal", serveHtml(getTermHtml));
 
 // ===== 挂载路由 =====
+// 认证闸门：除白名单（/api/health）外，所有 /api/* 需携带 token
+app.use("/api", authGate);
 apiRoutes(app);
 toolsRoutes(app);
 launchRoutes(app);
+installRoutes(app);
 
 // ===== 启动 & 优雅关闭 =====
 const server = app.listen(PORT, HOST, () => {
@@ -137,12 +141,22 @@ const server = app.listen(PORT, HOST, () => {
 });
 
 // 将 WebSocket 挂载到同一 HTTP 服务，路径 /ws/terminal
-const wss = new WebSocketServer({ server, path: "/ws/terminal", verifyClient: (info, cb) => {
-  // WebSocket origin 检查：只允许本机来源
-  const origin = info.origin || "";
-  const ok = !origin || /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin);
-  cb(ok, ok ? undefined : 403, "Forbidden");
-}});
+const wss = new WebSocketServer({
+  server,
+  path: "/ws/terminal",
+  maxPayload: 1024 * 1024, // 单帧上限 1MB，防恶意大消息
+  verifyClient: (info, cb) => {
+    // 双重校验：origin（挡浏览器跨域）+ token（挡本机其他脚本/CSRF）
+    const origin = info.origin || "";
+    const originOk = !origin || /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(origin);
+    let token = "";
+    try {
+      token = new URL(info.req.url, "http://127.0.0.1").searchParams.get("token") || "";
+    } catch {}
+    const ok = originOk && tokenOk(token);
+    cb(ok, ok ? undefined : 403, "Forbidden");
+  },
+});
 setupTerminal(wss);
 // WSS 会把 HTTP server 的 error（如 EADDRINUSE）转发为自身 error，
 // 没有监听者会 crash 并掩盖下面 server.on("error") 的友好提示
