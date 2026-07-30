@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-07-29T16:44:02.256Z",
+  "updatedAt": "2026-07-30T10:04:26.349Z",
   "services": {
     "ollama": {
       "port": 11434,
@@ -8,7 +8,7 @@
     },
     "lmstudio": {
       "port": 1234,
-      "online": true
+      "online": false
     }
   },
   "tools": [
@@ -137,8 +137,9 @@
         {
           "label": "pi --web",
           "command": "pi --web",
+          "background": true,
           "openUrl": "http://127.0.0.1:8192/",
-          "openDelay": 2500
+          "openDelay": 1500
         }
       ]
     },

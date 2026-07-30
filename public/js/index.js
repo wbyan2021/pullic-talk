@@ -123,6 +123,15 @@ async function runAction(action, tool){
   }
   // 命令
   if (action.command){
+    // 若已有 openUrl 且服务已经在监听：跳过启动，直接开浏览器
+    if (action.openUrl){
+      const alive = await isUrlAlive(action.openUrl);
+      if (alive){
+        window.open(action.openUrl, "_blank");
+        toast(`已在运行，打开 ${action.openUrl}`);
+        return;
+      }
+    }
     if (action.background){
       const r = await fetch("/api/launch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"command",command:action.command})});
       const d = await r.json();
@@ -135,6 +144,17 @@ async function runAction(action, tool){
     if (action.openUrl) setTimeout(()=>window.open(action.openUrl,"_blank"), action.openDelay||2500);
     toast(`在终端执行 ${action.command}`);
   }
+}
+
+/* ---------- 端口探活（no-cors，能连通即算 alive） ---------- */
+async function isUrlAlive(url, timeout=800){
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), timeout);
+    await fetch(url, { mode:"no-cors", signal: ctrl.signal, cache:"no-store" });
+    clearTimeout(t);
+    return true;
+  } catch { return false; }
 }
 
 /* ---------- 全屏终端 ---------- */
