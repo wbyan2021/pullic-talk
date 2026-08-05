@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=jetbrains-mono@400,500,600&f[]=switzer@400,500&display=swap">
 <link rel="stylesheet" href="/css/index.css">
 <link rel="stylesheet" href="/css/installer.css">
+<link rel="stylesheet" href="/css/escort.css">
 </head>
 <body>
 
@@ -32,6 +33,9 @@
   <div class="leds" id="leds"></div>
   <div id="clock">--:--:--</div>
   <button id="procs-btn" class="icon-btn hide" onclick="togglePopover(event)">▤ 后台 <span class="badge" id="procs-badge">0</span></button>
+  <button id="escort-toggle" type="button" aria-controls="escort-panel" aria-expanded="true">
+    <span id="escort-top-dot"></span><span>护航</span><span id="escort-top-label">检测中</span>
+  </button>
   <button class="term-btn" id="term-btn" title="打开全屏终端 ( ` )" onclick="openTerminal()">▸_ 终端</button>
   <button class="icon-btn" id="scan-btn" title="重新扫描本机工具" onclick="rescan()">⟳</button>
   <button class="icon-btn" id="theme-btn" title="切换主题" onclick="toggleTheme()">◐</button>
@@ -47,7 +51,8 @@
   <div class="filters" id="filters"></div>
 </div>
 
-<!-- VIEWS -->
+<!-- COCKPIT BODY -->
+<main id="cockpit-body">
 <div id="views">
   <div class="view active" id="console-view">
     <div id="launchpad-wrap">
@@ -83,6 +88,67 @@
   </div>
 </div>
 
+<button id="escort-scrim" type="button" aria-label="关闭护航面板"></button>
+
+<aside id="escort-panel" aria-label="护航 AI" data-availability="checking" tabindex="-1">
+  <div class="escort-head">
+    <div>
+      <div class="escort-kicker">COCKPIT ESCORT</div>
+      <div class="escort-title"><span id="escort-status-dot"></span>护航 AI</div>
+    </div>
+    <button id="escort-close" type="button" aria-label="关闭护航面板">×</button>
+  </div>
+
+  <div class="escort-body">
+    <section class="escort-status-card" aria-live="polite">
+      <div class="escort-status-row">
+        <span id="escort-status-label">正在检查能源状态</span>
+        <span id="escort-provider-label">DEEPSEEK</span>
+      </div>
+      <p id="escort-status-message">正在读取安全配置，不会读取或展示 API Key。</p>
+      <p id="escort-status-action"></p>
+    </section>
+
+    <p id="escort-inline-error" role="alert" hidden></p>
+
+    <section id="escort-key-setup" class="escort-section">
+      <div class="escort-section-title">接入第一个模型能源</div>
+      <p class="escort-help">Key 只保存到 macOS 钥匙串。护航 AI 与 Pi 的调用链彼此独立。</p>
+      <form id="escort-key-form">
+        <label for="escort-key-input">DeepSeek API Key</label>
+        <input id="escort-key-input" name="apiKey" type="password" minlength="16" maxlength="512" autocomplete="new-password" spellcheck="false" placeholder="粘贴后只显示安全保存状态">
+        <button id="escort-save-key" type="submit">保存并检测</button>
+      </form>
+      <a class="escort-external" href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">还没有 Key？前往 DeepSeek 申请 ↗</a>
+    </section>
+
+    <section id="escort-key-saved" class="escort-section" hidden>
+      <div class="escort-section-title">能源凭据</div>
+      <div class="escort-saved-row">
+        <span id="escort-masked-key">••••••••（已安全保存）</span>
+        <span class="escort-vault-badge">KEYCHAIN</span>
+      </div>
+      <div class="escort-actions">
+        <button id="escort-retry" type="button">检查连接</button>
+        <button id="escort-replace" type="button">替换 Key</button>
+        <button id="escort-delete" class="danger" type="button">删除</button>
+      </div>
+    </section>
+
+    <section id="escort-chat" class="escort-section escort-chat" hidden>
+      <div class="escort-section-title">向护航 AI 提问</div>
+      <div id="escort-messages" aria-live="polite"></div>
+      <form id="escort-chat-form">
+        <label class="sr-only" for="escort-message-input">给护航 AI 的消息</label>
+        <textarea id="escort-message-input" maxlength="8000" rows="3" placeholder="不会配置、看不懂状态，都可以直接问…"></textarea>
+        <button id="escort-send" type="submit">发送</button>
+      </form>
+      <p class="escort-privacy">消息会发送给 DeepSeek；S01 不在本地持久化聊天记录，刷新页面即清空。</p>
+    </section>
+  </div>
+</aside>
+</main>
+
 <!-- POPOVER -->
 <div id="popover">
   <div class="ph">后台进程</div>
@@ -94,5 +160,6 @@
 <script src="/js/ops.js"></script>
 <script src="/js/installer.js"></script>
 <script src="/js/index.js"></script>
+<script src="/js/escort.js"></script>
 </body>
 </html>
