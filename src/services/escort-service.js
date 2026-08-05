@@ -34,6 +34,18 @@ const ERROR_ACTIONS = {
 const FALLBACK_MESSAGES = {
   invalid_credential_input: "API Key 格式无效，请检查后重新输入。",
   invalid_message: "请输入 1–8000 字的消息。",
+  credential_missing: "尚未配置 DeepSeek API Key。",
+  credential_invalid: "DeepSeek API Key 无效或已失效，请替换后重试。",
+  insufficient_balance: "DeepSeek 账户余额不足，请充值后重试。",
+  rate_limited: "DeepSeek 当前请求受限，请稍后重试。",
+  provider_request_invalid: "驾驶舱与 DeepSeek 的请求协议不兼容，需要更新应用。",
+  provider_unavailable: "DeepSeek 服务暂时不可用，请稍后重试。",
+  network_error: "本机暂时无法连接 DeepSeek，请检查网络后重试。",
+  timeout: "DeepSeek 响应超时，请稍后重试。",
+  invalid_response: "DeepSeek 返回了驾驶舱无法识别的响应，请稍后重试。",
+  credential_store_unavailable: "系统钥匙串暂时不可用，请检查 macOS 钥匙串状态后重试。",
+  unsupported_platform: "当前凭据存储仅支持 macOS。",
+  request_aborted: "本次护航请求已取消。",
   busy: "护航 AI 正在处理上一条请求，请稍候。",
   internal_error: "护航服务发生未知错误，请重新加载后重试。",
 };
@@ -105,7 +117,7 @@ function safeError(error) {
     "invalid_response", "credential_store_unavailable", "unsupported_platform", "request_aborted",
   ]);
   if (!supported.has(code)) return new EscortServiceError("internal_error", undefined, { cause: error });
-  return new EscortServiceError(code, typeof error?.message === "string" ? error.message : undefined, {
+  return new EscortServiceError(code, FALLBACK_MESSAGES[code], {
     cause: error,
     retryable: error?.retryable,
     availability: error?.availability || (code === "insufficient_balance" || code === "rate_limited" ? "limited" : "unavailable"),
@@ -134,7 +146,7 @@ export function createEscortService({ credentialStore, provider, now = () => new
     provider: PROVIDER,
     configured,
     display: configured ? MASKED_DISPLAY : null,
-    availability: configured ? state.availability : "unconfigured",
+    availability: configured || state.error ? state.availability : "unconfigured",
     lastCheckedAt: state.lastCheckedAt,
     error: state.error,
   });
@@ -148,9 +160,9 @@ export function createEscortService({ credentialStore, provider, now = () => new
   const setFailure = (error, configured = true) => {
     const safe = safeError(error);
     state = {
-      availability: configured ? safe.availability : "unconfigured",
+      availability: safe.availability,
       lastCheckedAt: configured ? timestamp() : null,
-      error: configured ? safe.toJSON() : null,
+      error: safe.toJSON(),
     };
     initialized = true;
     return { safe, status: publicStatus(configured) };

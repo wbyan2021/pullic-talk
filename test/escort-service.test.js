@@ -61,6 +61,24 @@ test("status is unconfigured without a Key and unchecked after restart with one"
   assert.equal(JSON.stringify(status).includes(FAKE_KEY), false);
 });
 
+test("credential store failures stay visible but never leak raw details", async () => {
+  const credentialStore = {
+    async has() {
+      const error = new Error(`raw keychain failure ${FAKE_KEY}`);
+      error.code = "credential_store_unavailable";
+      error.retryable = true;
+      throw error;
+    },
+  };
+  const { service } = serviceWith({ credentialStore });
+
+  const status = await service.getStatus();
+  assert.equal(status.configured, false);
+  assert.equal(status.availability, "unavailable");
+  assert.equal(status.error.code, "credential_store_unavailable");
+  assert.equal(JSON.stringify(status).includes(FAKE_KEY), false);
+});
+
 test("saveCredential validates, trims, saves once, and never returns the Key", async () => {
   const { service, store } = serviceWith();
   const status = await service.saveCredential(`  ${FAKE_KEY}\n`);
