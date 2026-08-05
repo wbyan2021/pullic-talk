@@ -13,6 +13,10 @@ import apiRoutes from "./routes/api.js";
 import toolsRoutes from "./routes/tools.js";
 import launchRoutes from "./routes/launch.js";
 import installRoutes from "./routes/install.js";
+import escortRoutes from "./routes/escort.js";
+import { createCredentialStore } from "./services/credential-store.js";
+import { createDeepSeekProvider } from "./providers/deepseek.js";
+import { createEscortService } from "./services/escort-service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,6 +26,9 @@ const app = express();
 const PORT = process.env.PORT || 3210;
 // 安全: 内嵌终端拥有完整 shell 权限，只允许本机访问
 const HOST = process.env.HOST || "127.0.0.1";
+const credentialStore = createCredentialStore();
+const deepSeekProvider = createDeepSeekProvider();
+const escortService = createEscortService({ credentialStore, provider: deepSeekProvider });
 
 // ===== 安全加固 =====
 // CSP 头：第三方库已全部本地化（public/vendor/），不再依赖 CDN。
@@ -127,6 +134,7 @@ app.get("/terminal", serveHtml(getTermHtml));
 // ===== 挂载路由 =====
 // 认证闸门：除白名单（/api/health）外，所有 /api/* 需携带 token
 app.use("/api", authGate);
+escortRoutes(app, { escortService });
 apiRoutes(app);
 toolsRoutes(app);
 launchRoutes(app);
