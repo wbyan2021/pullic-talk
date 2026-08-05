@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
+    "test": "node --test",
     "scan": "node scripts/scan-tools.js",
     "setup": "bash scripts/setup.sh",
     "postinstall": "node scripts/fix-node-pty.js"
