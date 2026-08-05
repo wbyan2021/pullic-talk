@@ -51,8 +51,8 @@ export function createSecurityRunner({ spawnImpl = spawn, timeoutMs = DEFAULT_TI
 
       let stdout = "";
       let stderr = "";
-      let timedOut = false;
       let settled = false;
+      let forceKillTimer;
 
       const finish = (callback) => {
         if (settled) return;
@@ -62,8 +62,12 @@ export function createSecurityRunner({ spawnImpl = spawn, timeoutMs = DEFAULT_TI
       };
 
       const timer = setTimeout(() => {
-        timedOut = true;
         try { child.kill("SIGTERM"); } catch {}
+        forceKillTimer = setTimeout(() => {
+          try { child.kill("SIGKILL"); } catch {}
+        }, 250);
+        forceKillTimer.unref?.();
+        finish(() => reject(new CredentialStoreError("credential_store_unavailable")));
       }, timeoutMs);
       timer.unref?.();
 
@@ -73,11 +77,8 @@ export function createSecurityRunner({ spawnImpl = spawn, timeoutMs = DEFAULT_TI
         finish(() => reject(new CredentialStoreError("credential_store_unavailable", undefined, { cause })));
       });
       child.on("close", (status, signal) => {
+        clearTimeout(forceKillTimer);
         finish(() => {
-          if (timedOut) {
-            reject(new CredentialStoreError("credential_store_unavailable"));
-            return;
-          }
           resolve({ status: Number.isInteger(status) ? status : 1, signal, stdout, stderr });
         });
       });

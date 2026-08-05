@@ -5,6 +5,25 @@ const COST_LIMIT = 12;
 const MASKED_DISPLAY = "••••••••（已安全保存）";
 const VALID_AVAILABILITY = new Set(["unconfigured", "unchecked", "checking", "available", "limited", "unavailable"]);
 
+const SAFE_ERROR_DETAILS = {
+  invalid_credential_input: ["API Key 格式无效，请检查后重新输入。", "重新输入 API Key", false],
+  invalid_message: ["请输入 1–8000 字的消息。", "修改消息后重试", false],
+  busy: ["护航 AI 正在处理上一条请求，请稍候。", "等待当前请求完成", true],
+  credential_missing: ["尚未配置 DeepSeek API Key。", "接入 DeepSeek API Key", false],
+  credential_invalid: ["DeepSeek API Key 无效或已失效，请替换后重试。", "替换 API Key 后重新检测", false],
+  insufficient_balance: ["DeepSeek 账户余额不足，请充值后重试。", "前往 DeepSeek 检查余额", false],
+  rate_limited: ["DeepSeek 当前请求受限，请稍后重试。", "稍后重新检测", true],
+  credential_store_unavailable: ["系统钥匙串暂时不可用，请检查 macOS 钥匙串状态后重试。", "检查 macOS 钥匙串后重试", true],
+  unsupported_platform: ["当前凭据存储仅支持 macOS。", "在 macOS 上使用安全凭据存储", false],
+  network_error: ["本机暂时无法连接 DeepSeek，请检查网络后重试。", "检查网络后重试", true],
+  provider_unavailable: ["DeepSeek 服务暂时不可用，请稍后重试。", "稍后重新检测", true],
+  provider_request_invalid: ["驾驶舱与 DeepSeek 的请求协议不兼容，需要更新应用。", "更新驾驶舱后重试", false],
+  invalid_response: ["DeepSeek 返回了驾驶舱无法识别的响应，请稍后重试。", "稍后重新检测", true],
+  timeout: ["DeepSeek 响应超时，请稍后重试。", "稍后重新检测", true],
+  request_aborted: ["本次护航请求已取消。", "重新发送请求", true],
+  internal_error: ["护航服务暂时不可用，请重新加载后重试。", "重新加载页面", true],
+};
+
 const SAFE_HTTP_STATUS = {
   invalid_credential_input: 400,
   invalid_message: 400,
@@ -31,16 +50,17 @@ const UNKNOWN_ERROR = {
   retryable: true,
 };
 
+function safeErrorDetails(code) {
+  const safeCode = Object.hasOwn(SAFE_ERROR_DETAILS, code) ? code : "internal_error";
+  const [message, action, retryable] = SAFE_ERROR_DETAILS[safeCode];
+  return { code: safeCode, message, action, retryable };
+}
+
 function safeStatus(status = {}) {
   const configured = status.configured === true;
   const availability = VALID_AVAILABILITY.has(status.availability) ? status.availability : "unavailable";
   const error = status.error && typeof status.error === "object"
-    ? {
-        code: String(status.error.code || "internal_error"),
-        message: String(status.error.message || "护航状态异常。"),
-        action: String(status.error.action || "重新加载页面"),
-        retryable: status.error.retryable === true,
-      }
+    ? safeErrorDetails(status.error.code)
     : null;
   return {
     provider: "deepseek",
@@ -56,12 +76,10 @@ function sendError(res, error) {
   if (!(error instanceof EscortServiceError) || !SAFE_HTTP_STATUS[error.code]) {
     return res.status(500).json(UNKNOWN_ERROR);
   }
+  const details = safeErrorDetails(error.code);
   return res.status(SAFE_HTTP_STATUS[error.code]).json({
     ok: false,
-    code: error.code,
-    message: error.message,
-    action: error.action,
-    retryable: error.retryable,
+    ...details,
   });
 }
 

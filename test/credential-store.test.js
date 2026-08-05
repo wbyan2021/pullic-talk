@@ -143,3 +143,25 @@ test("security runner uses the absolute binary and appends stdin newline", async
   assert.equal(observed.args.includes(FAKE_SECRET), false);
   assert.equal(result.stdout, "ok\n");
 });
+
+test("security runner rejects at its deadline even when the child ignores SIGTERM", async () => {
+  const signals = [];
+  const spawnImpl = () => {
+    const child = new EventEmitter();
+    child.stdin = new PassThrough();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = (signal) => { signals.push(signal); return true; };
+    return child;
+  };
+  const runSecurity = createSecurityRunner({ spawnImpl, timeoutMs: 5 });
+
+  await assert.rejects(
+    Promise.race([
+      runSecurity(["find-generic-password"]),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("runner did not reject at deadline")), 50)),
+    ]),
+    (error) => error instanceof CredentialStoreError && error.code === "credential_store_unavailable",
+  );
+  assert.deepEqual(signals, ["SIGTERM"]);
+});

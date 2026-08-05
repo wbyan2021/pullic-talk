@@ -103,6 +103,31 @@ test("route responses whitelist status fields even if an internal service adds a
   assert.equal(JSON.stringify(res.body).includes(FAKE_KEY), false);
 });
 
+test("route responses replace nested error text instead of trusting internal strings", async () => {
+  const unsafeStatus = {
+    ...SAFE_STATUS,
+    availability: "unavailable",
+    error: {
+      code: "credential_invalid",
+      message: `raw ${FAKE_KEY}`,
+      action: `send ${FAKE_KEY}`,
+      retryable: true,
+      secret: FAKE_KEY,
+    },
+  };
+  const { app } = setup(createService({ async getStatus() { return unsafeStatus; } }));
+
+  const res = await invoke(app, "GET", "/api/providers/deepseek/status");
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body.status.error, {
+    code: "credential_invalid",
+    message: "DeepSeek API Key 无效或已失效，请替换后重试。",
+    action: "替换 API Key 后重新检测",
+    retryable: false,
+  });
+  assert.equal(JSON.stringify(res.body).includes(FAKE_KEY), false);
+});
+
 test("PUT rejects a missing apiKey before calling the service", async () => {
   const { app, service } = setup();
   const res = await invoke(app, "PUT", "/api/providers/deepseek/credential", {});
@@ -120,7 +145,14 @@ test("connection check always returns a structured Provider status", async () =>
   const { app } = setup(createService({ async checkConnection() { return failed; } }));
   const res = await invoke(app, "POST", "/api/providers/deepseek/check");
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(res.body, { ok: false, status: failed });
+  assert.equal(res.body.ok, false);
+  assert.equal(res.body.status.availability, "unavailable");
+  assert.deepEqual(res.body.status.error, {
+    code: "credential_invalid",
+    message: "DeepSeek API Key 无效或已失效，请替换后重试。",
+    action: "替换 API Key 后重新检测",
+    retryable: false,
+  });
 });
 
 test("message success returns reply metadata and safe status", async () => {
@@ -160,15 +192,35 @@ for (const [code, expectedStatus] of [
     const res = await invoke(app, "POST", "/api/escort/messages", { message: "hello", history: [] });
     assert.equal(res.statusCode, expectedStatus);
     assert.notEqual(res.statusCode, 401);
-    assert.deepEqual(res.body, {
-      ok: false,
-      code,
-      message: "safe message",
-      action: "safe action",
-      retryable: expectedStatus >= 500,
-    });
+    assert.equal(res.body.ok, false);
+    assert.equal(res.body.code, code);
+    assert.equal(typeof res.body.message, "string");
+    assert.equal(typeof res.body.action, "string");
+    assert.equal(typeof res.body.retryable, "boolean");
   });
 }
+
+test("known service errors cannot smuggle internal text into API responses", async () => {
+  const { app } = setup(createService({
+    async sendMessage() {
+      throw new EscortServiceError("credential_invalid", `raw ${FAKE_KEY}`, {
+        action: `send ${FAKE_KEY}`,
+        retryable: true,
+      });
+    },
+  }));
+  const res = await invoke(app, "POST", "/api/escort/messages", { message: "hello", history: [] });
+
+  assert.equal(res.statusCode, 424);
+  assert.deepEqual(res.body, {
+    ok: false,
+    code: "credential_invalid",
+    message: "DeepSeek API Key 无效或已失效，请替换后重试。",
+    action: "替换 API Key 后重新检测",
+    retryable: false,
+  });
+  assert.equal(JSON.stringify(res.body).includes(FAKE_KEY), false);
+});
 
 test("check and chat share a 12-per-minute local cost limiter", async () => {
   let now = 10_000;
