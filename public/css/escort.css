@@ -390,4 +390,7 @@ textarea:disabled {
   #escort-toggle > span:not(#escort-top-dot) { display: none; }
   #escort-panel { width: 100vw; }
   .escort-body { padding: 13px; }
+  #subbar { overflow-x: auto; overflow-y: hidden; }
+  #subbar .tabs, #subbar .filters { flex: none; flex-wrap: nowrap; }
+  #subbar .tab { white-space: nowrap; }
 }
