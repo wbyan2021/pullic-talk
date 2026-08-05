@@ -93,6 +93,16 @@ test("status, save, and delete return safe shapes without echoing the Key", asyn
   assert.equal(service.calls.delete, 1);
 });
 
+test("route responses whitelist status fields even if an internal service adds a secret", async () => {
+  const unsafeStatus = { ...SAFE_STATUS, apiKey: FAKE_KEY, internal: { secret: FAKE_KEY } };
+  const { app } = setup(createService({ async getStatus() { return unsafeStatus; } }));
+
+  const res = await invoke(app, "GET", "/api/providers/deepseek/status");
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { ok: true, status: SAFE_STATUS });
+  assert.equal(JSON.stringify(res.body).includes(FAKE_KEY), false);
+});
+
 test("PUT rejects a missing apiKey before calling the service", async () => {
   const { app, service } = setup();
   const res = await invoke(app, "PUT", "/api/providers/deepseek/credential", {});

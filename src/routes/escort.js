@@ -2,6 +2,8 @@ import { EscortServiceError } from "../services/escort-service.js";
 
 const COST_WINDOW_MS = 60_000;
 const COST_LIMIT = 12;
+const MASKED_DISPLAY = "••••••••（已安全保存）";
+const VALID_AVAILABILITY = new Set(["unconfigured", "unchecked", "checking", "available", "limited", "unavailable"]);
 
 const SAFE_HTTP_STATUS = {
   invalid_credential_input: 400,
@@ -28,6 +30,27 @@ const UNKNOWN_ERROR = {
   action: "重新加载页面",
   retryable: true,
 };
+
+function safeStatus(status = {}) {
+  const configured = status.configured === true;
+  const availability = VALID_AVAILABILITY.has(status.availability) ? status.availability : "unavailable";
+  const error = status.error && typeof status.error === "object"
+    ? {
+        code: String(status.error.code || "internal_error"),
+        message: String(status.error.message || "护航状态异常。"),
+        action: String(status.error.action || "重新加载页面"),
+        retryable: status.error.retryable === true,
+      }
+    : null;
+  return {
+    provider: "deepseek",
+    configured,
+    display: configured ? MASKED_DISPLAY : null,
+    availability,
+    lastCheckedAt: typeof status.lastCheckedAt === "string" ? status.lastCheckedAt : null,
+    error,
+  };
+}
 
 function sendError(res, error) {
   if (!(error instanceof EscortServiceError) || !SAFE_HTTP_STATUS[error.code]) {
@@ -79,7 +102,7 @@ export default function escortRoutes(app, { escortService, now = () => Date.now(
   app.get("/api/providers/deepseek/status", async (_req, res) => {
     try {
       const status = await escortService.getStatus();
-      res.json({ ok: true, status });
+      res.json({ ok: true, status: safeStatus(status) });
     } catch (error) {
       sendError(res, error);
     }
@@ -97,7 +120,7 @@ export default function escortRoutes(app, { escortService, now = () => Date.now(
     }
     try {
       const status = await escortService.saveCredential(req.body.apiKey);
-      return res.json({ ok: true, status });
+      return res.json({ ok: true, status: safeStatus(status) });
     } catch (error) {
       return sendError(res, error);
     }
@@ -106,7 +129,7 @@ export default function escortRoutes(app, { escortService, now = () => Date.now(
   app.delete("/api/providers/deepseek/credential", async (_req, res) => {
     try {
       const status = await escortService.deleteCredential();
-      res.json({ ok: true, status });
+      res.json({ ok: true, status: safeStatus(status) });
     } catch (error) {
       sendError(res, error);
     }
@@ -116,7 +139,8 @@ export default function escortRoutes(app, { escortService, now = () => Date.now(
     if (!consumeCostAllowance(res)) return;
     try {
       const status = await withClientAbort(res, (signal) => escortService.checkConnection({ signal }));
-      res.json({ ok: status.availability === "available", status });
+      const publicStatus = safeStatus(status);
+      res.json({ ok: publicStatus.availability === "available", status: publicStatus });
     } catch (error) {
       sendError(res, error);
     }
@@ -133,7 +157,7 @@ export default function escortRoutes(app, { escortService, now = () => Date.now(
       res.json({
         ok: true,
         reply: { text: result.text, model: result.model, provider: result.provider },
-        status: result.status,
+        status: safeStatus(result.status),
       });
     } catch (error) {
       sendError(res, error);
