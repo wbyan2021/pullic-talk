@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import pty from "node-pty";
 
 const SECURITY_BIN = "/usr/bin/security";
 const SERVICE = "com.ai-ops.cockpit.provider.deepseek";
@@ -6,6 +7,7 @@ const ACCOUNT = "default";
 const LABEL = "AI·OPS COCKPIT · DeepSeek";
 const MAX_OUTPUT_BYTES = 8 * 1024;
 const DEFAULT_TIMEOUT_MS = 10_000;
+const KEYCHAIN_WRITE_PROMPT = /password data for new item:\s*$/i;
 
 const SAFE_MESSAGES = {
   credential_store_unavailable: "系统钥匙串暂时不可用，请检查 macOS 钥匙串状态后重试。",
@@ -89,6 +91,98 @@ export function createSecurityRunner({ spawnImpl = spawn, timeoutMs = DEFAULT_TI
   };
 }
 
+export function createSecurityPromptRunner({ spawnPtyImpl = pty.spawn, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  return function runSecurityPrompt(args, { secret } = {}) {
+    return new Promise((resolve, reject) => {
+      if (typeof secret !== "string" || !secret || secret.length > 512 || /[\u0000-\u001f\u007f]/.test(secret)) {
+        reject(new CredentialStoreError("invalid_secret", undefined, { retryable: false }));
+        return;
+      }
+
+      const userName = process.env.USER || process.env.LOGNAME || "";
+      const env = {
+        PATH: "/usr/bin:/bin",
+        HOME: process.env.HOME || "",
+        USER: userName,
+        LOGNAME: process.env.LOGNAME || userName,
+        LANG: "C",
+        LC_ALL: "C",
+      };
+
+      let term;
+      try {
+        term = spawnPtyImpl(SECURITY_BIN, args, {
+          name: "xterm-256color",
+          cols: 80,
+          rows: 24,
+          cwd: process.cwd(),
+          env,
+        });
+      } catch (cause) {
+        reject(new CredentialStoreError("credential_store_unavailable", undefined, { cause }));
+        return;
+      }
+
+      let settled = false;
+      let secretSent = false;
+      let promptBuffer = "";
+      let timer;
+      let forceKillTimer;
+      let dataSubscription;
+      let exitSubscription;
+
+      const settle = (callback) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        dataSubscription?.dispose?.();
+        callback();
+      };
+
+      dataSubscription = term.onData((chunk) => {
+        if (secretSent || settled) return;
+        promptBuffer = appendBounded(promptBuffer, chunk);
+        if (!KEYCHAIN_WRITE_PROMPT.test(promptBuffer)) return;
+        secretSent = true;
+        promptBuffer = "";
+        try {
+          term.write(`${secret}\r`);
+        } catch (cause) {
+          try { term.kill("SIGTERM"); } catch {}
+          settle(() => reject(new CredentialStoreError("credential_store_unavailable", undefined, { cause })));
+        }
+      });
+
+      exitSubscription = term.onExit((event = {}) => {
+        clearTimeout(forceKillTimer);
+        exitSubscription?.dispose?.();
+        if (settled) return;
+        if (!secretSent) {
+          settle(() => reject(new CredentialStoreError("credential_store_unavailable")));
+          return;
+        }
+        settle(() => resolve({
+          status: Number.isInteger(event.exitCode) ? event.exitCode : 1,
+          signal: event.signal ?? null,
+          stdout: "",
+          stderr: "",
+        }));
+      });
+
+      timer = setTimeout(() => {
+        try { term.kill("SIGTERM"); } catch {}
+        forceKillTimer = setTimeout(() => {
+          try { term.kill("SIGKILL"); } catch {}
+          exitSubscription?.dispose?.();
+        }, 250);
+        forceKillTimer.unref?.();
+        settle(() => reject(new CredentialStoreError("credential_store_unavailable")));
+      }, timeoutMs);
+      timer.unref?.();
+    });
+  };
+}
+
 function isNotFound(result) {
   if (result?.status === 44) return true;
   return /could not be found|errSecItemNotFound|specified item.*not.*found/i.test(result?.stderr || "");
@@ -96,6 +190,7 @@ function isNotFound(result) {
 
 export function createCredentialStore({
   runSecurity = createSecurityRunner(),
+  runSecurityPrompt = createSecurityPromptRunner(),
   platform = process.platform,
 } = {}) {
   function assertSupported() {
@@ -104,15 +199,18 @@ export function createCredentialStore({
     }
   }
 
-  async function execute(args, options) {
+  async function executeWith(runner, args, options) {
     assertSupported();
     try {
-      return await runSecurity(args, options);
+      return await runner(args, options);
     } catch (cause) {
       if (cause instanceof CredentialStoreError) throw cause;
       throw new CredentialStoreError("credential_store_unavailable", undefined, { cause });
     }
   }
+
+  const execute = (args, options) => executeWith(runSecurity, args, options);
+  const executePrompt = (args, options) => executeWith(runSecurityPrompt, args, options);
 
   const findArgs = () => ["find-generic-password", "-a", ACCOUNT, "-s", SERVICE];
 
@@ -132,7 +230,7 @@ export function createCredentialStore({
     },
 
     async set(secret) {
-      if (typeof secret !== "string" || !secret) {
+      if (typeof secret !== "string" || !secret || secret.length > 512 || /[\u0000-\u001f\u007f]/.test(secret)) {
         throw new CredentialStoreError("invalid_secret", undefined, { retryable: false });
       }
       const args = [
@@ -143,7 +241,7 @@ export function createCredentialStore({
         "-U",
         "-w",
       ];
-      const result = await execute(args, { stdin: secret });
+      const result = await executePrompt(args, { secret });
       if (result.status !== 0) throw new CredentialStoreError("credential_store_unavailable");
       return true;
     },
