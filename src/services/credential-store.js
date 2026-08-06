@@ -8,6 +8,7 @@ const LABEL = "AI·OPS COCKPIT · DeepSeek";
 const MAX_OUTPUT_BYTES = 8 * 1024;
 const DEFAULT_TIMEOUT_MS = 10_000;
 const KEYCHAIN_WRITE_PROMPT = /password data for new item:\s*$/i;
+const KEYCHAIN_RETYPE_PROMPT = /retype password for new item:\s*$/i;
 
 const SAFE_MESSAGES = {
   credential_store_unavailable: "系统钥匙串暂时不可用，请检查 macOS 钥匙串状态后重试。",
@@ -91,9 +92,16 @@ export function createSecurityRunner({ spawnImpl = spawn, timeoutMs = DEFAULT_TI
   };
 }
 
-export function createSecurityPromptRunner({ spawnPtyImpl = pty.spawn, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+export function createSecurityPromptRunner({
+  spawnPtyImpl = pty.spawn,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  onDiagnostic = () => {},
+} = {}) {
   return function runSecurityPrompt(args, { secret } = {}) {
     return new Promise((resolve, reject) => {
+      const diagnose = (event) => {
+        try { onDiagnostic(event); } catch {}
+      };
       if (typeof secret !== "string" || !secret || secret.length > 512 || /[\u0000-\u001f\u007f]/.test(secret)) {
         reject(new CredentialStoreError("invalid_secret", undefined, { retryable: false }));
         return;
@@ -118,13 +126,15 @@ export function createSecurityPromptRunner({ spawnPtyImpl = pty.spawn, timeoutMs
           cwd: process.cwd(),
           env,
         });
+        diagnose({ event: "spawned" });
       } catch (cause) {
+        diagnose({ event: "spawn_failed" });
         reject(new CredentialStoreError("credential_store_unavailable", undefined, { cause }));
         return;
       }
 
       let settled = false;
-      let secretSent = false;
+      let secretWrites = 0;
       let promptBuffer = "";
       let timer;
       let forceKillTimer;
@@ -140,14 +150,23 @@ export function createSecurityPromptRunner({ spawnPtyImpl = pty.spawn, timeoutMs
       };
 
       dataSubscription = term.onData((chunk) => {
-        if (secretSent || settled) return;
-        promptBuffer = appendBounded(promptBuffer, chunk);
-        if (!KEYCHAIN_WRITE_PROMPT.test(promptBuffer)) return;
-        secretSent = true;
+        if (settled) return;
+        if (secretWrites >= 2) {
+          diagnose({ event: "post_secret_data", bytes: Buffer.byteLength(chunk) });
+          return;
+        }
+        const safeChunk = chunk.split(secret).join("");
+        promptBuffer = appendBounded(promptBuffer, safeChunk);
+        const expectedPrompt = secretWrites === 0 ? KEYCHAIN_WRITE_PROMPT : KEYCHAIN_RETYPE_PROMPT;
+        if (!expectedPrompt.test(promptBuffer)) return;
+        diagnose({ event: secretWrites === 0 ? "prompt_seen" : "retype_prompt_seen" });
+        secretWrites += 1;
         promptBuffer = "";
         try {
-          term.write(`${secret}\r`);
+          term.write(`${secret}\n`);
+          diagnose({ event: secretWrites === 1 ? "secret_written" : "secret_retyped" });
         } catch (cause) {
+          diagnose({ event: "write_failed" });
           try { term.kill("SIGTERM"); } catch {}
           settle(() => reject(new CredentialStoreError("credential_store_unavailable", undefined, { cause })));
         }
@@ -157,7 +176,12 @@ export function createSecurityPromptRunner({ spawnPtyImpl = pty.spawn, timeoutMs
         clearTimeout(forceKillTimer);
         exitSubscription?.dispose?.();
         if (settled) return;
-        if (!secretSent) {
+        diagnose({
+          event: "exit",
+          status: Number.isInteger(event.exitCode) ? event.exitCode : 1,
+          secretWrites,
+        });
+        if (secretWrites === 0) {
           settle(() => reject(new CredentialStoreError("credential_store_unavailable")));
           return;
         }
@@ -170,6 +194,7 @@ export function createSecurityPromptRunner({ spawnPtyImpl = pty.spawn, timeoutMs
       });
 
       timer = setTimeout(() => {
+        diagnose({ event: "timeout", secretWrites });
         try { term.kill("SIGTERM"); } catch {}
         forceKillTimer = setTimeout(() => {
           try { term.kill("SIGKILL"); } catch {}

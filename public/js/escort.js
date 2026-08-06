@@ -160,17 +160,14 @@
     event.preventDefault();
     const apiKey = elements.keyInput.value;
     runBusy(async () => {
-      try {
-        const saved = await requestJson("/api/providers/deepseek/credential", {
-          method: "PUT",
-          json: { apiKey },
-        });
-        status = saved.status;
-        replacing = false;
-        await checkConnection();
-      } finally {
-        elements.keyInput.value = "";
-      }
+      const saved = await requestJson("/api/providers/deepseek/credential", {
+        method: "PUT",
+        json: { apiKey },
+      });
+      elements.keyInput.value = "";
+      status = saved.status;
+      replacing = false;
+      await checkConnection();
     });
   });
 

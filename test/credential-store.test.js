@@ -185,6 +185,7 @@ test("prompt runner waits for the Keychain prompt and never puts the secret in a
   let onData;
   let onExit;
   const writes = [];
+  const diagnostics = [];
   const spawnPtyImpl = (command, args, options) => {
     observed = { command, args, options };
     return {
@@ -194,12 +195,18 @@ test("prompt runner waits for the Keychain prompt and never puts the secret in a
       kill() {},
     };
   };
-  const runPrompt = createSecurityPromptRunner({ spawnPtyImpl, timeoutMs: 100 });
+  const runPrompt = createSecurityPromptRunner({
+    spawnPtyImpl,
+    timeoutMs: 100,
+    onDiagnostic: (event) => diagnostics.push(event),
+  });
   const args = ["add-generic-password", "-a", "default", "-s", "test", "-U", "-w"];
 
   const pending = runPrompt(args, { secret: FAKE_SECRET });
   onData("password data for new item: ");
-  assert.deepEqual(writes, [`${FAKE_SECRET}\r`]);
+  assert.deepEqual(writes, [`${FAKE_SECRET}\n`]);
+  onData(`\r\nretype password for new item: `);
+  assert.deepEqual(writes, [`${FAKE_SECRET}\n`, `${FAKE_SECRET}\n`]);
   onData(FAKE_SECRET); // A misbehaving child may echo; the runner must not retain it.
   onExit({ exitCode: 0, signal: 0 });
   const result = await pending;
@@ -208,6 +215,11 @@ test("prompt runner waits for the Keychain prompt and never puts the secret in a
   assert.equal(observed.args.includes(FAKE_SECRET), false);
   assert.equal(Object.values(observed.options.env).includes(FAKE_SECRET), false);
   assert.equal(JSON.stringify(result).includes(FAKE_SECRET), false);
+  assert.equal(JSON.stringify(diagnostics).includes(FAKE_SECRET), false);
+  assert.deepEqual(diagnostics.map((item) => item.event), [
+    "spawned", "prompt_seen", "secret_written", "retype_prompt_seen", "secret_retyped",
+    "post_secret_data", "exit",
+  ]);
   assert.deepEqual(result, { status: 0, signal: 0, stdout: "", stderr: "" });
 });
 
@@ -285,5 +297,51 @@ if (process.env.RUN_MACOS_KEYCHAIN_PROMPT_PROBE === "1") {
       { stdio: "ignore" },
     );
     assert.notEqual(lookup.status, 0, "prompt probe unexpectedly created a Keychain item");
+  });
+}
+
+if (process.env.RUN_MACOS_KEYCHAIN_WRITE_PROBE === "1") {
+  test("macOS prompt runner can create and remove an isolated fake Keychain item", async () => {
+    assert.equal(process.platform, "darwin");
+    const service = `com.ai-ops.cockpit.write-probe.${process.pid}.${Date.now()}`;
+    const itemArgs = ["-a", "probe", "-s", service];
+    const diagnostics = [];
+    const runPrompt = createSecurityPromptRunner({
+      timeoutMs: 3_000,
+      onDiagnostic: (event) => diagnostics.push(event),
+    });
+
+    try {
+      let result;
+      try {
+        result = await runPrompt(
+          ["add-generic-password", ...itemArgs, "-U", "-w"],
+          { secret: FAKE_SECRET },
+        );
+      } catch (error) {
+        assert.fail(`prompt runner failed: ${JSON.stringify(diagnostics)}`);
+      }
+      assert.equal(result.status, 0, `security exited with status ${result.status}`);
+
+      const lookup = spawnSync(
+        "/usr/bin/security",
+        ["find-generic-password", ...itemArgs],
+        { stdio: "ignore" },
+      );
+      assert.equal(lookup.status, 0, "fake Keychain item was not created");
+    } finally {
+      spawnSync(
+        "/usr/bin/security",
+        ["delete-generic-password", ...itemArgs],
+        { stdio: "ignore" },
+      );
+    }
+
+    const lookupAfterCleanup = spawnSync(
+      "/usr/bin/security",
+      ["find-generic-password", ...itemArgs],
+      { stdio: "ignore" },
+    );
+    assert.notEqual(lookupAfterCleanup.status, 0, "fake Keychain probe item was not removed");
   });
 }
