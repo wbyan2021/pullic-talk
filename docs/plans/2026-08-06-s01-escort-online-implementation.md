@@ -27,12 +27,12 @@ Tasks 1–6 and the no-real-Key portion of Task 7 were completed on `codex/v0.1-
 
 | Area | Result |
 |---|---|
-| Credential Store | Implemented and covered by 8 tests, including a child-process timeout that rejects even if `SIGTERM` is ignored; no real Keychain mutation performed |
+| Credential Store | Implemented and covered by 11 default tests plus a 12/12 macOS no-write prompt probe; save uses a protected PTY after real validation disproved ordinary stdin; real login-Keychain mutation remains user-only |
 | DeepSeek Provider | Implemented and covered by 13 tests; no real network/charged request performed |
 | Escort Service | Implemented and covered by 14 tests; independent of CLI Agents |
 | Authenticated routes | Implemented and covered by 22 tests, including nested error-text replacement and safe status-field whitelisting |
 | Escort panel | Implemented; desktop 1280×720 and narrow 760×720 browser checks passed without console errors |
-| Full automated evidence | `npm test` 57/57, syntax checks, `git diff --check`, isolated-port health and strict project-state validation passed |
+| Full automated evidence | `npm test` 60/60; macOS no-write PTY probe 12/12; syntax checks, `git diff --check`, isolated-port health and strict project-state validation passed |
 | Remaining gate | User enters their own Key in the browser and completes design §12.2 without sharing it with AI |
 
 ---
@@ -68,7 +68,7 @@ Add exactly this script without changing dependencies:
 
 Use `node:test` and `node:assert/strict`. Inject a fake `runSecurity(args, options)` and verify:
 
-1. `set("fake-secret-123456")` calls `add-generic-password`, includes fixed account/service/label and `-U`, ends argv with `-w`, passes the secret only as `options.stdin`, and does not include it in `args`.
+1. `set("fake-secret-123456")` calls `add-generic-password`, includes fixed account/service/label and `-U`, ends argv with `-w`, passes the secret only to the prompt runner, and does not include it in `args` or the child environment.
 2. `has()` calls `find-generic-password` without `-w`, returning only true/false.
 3. `get()` calls `find-generic-password` with `-w` and trims the final newline.
 4. `delete()` treats the fixed not-found result as success.
@@ -84,6 +84,10 @@ export class CredentialStoreError extends Error {
 
 export function createSecurityRunner({ spawnImpl, timeoutMs } = {}) {
   return async function runSecurity(args, { stdin } = {}) { /* bounded stdout/stderr */ };
+}
+
+export function createSecurityPromptRunner({ spawnPtyImpl, timeoutMs } = {}) {
+  return async function runSecurityPrompt(args, { secret } = {}) { /* fixed prompt; no retained output */ };
 }
 
 export function createCredentialStore({ runSecurity, platform = process.platform } = {}) {
@@ -118,7 +122,7 @@ Expected: FAIL because the module or exports do not exist.
 
 - Spawn only absolute `/usr/bin/security`; never invoke a shell.
 - Bound execution to 10 seconds and each output stream to 8 KiB.
-- For save use argv `add-generic-password ... -U -w` with `-w` last, then `child.stdin.end(secret + "\n")`.
+- For save use argv `add-generic-password ... -U -w` with `-w` last, wait for the fixed C-locale password prompt on a protected PTY, write the secret once, and retain no output after that point.
 - For `has`, do not request or capture a password value.
 - For `get`, capture stdout internally and never log it.
 - Detect item-not-found by exit status and known Keychain not-found wording, but never expose raw stderr.

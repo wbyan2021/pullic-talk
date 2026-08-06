@@ -23,7 +23,7 @@ updated: 2026-08-06
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
 - 稳定基线：`9d5a6d41e678fdb5062531b4ac727a2da70f0154`
-- 当前验证基线：依赖完整；已配置 Node.js 原生测试入口，57 项 S01 测试通过；隔离端口健康检查和桌面/窄屏页面检查通过；没有 lint、CI 或 build 脚本。
+- 当前验证基线：依赖完整；60 项默认 S01 测试和 12/12 macOS 无写入 PTY 探针通过；隔离端口健康检查和桌面/窄屏页面检查通过；没有 lint、CI 或 build 脚本。
 
 ## 关键路径
 
@@ -66,7 +66,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 | 扫描工具 | `npm run scan` | 本轮未执行；会更新本地 `tools.json` |
 | 完整安装引导 | `npm run setup` | 本轮未执行；包含环境检查、安装和扫描 |
 | JavaScript 语法检查 | `git ls-files '*.js' | xargs -n1 node --check` | 初始化 28 个文件通过；S01 新增/装配文件再次通过 |
-| 自动化测试 | `npm test` | 57 项通过 |
+| 自动化测试 | `npm test` | 60 项通过；`RUN_MACOS_KEYCHAIN_PROMPT_PROBE=1 node --test test/credential-store.test.js` 另有 12/12 无写入 macOS 探针 |
 | lint | 未配置 | 不可用 |
 | build | 无需前端构建，且未配置 build 脚本 | 不适用 |
 
@@ -119,7 +119,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 | 安装/启动/终端接口 | 安装软件、启动进程或执行当前用户权限命令 | 必须遵守白名单、用户授权和进程归属边界 |
 | S01 凭据操作 | 增改或删除 macOS Keychain 中固定服务条目 | 只通过明确 UI 动作；Key 不进 argv、文件或日志；删除必须幂等 |
 
-S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deepseek`、account `default`。自动化测试只使用假的 runner，没有写入真实条目；真实副作用必须由用户在网页验收时主动触发。
+S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deepseek`、account `default`。保存通过既有 `node-pty` 等待 C-locale 固定提示并写入，写入后不保留 PTY 输出；查询、读取和删除仍使用无 shell 的普通子进程。自动化测试使用假 Key；macOS 提示探针在输入前终止并确认不生成条目。真实副作用必须由用户在网页验收时主动触发。
 
 ## 高风险区域
 
@@ -130,7 +130,7 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 | `src/routes/install.js`、`src/install-catalog.js` | 调用包管理器和外部安装源 | 白名单、来源、超时、重复任务和失败提示 |
 | `src/agent-caller.js` | CLI 在用户主目录运行并继承环境变量 | 工作目录、参数注入、输出上限、超时和停止 |
 | `src/utils/auth.js`、`src/server.js` | 本地控制面的认证与暴露边界 | Token、Origin、监听地址、CSP、速率限制 |
-| `src/services/credential-store.js` | 接触真实 Provider Key 与系统钥匙串 | 绝对命令路径、shell 禁用、stdin、输出边界、无明文回退 |
+| `src/services/credential-store.js` | 接触真实 Provider Key 与系统钥匙串 | 绝对命令路径、shell 禁用、受控 PTY 固定提示、输出边界、超时回收、无明文回退 |
 | `src/providers/deepseek.js`、`src/routes/escort.js` | 付费外部请求与错误/秘密泄露 | 超时、单并发、频率、状态字段白名单、原始错误不透传 |
 | `public/js/chat.js` | 单文件较大，状态、DOM 与流式逻辑耦合 | XSS、会话兼容、停止流程和现有交互回归 |
 | `agents.config.json` | 可改变真实 CLI 命令和参数 | 不含秘密、命令合法、输出解析契约可验证 |
@@ -138,7 +138,7 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 
 ## 已知工程缺口
 
-- 已有 57 项 S01 自动化测试，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
+- 已有 60 项默认 S01 自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
 - `public/js/chat.js` 体量较大，修改容易产生跨功能回归。
 - Agent 默认工作目录是用户主目录，不具备项目级 Workspace 边界。
 - 默认端口 `3210` 在初始化时已被未知进程占用。

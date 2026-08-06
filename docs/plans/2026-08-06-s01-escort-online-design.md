@@ -166,12 +166,12 @@ flowchart LR
 
 | 操作 | 系统调用原则 | 秘密流向 |
 |---|---|---|
-| 保存/替换 | `/usr/bin/security add-generic-password` + `-U`；`-w` 必须是最后一个参数 | Key 通过子进程 stdin 输入，不进入 argv |
+| 保存/替换 | `/usr/bin/security add-generic-password` + `-U`；`-w` 必须是最后一个参数 | 通过受控 PTY 等待固定提示后输入；Key 不进入 argv、环境变量、文件、日志或返回值 |
 | 读取 | `/usr/bin/security find-generic-password ... -w` | stdout 只返回服务端内存，不写日志、不返回前端 |
 | 删除 | `/usr/bin/security delete-generic-password ...` | 无秘密参数；不存在时按幂等成功处理 |
 | 状态 | 尝试查找并只返回是否存在 | 前端仅得到 `configured: true/false` |
 
-本机 `/usr/bin/security help add-generic-password` 已确认：使用 `-w` 直接携带密码不安全，应把 `-w` 放在最后通过提示输入。本轮只查看了帮助，没有写入、读取或删除任何真实 Keychain 条目。
+本机 `/usr/bin/security help add-generic-password` 已确认：使用 `-w` 直接携带密码不安全，应把 `-w` 放在最后通过提示输入。首次真实网页验收进一步确认该提示读取控制终端而非普通 stdin；实现因此复用既有 `node-pty`，强制 C locale、只识别固定提示、写入后不保留 PTY 输出，并保留 10 秒超时与强制回收。
 
 ### 6.3 输入边界
 
@@ -290,7 +290,7 @@ API 不返回 Key、Key 长度、前后缀、Keychain 路径、DeepSeek 原始�
 | `src/routes/escort.js` | Provider / Escort HTTP 契约与输入验证 |
 | `public/js/escort.js` | 护航侧栏状态、配置和对话交互 |
 | `public/css/escort.css` | 护航侧栏及响应式样式 |
-| `test/credential-store.test.js` | Keychain 命令、stdin 与秘密不进 argv |
+| `test/credential-store.test.js` | Keychain 普通命令、受控 PTY 提示、秘密不进 argv/环境/输出及真实无写入提示探针 |
 | `test/deepseek-provider.test.js` | 成功响应、HTTP/网络/超时/非法响应映射 |
 | `test/escort-service.test.js` | 状态迁移、Pi 独立、并发与历史边界 |
 | `test/escort-routes.test.js` | HTTP 契约、状态字段白名单、限流与安全错误响应 |
@@ -378,7 +378,7 @@ curl http://127.0.0.1:43211/api/health
 
 ## 13. 安全审查清单
 
-- [x] Key 只从受现有 token 保护的本机 loopback HTTP 请求体进入本地进程，并只从 stdin 进入 `security`；
+- [x] Key 只从受现有 token 保护的本机 loopback HTTP 请求体进入本地进程，并只在固定 Keychain 提示出现后进入受控 PTY；
 - [x] Key 不在 argv、URL、响应、日志、异常、DOM 文本和浏览器持久化中；
 - [x] Provider 原始错误不透传，401 不与本地认证混淆；
 - [x] 所有新接口都经过现有 token 闸门和本机监听边界；
@@ -416,6 +416,6 @@ curl http://127.0.0.1:43211/api/health
 
 ## 16. 实现复核结论
 
-2026-08-06，S01 代码按本设计落地，未修改 §10.3 的禁止文件。最终审查增加两项范围内安全加固：钥匙串子进程即使忽略 `SIGTERM`，调用方也会按时收到安全错误并安排强制回收；HTTP 层只按稳定错误码生成固定文案，不信任可能夹带内部信息的错误字符串。这些补充收紧安全边界，不改变产品范围。
+2026-08-06，S01 代码按本设计落地，未修改 §10.3 的禁止文件。最终审查增加三项范围内安全加固：钥匙串子进程即使忽略 `SIGTERM`，调用方也会按时收到安全错误并安排强制回收；HTTP 层只按稳定错误码生成固定文案；真实验收推翻普通 stdin 假设后，Keychain 保存改为受控 PTY 提示输入。这些补充收紧安全边界，不改变产品范围。
 
 当前结论为“代码实现完成、真实验收待用户”。在用户完成 §12.2 前，`docs/NOW.md` 必须保持 `stage: review`、`slice_status: active`。

@@ -23,7 +23,7 @@ S01 同时要处理真实 DeepSeek API Key。Key 需要可保存、替换和删�
 1. 新增独立的 Provider Adapter 和 Escort Service；护航 AI 直接调用 DeepSeek，不经过 CLI Agent 调用器。
 2. DeepSeek 是 S01 唯一实现的 Provider，但路由、服务和适配器保持明确边界，后续 Provider 通过新增适配器接入，不在 S01 预建通用插件平台。
 3. API Key 保存到 macOS 默认 Keychain 的固定 service/account 条目。
-4. 写入 Keychain 时调用 `/usr/bin/security add-generic-password ... -U -w`，把 `-w` 放在最后，并从子进程 stdin 输入 Key；Key 不进入 argv。读取结果只在服务端请求生命周期内使用，不记录、不返回前端。
+4. 写入 Keychain 时调用 `/usr/bin/security add-generic-password ... -U -w` 并把 `-w` 放在最后。真实 macOS 验收确认该命令从控制终端而非普通 stdin 读取密码，因此保存通过项目既有 `node-pty` 创建受控伪终端：仅识别固定英文提示后写入 Key，随后不保留 PTY 输出；Key 不进入 argv、环境变量、文件或日志。读取结果只在服务端请求生命周期内使用，不记录、不返回前端。
 5. 前端只获得 `configured` 与脱敏占位状态；输入框提交后立即清空，Key 不写入 localStorage、DOM 展示文本或聊天历史。
 6. Provider 状态在内存中维护；应用重启后从 `unchecked` 重新检测，不把故障状态写入普通配置。
 7. S01 护航只解释、诊断和给出下一步，不调用本机工具，也不得声称已经替用户执行操作。
@@ -34,12 +34,13 @@ S01 同时要处理真实 DeepSeek API Key。Key 需要可保存、替换和删�
 
 - Pi 或其他 CLI 失效时，护航 AI 仍然可用。
 - Provider、凭据、护航对话和旧群聊职责清楚，后续可逐步扩展而不重写旧功能。
-- 不新增原生 Node 依赖，Key 由系统钥匙串保护，且避免出现在命令参数中。
+- 不新增依赖，复用项目已有 `node-pty`；Key 由系统钥匙串保护，且避免出现在命令参数中。
 - 适配器和服务可用假的 Keychain runner / fetch 做单元测试。
 
 ### 代价与残余风险
 
 - 当前方案只支持 macOS；跨平台凭据库以后需要新适配器。
+- 保存依赖 Apple `security` 的英文固定提示；runner 强制 `LANG/LC_ALL=C`、限制输出和时间，并在提示或退出协议异常时安全失败。
 - Node.js 字符串无法保证用后从内存中立即抹除，只能缩短生命周期并禁止复制和记录。
 - 用户的 Keychain 策略可能触发系统授权或不可用，产品必须显示 `credential_store_unavailable`，不能回退到明文文件。
 - S01 不保存聊天历史，不提供黑匣子和工具调用；这些能力由后续切片负责。
@@ -60,7 +61,11 @@ S01 同时要处理真实 DeepSeek API Key。Key 需要可保存、替换和删�
 
 ### 新增原生 Keychain Node 依赖
 
-暂不采用。它增加安装和 Node ABI 风险；当前系统命令已经提供所需最小能力。若 stdin 写入或系统授权体验的真实原型不成立，再重新评估原生桥接。
+暂不采用。它增加安装和 Node ABI 风险；当前系统命令配合项目已有的 `node-pty` 已能建立最小安全输入通道。若真实保存、替换、删除或系统授权体验仍不成立，再重新评估原生桥接。
+
+## 真实验收修订
+
+2026-08-06 首次网页保存时，服务终端出现 `password data for new item:` 并在 10 秒后安全超时，证明普通 stdin 假设错误。修订后增加 3 项单元边界测试和一个无写入 macOS PTY 提示探针：探针只等待提示后终止，并确认没有生成测试条目。真实登录钥匙串保存仍由用户在网页中完成，AI 不读取或代填 Key。
 
 ## 参考
 
