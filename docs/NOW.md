@@ -5,10 +5,10 @@ workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
 stage: design
-current_slice: S01-escort-online
-slice_status: done
-work_branch: none（S01 分支已合并并删除；S02 分支待 Ready 后创建）
-base_commit: cf62d8ffdbf8dafbce4fca8062419bf345a2a29c
+current_slice: S02-git-safety-boundary
+slice_status: candidate
+work_branch: none（S02 分支 `codex/v0.1-s02-git-safety-boundary` 待 Ready 后从下方基线创建）
+base_commit: 40c5e4824e05f69c6f450f0c07fddf44e5977def
 risk_level: high
 last_verified_commit: cf62d8ffdbf8dafbce4fca8062419bf345a2a29c
 updated: 2026-08-06
@@ -93,7 +93,7 @@ updated: 2026-08-06
 | 顺序 | 切片 | 可观察结果 | 状态 |
 |---|---|---|---|
 | S01 | 护航 AI 独立上线 | 配置 DeepSeek 后能检测连接、对话并显示可靠状态 | done |
-| S02 | Git 项目安全边界 | 选择项目后识别并保护现有工作区状态 | pending |
+| S02 | Git 项目安全边界 | 选择项目后识别并保护现有工作区状态 | candidate |
 | S03 | Pi 受控运行 | Pi 只在项目内启动，并可暂停、继续、终止 | pending |
 | S04 | 证据与黑匣子 | 可查看状态时间线、文件变化和验收证据 | pending |
 | S05 | 恢复与总览闭环 | 可恢复到检查点，并从总仪表完成整条任务 | pending |
@@ -112,32 +112,31 @@ updated: 2026-08-06
 
 ## 当前切片
 
-### S01 · 护航 AI 独立上线
+### S02 · Git 项目安全边界（candidate，设计中）
 
 ### 目标
 
-用户安全录入 DeepSeek API Key 并检测连接后，可以直接与护航 AI 对话；即使 Pi 尚未安装或不可用，护航能力仍然正常。
+用户选择一个本地 Git 项目（手动输入路径）后，系统对其进行只读识别并记录工作区状态；全程零写入，服务重启后选择仍在、可刷新、可移除。
 
 ### 验收标准
 
-- [ ] Key 可以录入、替换和删除，界面只显示脱敏状态。
-- [ ] Key 不写入仓库、普通配置文件或应用日志。
-- [ ] 连接检测能区分无效凭据、网络错误、限流、服务异常和超时。
-- [ ] 护航 AI 可以完成一次真实响应，并显示连接中、可用、受限或异常状态。
-- [ ] Pi 不可用时，护航 AI 和离线配置指引仍可使用。
-- [ ] 有可重复的自动或半自动验证命令与人工验收步骤。
+- [ ] 可选择真实 Git 项目，准确识别仓库根、分支/detached、已暂存/未暂存/未跟踪/冲突、最近提交与远端。
+- [ ] 非 Git 目录、不存在路径、文件、禁止根（`/` 或主目录）均返回可区分的错误。
+- [ ] 选择持久化在服务端 `projects.local.json`（被忽略），重启后仍在；路径失效明确显示失效。
+- [ ] 识别只读：代码层无 Git 写动词 + 验收仓库前后 `git status` 一致。
+- [ ] 移除幂等且需就地确认；UI 仅用 `textContent` 类安全渲染。
+- [ ] 护航、群聊、终端、安装链路不受影响；Pi 不可用不影响项目选择。
 
 ### 明确不做
 
-- 不安装或配置 Pi。
-- 不创建项目任务、执行项目代码或接入 Git 恢复。
-- 不接入第二个 Provider、搜索服务或其他 Harness。
-- 不做远程访问、多用户和复杂预算统计。
+- 不创建恢复点/stash/commit/branch（S05）；不强制执行 Pi 边界（S03）。
+- 不做目录浏览 API 或原生文件选择器；不做多项目。
+- 不动护航、群聊、终端、安装与启动代码。
 
 ### 允许修改范围
 
-- 已完成的产品代码严格限定在 [S01 设计稿](plans/2026-08-06-s01-escort-online-design.md#10-精确修改范围)；当前进入复核，除修复验收发现的范围内缺陷外，不再扩展功能。
-- 不修改现有 `src/agent-caller.js`、`src/routes/api.js`、`public/js/chat.js`、`public/vendor/`、`tools.json`、`.token`、`agents.config.json` 和用户现有代码改动。
+- 严格限定在 [S02 设计稿 §10](plans/2026-08-06-s02-git-safety-boundary-design.md#10-精确修改范围)：9 个新增文件 + `src/server.js`、`public/index.html`、`.gitignore`（`.gitignore` 暂存策略实现时单独征求用户同意）。
+- 不修改 `src/agent-caller.js`、`src/routes/api.js`、`public/js/chat.js`、`public/vendor/`、`tools.json`、`.token`、`agents.config.json` 与 S01 护航全部文件。
 
 ### Definition of Ready
 
@@ -148,14 +147,15 @@ updated: 2026-08-06
 - [x] 修改范围精确到文件或目录
 - [x] 代码入口和验证命令明确
 - [x] 基线状态已记录
-- [x] 唯一工作分支名称已确定
+- [x] 唯一工作分支名称已确定（`codex/v0.1-s02-git-safety-boundary`，自 `main` 当前 HEAD）
 - [x] 未知改动已识别并有保护方案
-- [x] 凭据存储、Provider 适配、状态与错误模型等关键决策已确认
-- [x] 工作量已拆到不超过两个专注工作段
+- [x] 关键决策已确认（D1–D6，2026-08-06 用户确认）
+- [ ] 设计稿获用户批准（当前 `draft`）
+- [ ] 实现计划已产出
 
-当前唯一保留为未提交用户资产的是 `.gitignore` 中新增的 `.superpowers/` 忽略规则；本切片未修改或暂存它。`AGENTS.md` 与 `docs/` 是已确认的项目管理资产，将与本次证据记录一并纳入工作分支。
+S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需求—证据映射保留在下方存档段落。`.gitignore` 的用户改动（`.superpowers/`）保持未提交、未暂存。
 
-## 需求—证据映射
+## 需求—证据映射（S01 存档记录）
 
 | 需求 | 自动证据 | 真实/人工证据 | 当前状态 |
 |---|---|---|---|
@@ -196,9 +196,16 @@ updated: 2026-08-06
 
 ## 唯一下一步
 
-为下一切片确定一个具体、可观察的重构目标；先完成设计、风险分级、文件范围和验收证据映射，再创建实现计划。S02“Git 项目安全边界”是当前路线图的默认候选，但尚未开始设计。
+用户审阅并批准 [S02 设计稿](plans/2026-08-06-s02-git-safety-boundary-design.md)；批准后标记 `accepted`、补齐 Definition of Ready，产出实现计划，再从 `main` 当前 HEAD 创建 `codex/v0.1-s02-git-safety-boundary` 开工。设计稿未批准前不写产品代码。
 
 ## 最近交接
+
+### 2026-08-06 · S02 设计稿产出
+
+- 当前阶段：`design`；切片：`S02-git-safety-boundary (candidate)`；稳定基线：`40c5e48`（main）；无产品工作分支。
+- 已完成：D1–D6 用户确认；[S02 设计稿](plans/2026-08-06-s02-git-safety-boundary-design.md)产出（`draft`）。
+- 未完成：用户批准设计稿、实现计划、工作分支创建与全部实现/验收。
+- 恢复动作：先读本文件；若用户已批准设计稿，更新其 `status: accepted` 并勾选 DoR，随后产出实现计划。
 
 ### 2026-08-06 · S01 合并入 main
 
@@ -214,6 +221,12 @@ updated: 2026-08-06
 - 若要改动 S01，只限于已发现缺陷并补回归测试。
 
 ## 会话记录
+
+### 2026-08-06 · S02 设计启动
+
+- 完成：旧实例占用 3210 的诊断与处置（用户授权）；护航在合并后代码上复测通过；D1–D6 设计决策获用户确认；S02 设计稿（draft）产出并链接入 NOW。
+- 决定：S02 采用独立 Git Inspector + Project Boundary Service + 主页面新 view；只读零写入；服务端 `projects.local.json` 持久化；风险 medium。
+- 下一步：用户批准设计稿 → DoR 补齐 → 实现计划 → 建分支开工。
 
 ### 2026-08-06 · S01 收尾合并
 
