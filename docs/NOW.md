@@ -7,10 +7,10 @@ status: active
 stage: design
 current_slice: S01-escort-online
 slice_status: done
-work_branch: codex/v0.1-s01-escort-online
-base_commit: 9d5a6d41e678fdb5062531b4ac727a2da70f0154
+work_branch: none（S01 分支已合并并删除；S02 分支待 Ready 后创建）
+base_commit: cf62d8ffdbf8dafbce4fca8062419bf345a2a29c
 risk_level: high
-last_verified_commit: 7ff8b5e713adf42a8b443b502f636352847bb711
+last_verified_commit: cf62d8ffdbf8dafbce4fca8062419bf345a2a29c
 updated: 2026-08-06
 ---
 
@@ -102,13 +102,13 @@ updated: 2026-08-06
 
 - 代码地图：[CODEMAP.md](CODEMAP.md)
 - 稳定分支：`main`
-- 稳定基线：`9d5a6d41e678fdb5062531b4ac727a2da70f0154`
-- 产品工作分支：`codex/v0.1-s01-escort-online`（已创建并切换）
+- 稳定基线：`cf62d8ffdbf8dafbce4fca8062419bf345a2a29c`（S01 已于 2026-08-06 fast-forward 合并入 main）
+- 产品工作分支：无；S02 达到 Ready 后从新基线创建
 - 依赖检查：`npm ls --depth=0`
 - 语法检查：`git ls-files '*.js' | xargs -n1 node --check`
 - 自动化测试：`npm test`
 - 健康检查：`PORT=43211 npm start` 后访问 `/api/health`
-- 当前状态：62 项默认自动化测试及 12/12 macOS 无写入 PTY 探针通过；最新受控 PTY 修复已覆盖 Keychain 的二次确认提示；真实登录钥匙串保存等待用户重试；默认端口 3210 仍由未知进程占用且未处理。
+- 当前状态：S01 已合并入 main 并删除工作分支；`npm test` 62/62 在合并提交 `cf62d8f` 上通过；默认端口 3210 仍由未知进程占用且未处理；本地 main 领先 `origin/main` 14 个提交，是否推送由用户决定。
 
 ## 当前切片
 
@@ -185,6 +185,7 @@ updated: 2026-08-06
 - 2026-08-06：当前 HEAD `7ff8b5e` 的 `npm test` 62/62 通过；新增 UI 回归覆盖“仅在 Keychain 保存成功后清空输入”，并覆盖受控 PTY 的 Keychain 二次确认提示。未运行会创建临时 Keychain 条目的写入探针，真实外部链路仍未验收。
 - 2026-08-06：用户完成 S01 真实验收并确认无问题：Keychain 保存、替换、删除及固定条目核对通过；DeepSeek 连接与真实护航回复通过；无效 Key 的凭据错误可识别；Pi 不可用时护航仍可用；用户确认 Key 未出现在聊天、终端、Git 状态、普通配置或日志。用户未向 AI 提供 Key。
 - 2026-08-06：在候选提交 `7ff8b5e` 上复跑 `npm test`，62/62 通过；`validate-project-state.mjs . --strict` 通过。
+- 2026-08-06：S01 收尾完成：`codex/v0.1-s01-escort-online` 以 fast-forward 合并入 `main`（新基线 `cf62d8f`），工作分支已删除；`npm test` 62/62 与 `--strict` 校验均在合并后的 HEAD 复跑通过；用户未提交改动仅剩 `.gitignore` 的 `.superpowers/` 规则，保持原样。
 
 ## 阻塞
 
@@ -197,15 +198,26 @@ updated: 2026-08-06
 
 ## 最近交接
 
+### 2026-08-06 · S01 合并入 main
+
+- 当前阶段：`design`；切片：`S01-escort-online (done)`；稳定基线：`cf62d8f`；无产品工作分支。
+- 已完成：S01 全部交付物以 fast-forward 合并入 `main`，工作分支删除；事实源基线记录已更新。
+- 未完成：S02 设计与实现；`origin/main` 推送与否待用户决定。
+- 恢复动作：先读本文件；确认 S02 设计决策（D1–D6）后写设计稿，Ready 后从 `cf62d8f` 创建工作分支。
+
 ### 2026-08-06 · S01 完成
 
-- 当前阶段：`design`；切片：`S01-escort-online (done)`；工作分支：`codex/v0.1-s01-escort-online`。
 - 已完成：独立 DeepSeek Provider、修订后的 macOS Keychain PTY 适配器、护航状态机、认证路由、常驻/响应式护航面板，以及 62 项默认测试、macOS 无写入探针、本地页面验证与用户真实验收。
 - 已确认边界：旧 CLI 群聊与终端链路未改；护航不调用工具；秘密不写普通文件或浏览器持久化；`.gitignore` 用户改动未暂存。
-- 未完成：S02 及后续切片的设计与实现。
-- 恢复动作：先读本文件；围绕“唯一下一步”完成下一切片的设计，不直接开始重构。若要改动 S01，只限于已发现缺陷并补回归测试。
+- 若要改动 S01，只限于已发现缺陷并补回归测试。
 
 ## 会话记录
+
+### 2026-08-06 · S01 收尾合并
+
+- 完成：S01 验收记录文档提交后 fast-forward 合并入 `main`（`cf62d8f`），工作分支删除，事实源基线更新。
+- 决定：S02「Git 项目安全边界」为下一设计对象；设计决策 D1–D6 待用户确认。
+- 下一步：用户确认 D1–D6 后产出 S02 设计稿并过 Definition of Ready。
 
 ### 2026-08-05 · 产品大纲确认与 v0.1 激活
 

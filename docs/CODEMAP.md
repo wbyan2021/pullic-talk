@@ -22,7 +22,7 @@ updated: 2026-08-06
 - Agent 流式协议：SSE；终端协议：WebSocket
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
-- 稳定基线：`9d5a6d41e678fdb5062531b4ac727a2da70f0154`
+- 稳定基线：`cf62d8ffdbf8dafbce4fca8062419bf345a2a29c`
 - 当前验证基线：依赖完整；62 项默认 S01 测试和 12/12 macOS 无写入 PTY 探针通过；隔离端口健康检查和桌面/窄屏页面检查通过；没有 lint、CI 或 build 脚本。
 
 ## 关键路径
@@ -84,7 +84,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 
 - 远程仓库：`origin` → `git@github.com:wbyan2021/pullic-talk.git`
 - 稳定分支：`main`
-- 当前产品工作分支：`codex/v0.1-s01-escort-online`；稳定基线仍为 `9d5a6d41e678fdb5062531b4ac727a2da70f0154`。
+- S01 工作分支 `codex/v0.1-s01-escort-online` 已于 2026-08-06 fast-forward 合并入 `main`（新基线 `cf62d8ffdbf8dafbce4fca8062419bf345a2a29c`）并删除；S02 分支待 Ready 后创建。
 - 当前唯一保留为未提交用户资产的是 `.gitignore` 中的 `.superpowers/` 规则，不覆盖、不暂存、不丢弃。
 - 产品代码使用 `codex/<版本>-<切片>-<短名称>`；同一时间只保留一个产品工作分支。
 
