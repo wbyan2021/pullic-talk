@@ -5,10 +5,10 @@ workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
 stage: design
-current_slice: S02-git-safety-boundary
-slice_status: done
-work_branch: none（S02 分支已合并并删除；S03 分支待 Ready 后创建）
-base_commit: d7470f59063bb1526f36e405c4fd73f704a1772a
+current_slice: S03-pi-controlled-run
+slice_status: candidate
+work_branch: none（S03 分支 `codex/v0.1-s03-pi-controlled-run` 待 Ready 后创建）
+base_commit: be2b5958a862e1d6c8eeb64b8e8f71d485cc4bae
 risk_level: high
 last_verified_commit: d7470f59063bb1526f36e405c4fd73f704a1772a
 updated: 2026-08-06
@@ -94,7 +94,7 @@ updated: 2026-08-06
 | --- | ---------- | ---------------------------- | --------- |
 | S01 | 护航 AI 独立上线 | 配置 DeepSeek 后能检测连接、对话并显示可靠状态 | done      |
 | S02 | Git 项目安全边界 | 选择项目后识别并保护现有工作区状态            | done |
-| S03 | Pi 受控运行    | Pi 只在项目内启动，并可暂停、继续、终止        | pending   |
+| S03 | Pi 受控运行    | Pi 只在项目内启动，并可暂停、继续、终止        | candidate   |
 | S04 | 证据与黑匣子     | 可查看状态时间线、文件变化和验收证据           | pending   |
 | S05 | 恢复与总览闭环    | 可恢复到检查点，并从总仪表完成整条任务          | pending   |
 
@@ -112,31 +112,34 @@ updated: 2026-08-06
 
 ## 当前切片
 
-### S02 · Git 项目安全边界（candidate，设计中）
+### S03 · Pi 受控运行（candidate，设计中）
 
 ### 目标
 
-用户选择一个本地 Git 项目（手动输入路径）后，系统对其进行只读识别并记录工作区状态；全程零写入，服务重启后选择仍在、可刷新、可移除。
+用户在项目 view 选定 Git 项目后，输入任务提示词并确认风险，Pi 在该项目目录内受控执行；流式输出可见，可随时停止，不越界。
 
 ### 验收标准
 
-- [x] 可选择真实 Git 项目，准确识别仓库根、分支/detached、已暂存/未暂存/未跟踪/冲突、最近提交与远端。
-- [x] 非 Git 目录、不存在路径、文件、禁止根（`/` 或主目录）均返回可区分的错误。
-- [x] 选择持久化在服务端 `projects.local.json`（被忽略），重启后仍在；路径失效明确显示失效。
-- [x] 识别只读：代码层无 Git 写动词 + 验收仓库前后 `git status` 一致。
-- [x] 移除幂等且需就地确认；UI 仅用 `textContent` 类安全渲染。
-- [x] 护航、群聊、终端、安装链路不受影响；Pi 不可用不影响项目选择。
+- [ ] 项目已选且非失效时，可输入任务并启动 Pi。
+- [ ] Pi 的 cwd 严格为选定项目的 repoRoot；不传 `--api-key`。
+- [ ] 启动前检查 `pi auth` 就绪；未就绪给出明确指引。
+- [ ] 输出流式可见，状态灯准确（idle/running/stopped/exited/error）。
+- [ ] 停止按钮发 SIGTERM 终止当前运行；服务关闭时清理进程无孤儿。
+- [ ] 同时只允许 1 个 Pi 运行；运行中拒绝新启动（busy）。
+- [ ] UI 启动前显示风险确认；动态内容仅用 textContent。
+- [ ] 不修改 agent-caller、群聊、终端、安装、护航与 S02 项目边界代码。
 
 ### 明确不做
 
-- 不创建恢复点/stash/commit/branch（S05）；不强制执行 Pi 边界（S03）。
-- 不做目录浏览 API 或原生文件选择器；不做多项目。
-- 不动护航、群聊、终端、安装与启动代码。
+- 不做真正的暂停/恢复（Pi `-p` 单次执行）；不做会话续传。
+- 不做沙箱隔离（Pi 拥有完整用户权限）。
+- 不传 DeepSeek Key 或任何密钥给 Pi；Pi 认证独立。
+- 不做多任务并发、费用控制或输出结构化解析。
 
 ### 允许修改范围
 
-- 严格限定在 [S02 设计稿 §10](plans/2026-08-06-s02-git-safety-boundary-design.md#10-精确修改范围)：9 个新增文件 + `src/server.js`、`public/index.html`、`.gitignore`（`.gitignore` 暂存策略实现时单独征求用户同意）。
-- 不修改 `src/agent-caller.js`、`src/routes/api.js`、`public/js/chat.js`、`public/vendor/`、`tools.json`、`.token`、`agents.config.json` 与 S01 护航全部文件。
+- 严格限定在 [S03 设计稿 §9](plans/2026-08-06-s03-pi-controlled-run-design.md#9-精确修改范围)：7 个新增文件 + `src/server.js`、`public/index.html`、`public/js/project.js`。
+- 不修改 `src/agent-caller.js`、`src/routes/api.js`、`public/js/chat.js`、`public/vendor/`、`tools.json`、`.token`、`agents.config.json`、终端/安装/启动与 S01/S02 全部文件。
 
 ### Definition of Ready
 
@@ -147,19 +150,30 @@ updated: 2026-08-06
 - [x] 修改范围精确到文件或目录
 - [x] 代码入口和验证命令明确
 - [x] 基线状态已记录
-- [x] 唯一工作分支名称已确定（`codex/v0.1-s02-git-safety-boundary`，自 `main` 当前 HEAD）
-- [x] 未知改动已识别并有保护方案
+- [x] 唯一工作分支名称已确定（`codex/v0.1-s03-pi-controlled-run`，自 `main` 当前 HEAD `be2b595`）
+- [x] 未知改动已识别并有保护方案（工作区干净）
 - [x] 关键决策已确认（D1–D6，2026-08-06 用户确认）
-- [x] 设计稿获用户批准（2026-08-06 “全部同意”，标记 `accepted`）
-- [x] 实现计划已产出（[S02 实现计划](plans/2026-08-06-s02-git-safety-boundary-implementation.md)，6 个任务 TDD）
+- [ ] 设计稿获用户批准（当前 `draft`）
+- [ ] 实现计划已产出
 
-S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需求—证据映射保留在下方存档段落。`.gitignore` 的用户改动（`.superpowers/`）保持未提交、未暂存；实现时新增 `projects.local.json` 行的暂存策略需单独征求用户同意。
+S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求-证据映射保留在下方存档段落。
 
-## 需求—证据映射
+## 需求-证据映射
 
 | 需求 | 自动证据 | 真实/人工证据 | 当前状态 |
 |---|---|---|---|
-| 可选择真实 Git 项目并准确识别 | Git Inspector 19 项、Boundary 11 项、Routes 9 项、UI 8 项测试通过；临时仓库夹具覆盖干净/脏/冲突/detached/unborn/远端 | 用户选择本仓库与干净仓库，识别结果与 `git status` 事实核对 | 自动与真实验收通过 |
+| Pi 只在选定项目内启动 | PiExecutor cwd=repoRoot 断言 + 假 pi 夹具测试 | 测试仓库中 Pi 执行，cwd 正确、不越界 | 待实现 |
+| 启动前 auth 就绪检查 | `pi auth check` 就绪/失败路径测试 | 用户验证未认证时得到指引 | 待实现 |
+| 输出流式可见 | SSE chunk 事件 + 输出截断测试 | 用户观察流式输出与状态灯 | 待实现 |
+| 可停止（SIGTERM） | 停止生命周期 + 超时回收测试 | 用户点停止按钮验证终止 | 待实现 |
+| 单运行实例 | busy 拒绝测试 | 用户验证运行中无法二次启动 | 待实现 |
+| 风险告知 + UI 安全 | UI 静态回归断言无 innerHTML、含风险确认 | 用户确认风险提示后才启动 | 待实现 |
+
+## 需求-证据映射（S02 存档记录）
+
+| 需求 | 自动证据 | 真实/人工证据 | 当前状态 |
+|---|---|---|---|
+| 可选择真实 Git 项目并准确识别 | Git Inspector 19 项、Boundary 11 项、Routes 9 项、UI 8 项测试通过;临时仓库夹具覆盖干净/脏/冲突/detached/unborn/远端 | 用户选择本仓库与干净仓库,识别结果与 `git status` 事实核对 | 自动与真实验收通过 |
 | 错误可区分（非仓库/不存在/文件/禁止根） | 路径安全与错误映射测试覆盖全部稳定错误码 | 用户输入非 Git 目录（声音世界）、不存在路径验证错误卡 | 自动与真实验收通过 |
 | 持久化与失效检测 | 重启加载、损坏文件降级、失效检测、幂等清空测试通过 | 用户完成选择与移除；持久化跨重启由自动化测试覆盖 | 自动与真实验收通过 |
 | 识别只读，零写入 | 命令白名单只读断言 + 测试夹具仅用临时目录 | 验收仓库前后 `git status --porcelain` 与 `git stash list` 完全一致 | 自动与真实验收通过 |
@@ -210,9 +224,16 @@ S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需�
 
 ## 唯一下一步
 
-将 `codex/v0.1-s02-git-safety-boundary` fast-forward 合并回 `main`，更新稳定基线与 CODEMAP；随后进入 S03「Pi 受控运行」的设计。
+用户审阅并批准 [S03 设计稿](plans/2026-08-06-s03-pi-controlled-run-design.md)；批准后标记 `accepted`、补齐 DoR、产出实现计划，再从 `main` 当前 HEAD 创建 `codex/v0.1-s03-pi-controlled-run` 开工。设计稿未批准前不写产品代码。
 
 ## 最近交接
+
+### 2026-08-06 · S03 设计稿产出
+
+- 当前阶段：`design`；切片：`S03-pi-controlled-run (candidate)`；基线：`be2b595`（main）；待建分支：`codex/v0.1-s03-pi-controlled-run`。
+- 已完成：S02 合并入 main 并推送 origin；Pi CLI 调查（v0.84.1）；D1–D6 用户确认；[S03 设计稿](plans/2026-08-06-s03-pi-controlled-run-design.md)产出（`draft`）。
+- 未完成：用户批准设计稿、实现计划、工作分支创建与全部实现/验收。
+- 恢复动作：先读本文件；若用户已批准设计稿，更新 `status: accepted` 并勾选 DoR，随后产出实现计划。
 
 ### 2026-08-06 · S02 完成
 
@@ -254,6 +275,12 @@ S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需�
 - 若要改动 S01，只限于已发现缺陷并补回归测试。
 
 ## 会话记录
+
+### 2026-08-06 · S03 设计启动
+
+- 完成：S01+S02 合并后推送 origin/main；Pi CLI 调查（v0.84.1）；D1–D6 设计决策获用户确认；S03 设计稿（draft）产出并链接入 NOW。
+- 决定：S03 采用独立 PiExecutor + SSE 路由 + 项目 view 运行面板；Pi 认证独立、不传密钥；暂停=停止；风险 high。
+- 下一步：用户批准设计稿 -> DoR 补齐 -> 实现计划 -> 建分支开工。
 
 ### 2026-08-06 · S02 完成与合并准备
 
