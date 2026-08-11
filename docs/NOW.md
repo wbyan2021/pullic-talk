@@ -7,10 +7,10 @@ status: active
 stage: design
 current_slice: S02-git-safety-boundary
 slice_status: done
-work_branch: codex/v0.1-s02-git-safety-boundary
-base_commit: 40c5e4824e05f69c6f450f0c07fddf44e5977def
+work_branch: none（S02 分支已合并并删除；S03 分支待 Ready 后创建）
+base_commit: d7470f59063bb1526f36e405c4fd73f704a1772a
 risk_level: high
-last_verified_commit: 8b73080127e09662c72eca12f818bba9492787d8
+last_verified_commit: d7470f59063bb1526f36e405c4fd73f704a1772a
 updated: 2026-08-06
 ---
 
@@ -102,13 +102,13 @@ updated: 2026-08-06
 
 - 代码地图：[CODEMAP.md](CODEMAP.md)
 - 稳定分支：`main`
-- 稳定基线：`cf62d8ffdbf8dafbce4fca8062419bf345a2a29c`（S01 已于 2026-08-06 fast-forward 合并入 main）
-- 产品工作分支：无；S02 达到 Ready 后从新基线创建
+- 稳定基线：`d7470f59063bb1526f36e405c4fd73f704a1772a`（S01 + S02 均已 fast-forward 合并入 main）
+- 产品工作分支：无；S03 达到 Ready 后从新基线创建
 - 依赖检查：`npm ls --depth=0`
 - 语法检查：`git ls-files '*.js' | xargs -n1 node --check`
 - 自动化测试：`npm test`
 - 健康检查：`PORT=43211 npm start` 后访问 `/api/health`
-- 当前状态：S02 实现完成于工作分支（候选提交 `abdd93d`），全量 `npm test` 109/109、隔离端口健康、401 闸门与禁改路径审计通过；真实验收待用户完成；分支代码尚未运行在 3210（验收前需重启）；本地 main 领先 `origin/main` 16 个提交，是否推送由用户决定。
+- 当前状态：S02 已合并入 main（基线 `d7470f5`）并删除工作分支；`npm test` 109/109 在合并提交上通过；本地 main 领先 `origin/main` 24 个提交，是否推送由用户决定。
 
 ## 当前切片
 

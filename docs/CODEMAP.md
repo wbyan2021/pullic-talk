@@ -22,8 +22,8 @@ updated: 2026-08-06
 - Agent 流式协议：SSE；终端协议：WebSocket
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
-- 稳定基线：`cf62d8ffdbf8dafbce4fca8062419bf345a2a29c`
-- 当前验证基线：依赖完整；62 项默认 S01 测试和 12/12 macOS 无写入 PTY 探针通过；隔离端口健康检查和桌面/窄屏页面检查通过；没有 lint、CI 或 build 脚本。
+- 稳定基线：`d7470f59063bb1526f36e405c4fd73f704a1772a`
+- 当前验证基线：依赖完整；109 项默认测试（S01 62 + S02 47）和 12/12 macOS 无写入 PTY 探针通过；隔离端口健康检查和禁改路径审计通过；没有 lint、CI 或 build 脚本。
 
 ## 关键路径
 
@@ -43,6 +43,9 @@ updated: 2026-08-06
 | `src/services/credential-store.js` | macOS Keychain 固定条目的安全增删改查 | 凭据适配层 |
 | `src/services/escort-service.js` | 护航状态机、输入边界、并发控制与 Provider 编排 | 护航领域层 |
 | `src/providers/deepseek.js` | DeepSeek 请求、超时、响应解析与稳定错误映射 | Provider 适配层 |
+| `src/routes/project.js` | 项目选择、只读识别、刷新与移除的认证 HTTP 契约 | 项目应用层 |
+| `src/services/git-inspector.js` | 只读 Git 适配器：命令白名单、超时、输出截断与路径安全 | 项目适配层 |
+| `src/services/project-boundary.js` | 项目选择状态机、`projects.local.json` 持久化与失效检测 | 项目领域层 |
 | `src/terminal.js` | 完整本机 PTY Shell | 高权限适配层 |
 | `src/utils/auth.js` | 随机 Token、认证中间件与写盘 | 安全边界 |
 | `public/` | 控制台、群聊、安装器和终端页面 | 表现层 |
@@ -66,7 +69,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 | 扫描工具 | `npm run scan` | 本轮未执行；会更新本地 `tools.json` |
 | 完整安装引导 | `npm run setup` | 本轮未执行；包含环境检查、安装和扫描 |
 | JavaScript 语法检查 | `git ls-files '*.js' | xargs -n1 node --check` | 初始化 28 个文件通过；S01 新增/装配文件再次通过 |
-| 自动化测试 | `npm test` | 62 项通过；`RUN_MACOS_KEYCHAIN_PROMPT_PROBE=1 node --test test/credential-store.test.js` 另有 12/12 无写入 macOS 探针 |
+| 自动化测试 | `npm test` | 109 项通过（S01 62 + S02 47）；`RUN_MACOS_KEYCHAIN_PROMPT_PROBE=1 node --test test/credential-store.test.js` 另有 12/12 无写入 macOS 探针 |
 | lint | 未配置 | 不可用 |
 | build | 无需前端构建，且未配置 build 脚本 | 不适用 |
 
@@ -84,7 +87,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 
 - 远程仓库：`origin` → `git@github.com:wbyan2021/pullic-talk.git`
 - 稳定分支：`main`
-- S01 工作分支 `codex/v0.1-s01-escort-online` 已于 2026-08-06 fast-forward 合并入 `main`（新基线 `cf62d8ffdbf8dafbce4fca8062419bf345a2a29c`）并删除；S02 分支待 Ready 后创建。
+- S01 工作分支 `codex/v0.1-s01-escort-online` 与 S02 工作分支 `codex/v0.1-s02-git-safety-boundary` 均已 fast-forward 合并入 `main`（当前基线 `d7470f59063bb1526f36e405c4fd73f704a1772a`）并删除；S03 分支待 Ready 后创建。
 - 当前唯一保留为未提交用户资产的是 `.gitignore` 中的 `.superpowers/` 规则，不覆盖、不暂存、不丢弃。
 - 产品代码使用 `codex/<版本>-<切片>-<短名称>`；同一时间只保留一个产品工作分支。
 
@@ -105,6 +108,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 
 - `.token`：认证秘密，只允许程序生成；禁止读取、展示和提交。
 - `tools.json`：本机扫描结果，由 `npm run scan` 更新；不纳入 Git。
+- `projects.local.json`：S02 项目选择状态，由项目边界服务写入仓库根；不含秘密，已加入 `.gitignore`。
 - `node_modules/`：依赖目录，只由 npm 管理。
 - `package-lock.json`：只随依赖安装或升级变化，不手工编辑。
 - `public/vendor/`：第三方本地化资产，普通功能切片不修改。
@@ -132,13 +136,14 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 | `src/utils/auth.js`、`src/server.js` | 本地控制面的认证与暴露边界 | Token、Origin、监听地址、CSP、速率限制 |
 | `src/services/credential-store.js` | 接触真实 Provider Key 与系统钥匙串 | 绝对命令路径、shell 禁用、受控 PTY 固定提示、输出边界、超时回收、无明文回退 |
 | `src/providers/deepseek.js`、`src/routes/escort.js` | 付费外部请求与错误/秘密泄露 | 超时、单并发、频率、状态字段白名单、原始错误不透传 |
+| `src/services/git-inspector.js`、`src/routes/project.js` | 任意路径输入与 Git 子进程 | 只读命令白名单、无 shell、超时、输出截断、realpath 校验、禁止根 |
 | `public/js/chat.js` | 单文件较大，状态、DOM 与流式逻辑耦合 | XSS、会话兼容、停止流程和现有交互回归 |
 | `agents.config.json` | 可改变真实 CLI 命令和参数 | 不含秘密、命令合法、输出解析契约可验证 |
 | 外部 AI CLI | 版本、登录和输出格式随上游变化 | 版本探测、最小真实调用和失败降级 |
 
 ## 已知工程缺口
 
-- 已有 62 项默认 S01 自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
+- 已有 109 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
 - `public/js/chat.js` 体量较大，修改容易产生跨功能回归。
 - Agent 默认工作目录是用户主目录，不具备项目级 Workspace 边界。
 - 默认端口 `3210` 曾被早于 S01 的旧实例占用；2026-08-06 已查明并经用户授权结束，现运行 S01 合并后的代码。
