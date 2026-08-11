@@ -6,8 +6,8 @@ milestone: v0.1-first-controlled-mission
 status: active
 stage: design
 current_slice: S02-git-safety-boundary
-slice_status: ready
-work_branch: none（S02 分支 `codex/v0.1-s02-git-safety-boundary` 待 Ready 后从下方基线创建）
+slice_status: active
+work_branch: codex/v0.1-s02-git-safety-boundary
 base_commit: 40c5e4824e05f69c6f450f0c07fddf44e5977def
 risk_level: high
 last_verified_commit: cf62d8ffdbf8dafbce4fca8062419bf345a2a29c
