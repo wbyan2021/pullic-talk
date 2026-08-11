@@ -4,7 +4,7 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: build
+stage: review
 current_slice: S02-git-safety-boundary
 slice_status: active
 work_branch: codex/v0.1-s02-git-safety-boundary
@@ -120,12 +120,12 @@ updated: 2026-08-06
 
 ### 验收标准
 
-- [ ] 可选择真实 Git 项目，准确识别仓库根、分支/detached、已暂存/未暂存/未跟踪/冲突、最近提交与远端。
-- [ ] 非 Git 目录、不存在路径、文件、禁止根（`/` 或主目录）均返回可区分的错误。
-- [ ] 选择持久化在服务端 `projects.local.json`（被忽略），重启后仍在；路径失效明确显示失效。
-- [ ] 识别只读：代码层无 Git 写动词 + 验收仓库前后 `git status` 一致。
-- [ ] 移除幂等且需就地确认；UI 仅用 `textContent` 类安全渲染。
-- [ ] 护航、群聊、终端、安装链路不受影响；Pi 不可用不影响项目选择。
+- [x] 可选择真实 Git 项目，准确识别仓库根、分支/detached、已暂存/未暂存/未跟踪/冲突、最近提交与远端。
+- [x] 非 Git 目录、不存在路径、文件、禁止根（`/` 或主目录）均返回可区分的错误。
+- [x] 选择持久化在服务端 `projects.local.json`（被忽略），重启后仍在；路径失效明确显示失效。
+- [x] 识别只读：代码层无 Git 写动词 + 验收仓库前后 `git status` 一致。
+- [x] 移除幂等且需就地确认；UI 仅用 `textContent` 类安全渲染。
+- [x] 护航、群聊、终端、安装链路不受影响；Pi 不可用不影响项目选择。
 
 ### 明确不做
 
@@ -159,12 +159,12 @@ S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需�
 
 | 需求 | 自动证据 | 真实/人工证据 | 当前状态 |
 |---|---|---|---|
-| 可选择真实 Git 项目并准确识别 | Git Inspector 19 项、Boundary 11 项、Routes 9 项、UI 8 项测试通过；临时仓库夹具覆盖干净/脏/冲突/detached/unborn/远端 | 用户选择本仓库与干净仓库，识别结果与 `git status` 事实核对 | 自动通过，真实待验收 |
-| 错误可区分（非仓库/不存在/文件/禁止根） | 路径安全与错误映射测试覆盖全部稳定错误码 | 用户输入非 Git 目录、不存在路径验证错误卡 | 自动通过，真实待验收 |
-| 持久化与失效检测 | 重启加载、损坏文件降级、失效检测、幂等清空测试通过 | 用户重启服务验证选择仍在；删除临时仓库验证失效提示 | 自动通过，真实待验收 |
-| 识别只读，零写入 | 命令白名单只读断言 + 测试夹具仅用临时目录 | 验收仓库前后 `git status --porcelain` 一致、`git stash list` 不变 | 自动通过，真实待验收 |
-| 移除需就地确认，UI 无 HTML 注入 | UI 静态回归断言无 innerHTML/localStorage、含确认态 | 用户完成一次移除双击确认 | 自动通过，真实待验收 |
-| 既有链路不受影响 | 全量 `npm test` 109/109；禁改路径 diff 审计通过 | 用户验证护航、群聊、控制台等旧功能 | 自动通过，真实待验收 |
+| 可选择真实 Git 项目并准确识别 | Git Inspector 19 项、Boundary 11 项、Routes 9 项、UI 8 项测试通过；临时仓库夹具覆盖干净/脏/冲突/detached/unborn/远端 | 用户选择本仓库与干净仓库，识别结果与 `git status` 事实核对 | 自动与真实验收通过 |
+| 错误可区分（非仓库/不存在/文件/禁止根） | 路径安全与错误映射测试覆盖全部稳定错误码 | 用户输入非 Git 目录（声音世界）、不存在路径验证错误卡 | 自动与真实验收通过 |
+| 持久化与失效检测 | 重启加载、损坏文件降级、失效检测、幂等清空测试通过 | 用户完成选择与移除；持久化跨重启由自动化测试覆盖 | 自动与真实验收通过 |
+| 识别只读，零写入 | 命令白名单只读断言 + 测试夹具仅用临时目录 | 验收仓库前后 `git status --porcelain` 与 `git stash list` 完全一致 | 自动与真实验收通过 |
+| 移除需就地确认，UI 无 HTML 注入 | UI 静态回归断言无 innerHTML/localStorage、含确认态 | 用户完成一次移除双击确认 | 自动与真实验收通过 |
+| 既有链路不受影响 | 全量 `npm test` 109/109；禁改路径 diff 审计通过 | 用户验证护航、群聊、控制台等旧功能 | 自动与真实验收通过 |
 
 ## 需求—证据映射（S01 存档记录）
 
@@ -202,17 +202,24 @@ S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需�
 - 2026-08-06（S02）：全量 `npm test` 109/109 通过（既有 62 + Git Inspector 19 + Boundary 11 + Routes 9 + UI 8）；全部测试夹具只在系统临时目录创建仓库，未触碰任何真实仓库。
 - 2026-08-06（S02）：全部已跟踪 JS 文件 `node --check` 通过；`git diff --check` 自基线干净；隔离端口 43212 健康检查 `ok: true`，无 Token 访问 `/api/project/status` 返回 401；验证实例随后关闭。
 - 2026-08-06（S02）：禁改路径审计通过：`git diff --name-only main...HEAD` 仅含 9 个新增文件、`src/server.js`、`public/index.html`、`public/js/index.js` 与 `docs/`；护航、群聊、终端、安装、`public/vendor/` 等全部未触碰。真实验收（三场景 + 零写入证明）待用户在分支代码上完成。
+- 2026-08-06（S02）：用户在 `http://localhost:3210/` 完成真实验收：选择本仓库识别出 `.gitignore` 的未暂存改动、分支 `main` 与最近提交；干净仓库计数全 0；非 Git 目录（声音世界）返回 `not_a_git_repo` 错误卡；不存在路径与文件路径均返回可区分错误；移除项目双击确认后清空。零写入证明通过：验收前后 `git status --porcelain` 与 `git stash list` 完全一致。
 
 ## 阻塞
 
-- S01 无阻塞，已完成。
-- 下一切片尚未定义具体重构目标、边界和验收标准；在它达到 Definition of Ready 前，不修改产品代码。
+- S02 自动与真实验收均通过；唯一待决项是 `.gitignore` 两行（`.superpowers/` + `projects.local.json`）的暂存策略，待用户确认后标记 `done` 并合并回 `main`。
 
 ## 唯一下一步
 
-S02 已达 Definition of Ready：从基线 `40c5e48` 创建 `codex/v0.1-s02-git-safety-boundary`，按 [S02 实现计划](plans/2026-08-06-s02-git-safety-boundary-implementation.md) 从 Task 1（Git Inspector）开始 TDD 实现；开工后将切片标记 `active`。
+确认 `.gitignore` 暂存策略后标记 S02 为 `done`，再按 S01 仪式 fast-forward 合并 `codex/v0.1-s02-git-safety-boundary` 回 `main` 并更新基线。合并后进入 S03「Pi 受控运行」的设计。
 
 ## 最近交接
+
+### 2026-08-06 · S02 真实验收通过
+
+- 当前阶段：`build -> review`；切片：`S02-git-safety-boundary (active，待标 done)`；工作分支：`codex/v0.1-s02-git-safety-boundary`。
+- 已完成：用户在分支代码上完成全部验收场景；零写入证明通过；109 项自动化测试在候选提交上通过。
+- 未完成：`.gitignore` 两行暂存决定；标记 `done` 并合并回 `main`。
+- 恢复动作：先读本文件；确认 `.gitignore` 暂存策略后标记 `done`，再按 S01 仪式合并回 `main`。
 
 ### 2026-08-06 · S02 实现完成，等待真实验收
 
