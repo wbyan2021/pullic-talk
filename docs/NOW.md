@@ -6,7 +6,7 @@ milestone: v0.1-first-controlled-mission
 status: active
 stage: design
 current_slice: S02-git-safety-boundary
-slice_status: candidate
+slice_status: ready
 work_branch: none（S02 分支 `codex/v0.1-s02-git-safety-boundary` 待 Ready 后从下方基线创建）
 base_commit: 40c5e4824e05f69c6f450f0c07fddf44e5977def
 risk_level: high
@@ -90,13 +90,13 @@ updated: 2026-08-06
 
 ## 计划切片
 
-| 顺序 | 切片 | 可观察结果 | 状态 |
-|---|---|---|---|
-| S01 | 护航 AI 独立上线 | 配置 DeepSeek 后能检测连接、对话并显示可靠状态 | done |
-| S02 | Git 项目安全边界 | 选择项目后识别并保护现有工作区状态 | candidate |
-| S03 | Pi 受控运行 | Pi 只在项目内启动，并可暂停、继续、终止 | pending |
-| S04 | 证据与黑匣子 | 可查看状态时间线、文件变化和验收证据 | pending |
-| S05 | 恢复与总览闭环 | 可恢复到检查点，并从总仪表完成整条任务 | pending |
+| 顺序  | 切片         | 可观察结果                        | 状态        |
+| --- | ---------- | ---------------------------- | --------- |
+| S01 | 护航 AI 独立上线 | 配置 DeepSeek 后能检测连接、对话并显示可靠状态 | done      |
+| S02 | Git 项目安全边界 | 选择项目后识别并保护现有工作区状态            | candidate |
+| S03 | Pi 受控运行    | Pi 只在项目内启动，并可暂停、继续、终止        | pending   |
+| S04 | 证据与黑匣子     | 可查看状态时间线、文件变化和验收证据           | pending   |
+| S05 | 恢复与总览闭环    | 可恢复到检查点，并从总仪表完成整条任务          | pending   |
 
 ## 代码工作区
 
@@ -150,10 +150,10 @@ updated: 2026-08-06
 - [x] 唯一工作分支名称已确定（`codex/v0.1-s02-git-safety-boundary`，自 `main` 当前 HEAD）
 - [x] 未知改动已识别并有保护方案
 - [x] 关键决策已确认（D1–D6，2026-08-06 用户确认）
-- [ ] 设计稿获用户批准（当前 `draft`）
-- [ ] 实现计划已产出
+- [x] 设计稿获用户批准（2026-08-06 “全部同意”，标记 `accepted`）
+- [x] 实现计划已产出（[S02 实现计划](plans/2026-08-06-s02-git-safety-boundary-implementation.md)，6 个任务 TDD）
 
-S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需求—证据映射保留在下方存档段落。`.gitignore` 的用户改动（`.superpowers/`）保持未提交、未暂存。
+S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需求—证据映射保留在下方存档段落。`.gitignore` 的用户改动（`.superpowers/`）保持未提交、未暂存；实现时新增 `projects.local.json` 行的暂存策略需单独征求用户同意。
 
 ## 需求—证据映射（S01 存档记录）
 
@@ -196,16 +196,20 @@ S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需�
 
 ## 唯一下一步
 
-用户审阅并批准 [S02 设计稿](plans/2026-08-06-s02-git-safety-boundary-design.md)；批准后标记 `accepted`、补齐 Definition of Ready，产出实现计划，再从 `main` 当前 HEAD 创建 `codex/v0.1-s02-git-safety-boundary` 开工。设计稿未批准前不写产品代码。
+S02 已达 Definition of Ready：从基线 `40c5e48` 创建 `codex/v0.1-s02-git-safety-boundary`，按 [S02 实现计划](plans/2026-08-06-s02-git-safety-boundary-implementation.md) 从 Task 1（Git Inspector）开始 TDD 实现；开工后将切片标记 `active`。
 
 ## 最近交接
 
+### 2026-08-06 · S02 Ready，准备开工
+
+- 当前阶段：`design → build`；切片：`S02-git-safety-boundary (ready)`；基线：`40c5e48`（main）；待建分支：`codex/v0.1-s02-git-safety-boundary`。
+- 已完成：S02 设计稿获用户批准（accepted）；DoR 全部满足；[实现计划](plans/2026-08-06-s02-git-safety-boundary-implementation.md)产出（6 任务 TDD，含零写入证明与三场景验收）。
+- 未完成：建分支、Task 1–6 实现与验收。
+- 恢复动作：先读本文件；从实现计划 Task 1 开始；开工后把 NOW.md 的 `slice_status` 改为 `active` 并记录工作分支。
+
 ### 2026-08-06 · S02 设计稿产出
 
-- 当前阶段：`design`；切片：`S02-git-safety-boundary (candidate)`；稳定基线：`40c5e48`（main）；无产品工作分支。
-- 已完成：D1–D6 用户确认；[S02 设计稿](plans/2026-08-06-s02-git-safety-boundary-design.md)产出（`draft`）。
-- 未完成：用户批准设计稿、实现计划、工作分支创建与全部实现/验收。
-- 恢复动作：先读本文件；若用户已批准设计稿，更新其 `status: accepted` 并勾选 DoR，随后产出实现计划。
+- 已完成：D1–D6 用户确认；S02 设计稿产出并获批准（`accepted`）。
 
 ### 2026-08-06 · S01 合并入 main
 
@@ -221,6 +225,12 @@ S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需�
 - 若要改动 S01，只限于已发现缺陷并补回归测试。
 
 ## 会话记录
+
+### 2026-08-06 · S02 设计与计划完成，Ready
+
+- 完成：S02 设计稿获用户批准（accepted）；DoR 全部满足；产出 6 任务 TDD 实现计划；S01 需求—证据映射转为存档段落。
+- 决定：错误响应沿用护航形状 `{ ok:false, code, message, action, retryable }`；`switchView` 一行改动补录入设计稿 §10.2；`.gitignore` 暂存策略实现时征求用户同意。
+- 下一步：建分支 `codex/v0.1-s02-git-safety-boundary`，从 Task 1（Git Inspector）开工。
 
 ### 2026-08-06 · S02 设计启动
 

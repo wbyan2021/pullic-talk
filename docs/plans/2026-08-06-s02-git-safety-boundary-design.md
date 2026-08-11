@@ -4,17 +4,17 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 slice: S02-git-safety-boundary
-status: draft
+status: accepted
 risk_level: medium
 updated: 2026-08-06
-approved_at: null
+approved_at: 2026-08-06
 source_of_truth: false
 facts: ../NOW.md
 ---
 
 # S02 · Git 项目安全边界设计
 
-> 设计决策 D1–D6 已由用户在 2026-08-06 确认（只读零写入、手动路径输入、服务端持久化、主页面新 view、medium 风险、三场景验收）。本文稿本身仍为 `draft`，待用户确认后才可标记 `accepted` 并进入 Definition of Ready。
+> 设计决策 D1–D6 已由用户在 2026-08-06 确认（只读零写入、手动路径输入、服务端持久化、主页面新 view、medium 风险、三场景验收）；设计稿全文同日获用户批准（“全部同意”），标记 `accepted`。实现必须另按 `writing-plans` 生成的逐步计划执行。
 
 ## 1. 这次要交付什么
 
@@ -218,7 +218,7 @@ select 新路径 = 替换旧选择
 
 ### 8.2 HTTP 约定
 
-沿用 S01：成功 200 + 白名单字段；失败按语义返回 4xx/5xx + `{ error: { code, message, retryable } }`；`message` 为固定中文文案，不透传 git 原始输出。
+沿用 S01：成功 200 + 白名单字段；失败按语义返回 4xx/5xx + `{ ok: false, code, message, action, retryable }`（与护航路由错误形状一致）；`message` 为固定中文文案，不透传 git 原始输出。
 
 ## 9. 本地 API 契约
 
@@ -255,6 +255,7 @@ select 新路径 = 替换旧选择
 |---|---|
 | `src/server.js` | 构造 gitInspector/projectBoundary 并挂载 `projectRoutes(app, …)`（约 3 行，跟随 escort 装配模式） |
 | `public/index.html` | subbar 增加「项目」tab、`#views` 增加 `project-view`、引入 project.css/project.js |
+| `public/js/index.js` | `switchView` 增加一行 `project-view` 可见性切换（实现时补录的范围细节，同模式一行改动） |
 | `.gitignore` | 增加 `projects.local.json` 一行（见 §13 第 6 条的用户确认事项） |
 
 ### 10.3 禁止修改
