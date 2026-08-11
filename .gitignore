@@ -11,3 +11,5 @@ debates/
 tools.json
 .token
 logs/
+.superpowers/
+projects.local.json
