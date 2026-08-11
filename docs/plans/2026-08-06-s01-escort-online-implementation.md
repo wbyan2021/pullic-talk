@@ -4,7 +4,7 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 slice: S01-escort-online
-status: implemented-awaiting-acceptance
+status: completed
 risk_level: high
 branch: codex/v0.1-s01-escort-online
 updated: 2026-08-06
@@ -23,7 +23,7 @@ design: ./2026-08-06-s01-escort-online-design.md
 
 ## Execution result
 
-Tasks 1–6 and the no-real-Key portion of Task 7 were completed on `codex/v0.1-s01-escort-online`. The implementation remains intentionally short of S01 `done` because the user has not yet performed the real-Key browser acceptance.
+Tasks 1–6 and the no-real-Key portion of Task 7 were completed on `codex/v0.1-s01-escort-online`. The user subsequently completed the real-Key browser acceptance without sharing the Key with AI, so S01 is `done`.
 
 | Area | Result |
 |---|---|
@@ -32,8 +32,8 @@ Tasks 1–6 and the no-real-Key portion of Task 7 were completed on `codex/v0.1-
 | Escort Service | Implemented and covered by 14 tests; independent of CLI Agents |
 | Authenticated routes | Implemented and covered by 22 tests, including nested error-text replacement and safe status-field whitelisting |
 | Escort panel | Implemented; desktop 1280×720 and narrow 760×720 browser checks passed without console errors |
-| Full automated evidence | `npm test` 60/60; macOS no-write PTY probe 12/12; syntax checks, `git diff --check`, isolated-port health and strict project-state validation passed |
-| Remaining gate | User enters their own Key in the browser and completes design §12.2 without sharing it with AI |
+| Full automated evidence | `npm test` 62/62; macOS no-write PTY probe 12/12; syntax checks, `git diff --check`, isolated-port health and strict project-state validation passed |
+| Remaining gate | Complete — user entered their own Key in the browser and completed design §12.2 without sharing it with AI |
 
 ---
 

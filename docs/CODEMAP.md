@@ -23,7 +23,7 @@ updated: 2026-08-06
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
 - 稳定基线：`9d5a6d41e678fdb5062531b4ac727a2da70f0154`
-- 当前验证基线：依赖完整；60 项默认 S01 测试和 12/12 macOS 无写入 PTY 探针通过；隔离端口健康检查和桌面/窄屏页面检查通过；没有 lint、CI 或 build 脚本。
+- 当前验证基线：依赖完整；62 项默认 S01 测试和 12/12 macOS 无写入 PTY 探针通过；隔离端口健康检查和桌面/窄屏页面检查通过；没有 lint、CI 或 build 脚本。
 
 ## 关键路径
 
@@ -48,7 +48,7 @@ updated: 2026-08-06
 | `public/` | 控制台、群聊、安装器和终端页面 | 表现层 |
 | `public/js/escort.js`、`public/css/escort.css` | 常驻/移动覆盖式护航面板及安全纯文本交互 | 护航表现层 |
 | `public/vendor/` | 本地化第三方前端依赖 | 第三方生成资产 |
-| `test/` | Credential Store、Provider、Escort Service 和路由的 Node 原生测试 | 自动化验证层 |
+| `test/` | Credential Store、Provider、Escort Service、路由和护航 UI 的 Node 原生测试 | 自动化验证层 |
 | `scripts/` | 环境安装、工具扫描和 node-pty 权限修复 | 运维脚本 |
 | `run-debate.js`、`debate.json` | 配置驱动的命令行辩论流程 | 实验性工作流 |
 | `docs/` | 产品、当前版本、代码地图与想法事实源 | 项目管理层 |
@@ -66,7 +66,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 | 扫描工具 | `npm run scan` | 本轮未执行；会更新本地 `tools.json` |
 | 完整安装引导 | `npm run setup` | 本轮未执行；包含环境检查、安装和扫描 |
 | JavaScript 语法检查 | `git ls-files '*.js' | xargs -n1 node --check` | 初始化 28 个文件通过；S01 新增/装配文件再次通过 |
-| 自动化测试 | `npm test` | 60 项通过；`RUN_MACOS_KEYCHAIN_PROMPT_PROBE=1 node --test test/credential-store.test.js` 另有 12/12 无写入 macOS 探针 |
+| 自动化测试 | `npm test` | 62 项通过；`RUN_MACOS_KEYCHAIN_PROMPT_PROBE=1 node --test test/credential-store.test.js` 另有 12/12 无写入 macOS 探针 |
 | lint | 未配置 | 不可用 |
 | build | 无需前端构建，且未配置 build 脚本 | 不适用 |
 
@@ -138,7 +138,7 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 
 ## 已知工程缺口
 
-- 已有 60 项默认 S01 自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
+- 已有 62 项默认 S01 自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
 - `public/js/chat.js` 体量较大，修改容易产生跨功能回归。
 - Agent 默认工作目录是用户主目录，不具备项目级 Workspace 边界。
 - 默认端口 `3210` 在初始化时已被未知进程占用。
