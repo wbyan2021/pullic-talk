@@ -170,6 +170,7 @@ function switchView(v){
   $("#console-view").classList.toggle("active", v==="console");
   $("#install-view").classList.toggle("active", v==="install");
   $("#chat-view").classList.toggle("active", v==="chat");
+  $("#project-view").classList.toggle("active", v==="project");
   if (v==="install") loadInstallCatalog();
   if (v==="chat"){ const f=$("#chat-frame"); if(!f.src) f.src = f.dataset.src; }
 }

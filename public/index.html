@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/css/index.css">
 <link rel="stylesheet" href="/css/installer.css">
 <link rel="stylesheet" href="/css/escort.css">
+<link rel="stylesheet" href="/css/project.css">
 </head>
 <body>
 
@@ -47,6 +48,7 @@
     <button class="tab active" data-view="console" onclick="switchView('console')"><span class="g">⊞</span> 控制台</button>
     <button class="tab" data-view="install" onclick="switchView('install')"><span class="g">⬇</span> 快捷安装</button>
     <button class="tab" data-view="chat" onclick="switchView('chat')"><span class="g">◧</span> 群聊</button>
+    <button class="tab" data-view="project" onclick="switchView('project')"><span class="g">⌂</span> 项目</button>
   </div>
   <div class="filters" id="filters"></div>
 </div>
@@ -85,6 +87,9 @@
   </div>
   <div class="view" id="chat-view">
     <iframe id="chat-frame" data-src="/chat" title="AI 群聊"></iframe>
+  </div>
+  <div class="view" id="project-view">
+    <div id="project-wrap"></div>
   </div>
 </div>
 
@@ -161,5 +166,6 @@
 <script src="/js/installer.js"></script>
 <script src="/js/index.js"></script>
 <script src="/js/escort.js"></script>
+<script src="/js/project.js"></script>
 </body>
 </html>
