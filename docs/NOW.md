@@ -4,7 +4,7 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: design
+stage: build
 current_slice: S02-git-safety-boundary
 slice_status: active
 work_branch: codex/v0.1-s02-git-safety-boundary
@@ -108,7 +108,7 @@ updated: 2026-08-06
 - 语法检查：`git ls-files '*.js' | xargs -n1 node --check`
 - 自动化测试：`npm test`
 - 健康检查：`PORT=43211 npm start` 后访问 `/api/health`
-- 当前状态：S01 已合并入 main 并删除工作分支；`npm test` 62/62 在合并提交 `cf62d8f` 上通过；默认端口 3210 的旧实例（2026-07-31 启动，早于 S01）已经用户授权结束，当前服务运行于 3210；本地 main 领先 `origin/main` 15 个提交，是否推送由用户决定。
+- 当前状态：S02 实现完成于工作分支（候选提交 `abdd93d`），全量 `npm test` 109/109、隔离端口健康、401 闸门与禁改路径审计通过；真实验收待用户完成；分支代码尚未运行在 3210（验收前需重启）；本地 main 领先 `origin/main` 16 个提交，是否推送由用户决定。
 
 ## 当前切片
 
@@ -155,6 +155,17 @@ updated: 2026-08-06
 
 S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需求—证据映射保留在下方存档段落。`.gitignore` 的用户改动（`.superpowers/`）保持未提交、未暂存；实现时新增 `projects.local.json` 行的暂存策略需单独征求用户同意。
 
+## 需求—证据映射
+
+| 需求 | 自动证据 | 真实/人工证据 | 当前状态 |
+|---|---|---|---|
+| 可选择真实 Git 项目并准确识别 | Git Inspector 19 项、Boundary 11 项、Routes 9 项、UI 8 项测试通过；临时仓库夹具覆盖干净/脏/冲突/detached/unborn/远端 | 用户选择本仓库与干净仓库，识别结果与 `git status` 事实核对 | 自动通过，真实待验收 |
+| 错误可区分（非仓库/不存在/文件/禁止根） | 路径安全与错误映射测试覆盖全部稳定错误码 | 用户输入非 Git 目录、不存在路径验证错误卡 | 自动通过，真实待验收 |
+| 持久化与失效检测 | 重启加载、损坏文件降级、失效检测、幂等清空测试通过 | 用户重启服务验证选择仍在；删除临时仓库验证失效提示 | 自动通过，真实待验收 |
+| 识别只读，零写入 | 命令白名单只读断言 + 测试夹具仅用临时目录 | 验收仓库前后 `git status --porcelain` 一致、`git stash list` 不变 | 自动通过，真实待验收 |
+| 移除需就地确认，UI 无 HTML 注入 | UI 静态回归断言无 innerHTML/localStorage、含确认态 | 用户完成一次移除双击确认 | 自动通过，真实待验收 |
+| 既有链路不受影响 | 全量 `npm test` 109/109；禁改路径 diff 审计通过 | 用户验证护航、群聊、控制台等旧功能 | 自动通过，真实待验收 |
+
 ## 需求—证据映射（S01 存档记录）
 
 | 需求 | 自动证据 | 真实/人工证据 | 当前状态 |
@@ -188,6 +199,9 @@ S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需�
 - 2026-08-06：S01 收尾完成：`codex/v0.1-s01-escort-online` 以 fast-forward 合并入 `main`（新基线 `cf62d8f`），工作分支已删除；`npm test` 62/62 与 `--strict` 校验均在合并后的 HEAD 复跑通过；用户未提交改动仅剩 `.gitignore` 的 `.superpowers/` 规则，保持原样。
 - 2026-08-06：查明“功能时好时坏”根因：默认端口 3210 被 2026-07-31 启动的旧实例（早于 S01 的代码）占用，用户访问 3210 时命中的是旧代码。经用户授权结束该实例（PID 25068），并在 3210 启动 S01 合并后的服务，`/api/health` 返回 `ok: true`。用户随后在 `http://localhost:3210/` 复测护航功能。
 - 2026-08-06：用户在 3210 端口的合并后服务上复测护航 AI，确认功能通过（连接检测、真实回复与身份设定均符合预期）；这是 S01 合并入 main 后的新鲜行为证据。
+- 2026-08-06（S02）：全量 `npm test` 109/109 通过（既有 62 + Git Inspector 19 + Boundary 11 + Routes 9 + UI 8）；全部测试夹具只在系统临时目录创建仓库，未触碰任何真实仓库。
+- 2026-08-06（S02）：全部已跟踪 JS 文件 `node --check` 通过；`git diff --check` 自基线干净；隔离端口 43212 健康检查 `ok: true`，无 Token 访问 `/api/project/status` 返回 401；验证实例随后关闭。
+- 2026-08-06（S02）：禁改路径审计通过：`git diff --name-only main...HEAD` 仅含 9 个新增文件、`src/server.js`、`public/index.html`、`public/js/index.js` 与 `docs/`；护航、群聊、终端、安装、`public/vendor/` 等全部未触碰。真实验收（三场景 + 零写入证明）待用户在分支代码上完成。
 
 ## 阻塞
 
@@ -200,12 +214,12 @@ S02 已达 Definition of Ready：从基线 `40c5e48` 创建 `codex/v0.1-s02-git-
 
 ## 最近交接
 
-### 2026-08-06 · S02 Ready，准备开工
+### 2026-08-06 · S02 实现完成，等待真实验收
 
-- 当前阶段：`design → build`；切片：`S02-git-safety-boundary (ready)`；基线：`40c5e48`（main）；待建分支：`codex/v0.1-s02-git-safety-boundary`。
-- 已完成：S02 设计稿获用户批准（accepted）；DoR 全部满足；[实现计划](plans/2026-08-06-s02-git-safety-boundary-implementation.md)产出（6 任务 TDD，含零写入证明与三场景验收）。
-- 未完成：建分支、Task 1–6 实现与验收。
-- 恢复动作：先读本文件；从实现计划 Task 1 开始；开工后把 NOW.md 的 `slice_status` 改为 `active` 并记录工作分支。
+- 当前阶段：`build`；切片：`S02-git-safety-boundary (active)`；工作分支：`codex/v0.1-s02-git-safety-boundary`（自基线 `40c5e48`，已含 5 个实现提交）。
+- 已完成：Task 1–5（Git Inspector、Boundary Service、路由装配、项目 view、全量自动验证）；`npm test` 109/109；隔离端口健康与 401 闸门验证通过；禁改路径审计通过。
+- 未完成：Task 6 用户真实验收（三场景 + 零写入证明 + 重启/失效/移除）；`.gitignore` 两行的暂存决定；验收通过后合并 main。
+- 恢复动作：先读本文件；用分支代码重启 3210 服务，引导用户按实现计划 Task 6 完成验收并回写证据；验收未过不标 `done`。
 
 ### 2026-08-06 · S02 设计稿产出
 
