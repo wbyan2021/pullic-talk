@@ -4,13 +4,13 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: review
+stage: design
 current_slice: S02-git-safety-boundary
-slice_status: active
+slice_status: done
 work_branch: codex/v0.1-s02-git-safety-boundary
 base_commit: 40c5e4824e05f69c6f450f0c07fddf44e5977def
 risk_level: high
-last_verified_commit: cf62d8ffdbf8dafbce4fca8062419bf345a2a29c
+last_verified_commit: 8b73080127e09662c72eca12f818bba9492787d8
 updated: 2026-08-06
 ---
 
@@ -93,7 +93,7 @@ updated: 2026-08-06
 | 顺序  | 切片         | 可观察结果                        | 状态        |
 | --- | ---------- | ---------------------------- | --------- |
 | S01 | 护航 AI 独立上线 | 配置 DeepSeek 后能检测连接、对话并显示可靠状态 | done      |
-| S02 | Git 项目安全边界 | 选择项目后识别并保护现有工作区状态            | candidate |
+| S02 | Git 项目安全边界 | 选择项目后识别并保护现有工作区状态            | done |
 | S03 | Pi 受控运行    | Pi 只在项目内启动，并可暂停、继续、终止        | pending   |
 | S04 | 证据与黑匣子     | 可查看状态时间线、文件变化和验收证据           | pending   |
 | S05 | 恢复与总览闭环    | 可恢复到检查点，并从总仪表完成整条任务          | pending   |
@@ -206,13 +206,21 @@ S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需�
 
 ## 阻塞
 
-- S02 自动与真实验收均通过；唯一待决项是 `.gitignore` 两行（`.superpowers/` + `projects.local.json`）的暂存策略，待用户确认后标记 `done` 并合并回 `main`。
+- S02 无阻塞，已完成；待合并回 `main`。
 
 ## 唯一下一步
 
-确认 `.gitignore` 暂存策略后标记 S02 为 `done`，再按 S01 仪式 fast-forward 合并 `codex/v0.1-s02-git-safety-boundary` 回 `main` 并更新基线。合并后进入 S03「Pi 受控运行」的设计。
+将 `codex/v0.1-s02-git-safety-boundary` fast-forward 合并回 `main`，更新稳定基线与 CODEMAP；随后进入 S03「Pi 受控运行」的设计。
 
 ## 最近交接
+
+### 2026-08-06 · S02 完成
+
+- 当前阶段：`design`；切片：`S02-git-safety-boundary (done)`；工作分支：`codex/v0.1-s02-git-safety-boundary`，待合并。
+- 已完成：Git Inspector、Boundary Service、路由装配、项目 view、全量自动验证（109/109）与用户真实验收（三场景 + 零写入证明通过）。
+- 已确认边界：护航、群聊、终端、安装链路未改；识别全程只读；`.gitignore` 两行已一并提交。
+- 未完成：合并回 `main`；S03 设计。
+- 恢复动作：先读本文件；合并 S02 后围绕 S03「Pi 受控运行」做设计。若要改动 S02，只限于已发现缺陷并补回归测试。
 
 ### 2026-08-06 · S02 真实验收通过
 
@@ -246,6 +254,12 @@ S01 已合并入 `main`（基线 `cf62d8f`，合并后复测通过）；其需�
 - 若要改动 S01，只限于已发现缺陷并补回归测试。
 
 ## 会话记录
+
+### 2026-08-06 · S02 完成与合并准备
+
+- 完成：S02 全部 6 个任务实现与验收；109 项自动化测试在候选提交 `8b73080` 上通过；用户真实验收通过（三场景 + 零写入证明）；`.gitignore` 两行一并提交。
+- 决定：S02 标记 `done`，待合并回 `main`。
+- 下一步：fast-forward 合并，更新基线；进入 S03 设计。
 
 ### 2026-08-06 · S02 设计与计划完成，Ready
 
