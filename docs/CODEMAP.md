@@ -22,8 +22,8 @@ updated: 2026-08-06
 - Agent 流式协议：SSE；终端协议：WebSocket
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
-- 稳定基线：`d7470f59063bb1526f36e405c4fd73f704a1772a`
-- 当前验证基线：依赖完整；109 项默认测试（S01 62 + S02 47）和 12/12 macOS 无写入 PTY 探针通过；隔离端口健康检查和禁改路径审计通过；没有 lint、CI 或 build 脚本。
+- 稳定基线：`b371ba4`
+- 当前验证基线：依赖完整；127 项默认测试（S01/S02 110 + S02b 净增 17）和 12/12 macOS 无写入 PTY 探针通过；隔离端口健康检查和禁改路径审计通过；没有 lint、CI 或 build 脚本。
 
 ## 关键路径
 
@@ -87,7 +87,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 
 - 远程仓库：`origin` → `git@github.com:wbyan2021/pullic-talk.git`
 - 稳定分支：`main`
-- S01 工作分支 `codex/v0.1-s01-escort-online` 与 S02 工作分支 `codex/v0.1-s02-git-safety-boundary` 均已 fast-forward 合并入 `main`（当前基线 `d7470f59063bb1526f36e405c4fd73f704a1772a`）并删除；S03 分支待 Ready 后创建。
+- S01 工作分支 `codex/v0.1-s01-escort-online`、S02 工作分支 `codex/v0.1-s02-git-safety-boundary` 与 S02b 工作分支 `codex/v0.1-s02b-multi-project` 均已 fast-forward 合并入 `main`（当前基线 `b371ba4`）并删除；S03 分支待 Ready 后创建。
 - 当前唯一保留为未提交用户资产的是 `.gitignore` 中的 `.superpowers/` 规则，不覆盖、不暂存、不丢弃。
 - 产品代码使用 `codex/<版本>-<切片>-<短名称>`；同一时间只保留一个产品工作分支。
 
