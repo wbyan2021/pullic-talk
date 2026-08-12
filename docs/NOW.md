@@ -4,7 +4,7 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: build
+stage: review
 current_slice: S02b-multi-project
 slice_status: done
 work_branch: codex/v0.1-s02b-multi-project
