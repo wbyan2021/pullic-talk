@@ -4,14 +4,14 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: design
+stage: build
 current_slice: S02b-multi-project
-slice_status: candidate
-work_branch: none（S03 分支 `codex/v0.1-s03-pi-controlled-run` 待 Ready 后创建）
-base_commit: be2b5958a862e1d6c8eeb64b8e8f71d485cc4bae
-risk_level: high
-last_verified_commit: d7470f59063bb1526f36e405c4fd73f704a1772a
-updated: 2026-08-06
+slice_status: active
+work_branch: codex/v0.1-s02b-multi-project（自 main HEAD `219c435` 创建）
+base_commit: 219c435
+risk_level: medium
+last_verified_commit: 44eee58
+updated: 2026-08-12
 ---
 
 # 当前版本：v0.1 · 第一次可控任务
