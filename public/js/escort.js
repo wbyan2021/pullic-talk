@@ -54,7 +54,8 @@
   let history = [];
 
   function openPanel() {
-    if (window.matchMedia("(max-width: 1180px)").matches) document.body.classList.add("escort-open");
+    // 宽屏与窄屏统一：点击顶部「护航」按钮展开面板
+    document.body.classList.add("escort-open");
     elements.toggle.setAttribute("aria-expanded", "true");
     elements.panel.focus?.({ preventScroll: true });
   }
@@ -221,7 +222,8 @@
     if (event.key === "Escape" && document.body.classList.contains("escort-open")) closePanel();
   });
 
-  if (window.matchMedia("(max-width: 1180px)").matches) closePanel();
+  // 默认折叠：护航面板不常驻占位，需要时点顶部「护航」展开
+  closePanel();
   render();
   loadStatus();
 })();

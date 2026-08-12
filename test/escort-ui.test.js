@@ -68,7 +68,7 @@ async function loadEscortUi(api) {
 
   runInNewContext(source, { window, document });
   await flushAsyncHandlers();
-  return { elements };
+  return { elements, body };
 }
 
 const UNCONFIGURED = {
@@ -79,6 +79,23 @@ const UNCONFIGURED = {
   lastCheckedAt: null,
   error: null,
 };
+
+test("escort panel is collapsed by default and opens on toggle click", async () => {
+  const { elements, body } = await loadEscortUi(async () =>
+    response(true, { ok: true, status: UNCONFIGURED })
+  );
+
+  // 默认折叠：宽屏初始化后 body 不应带 escort-open
+  assert.equal(body.classList.contains("escort-open"), false);
+
+  // 点击顶部「护航」按钮 → 展开
+  elements["escort-toggle"].listeners.get("click")();
+  assert.equal(body.classList.contains("escort-open"), true);
+
+  // 再次点击 → 收起
+  elements["escort-toggle"].listeners.get("click")();
+  assert.equal(body.classList.contains("escort-open"), false);
+});
 
 test("credential input stays populated when Keychain save fails", async () => {
   const { elements } = await loadEscortUi(async (url, options = {}) => {
