@@ -133,7 +133,7 @@
     const head = el("div", "project-head");
     head.appendChild(el("h2", "project-title", "项目与任务系统"));
     head.appendChild(el("p", "project-sub",
-      "录入多个本地 Git 项目并指定一个活动项目。识别全程只读：不会修改、提交或清理你的仓库。"));
+      "这里管理 AI 任务的工作边界：被标记 ACTIVE 的项目，是接下来 Pi 受控执行任务时唯一允许操作的目录（S03 开放）。识别全程只读，不会修改、提交或清理你的仓库。"));
     return head;
   }
 
@@ -169,7 +169,7 @@
     const box = el("section", "project-card");
     box.appendChild(el("h3", "project-card-title", "尚未录入项目"));
     box.appendChild(el("p", "project-note",
-      "录入后，驾驶舱会只读识别该仓库的分支、未提交改动、未跟踪文件、最近提交与远端；被标记为 ACTIVE 的仓库根将作为后续 Pi 任务的工作边界（S03 生效）。"));
+      "录入后，驾驶舱会只读识别仓库的分支、改动与最近提交。它的用途是为 AI 执行划定安全边界：下一步（S03）你可以提出一条真实任务，让 Pi 只在 ACTIVE 项目的目录内工作，全程可观察、可停止。"));
     box.appendChild(el("p", "project-note",
       "本切片不会创建恢复点、不会做任何 Git 写操作；恢复能力在 S05 提供。"));
     return box;
@@ -263,7 +263,7 @@
     box.appendChild(kv("录入时间", project.selectedAt || ""));
 
     if (isActive && !project.stale) {
-      box.appendChild(el("p", "project-boundary-note", "该仓库根将作为后续 Pi 任务的工作边界（S03 生效）。"));
+      box.appendChild(el("p", "project-boundary-note", "ACTIVE：后续 Pi 任务将只在此仓库根目录内运行（S03 生效）。"));
     }
 
     // 操作区

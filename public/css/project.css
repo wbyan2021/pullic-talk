@@ -5,6 +5,9 @@
 #project-view [hidden] { display: none !important; }
 
 #project-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   max-width: 860px;
   margin: 0 auto;
   padding: 22px 20px 40px;
