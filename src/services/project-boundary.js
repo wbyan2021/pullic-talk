@@ -1,15 +1,17 @@
 "use strict";
 // ─────────────────────────────────────────────────────────────
-// Project Boundary Service · S02 项目边界状态机与持久化
-// 设计: docs/plans/2026-08-06-s02-git-safety-boundary-design.md §7
+// Project Boundary Service · S02b 多项目边界状态机与持久化（v2）
+// 设计: docs/plans/2026-08-12-s02b-multi-project-design.md §3–§4
 //
 // 约束:
 // - 只读：本服务从不执行 Git 写操作（识别全部委托 GitInspector）；
 // - 持久化文件 projects.local.json 不含秘密，且必须被 Git 忽略；
 // - 写入为临时文件 + rename，避免半写状态；损坏文件静默降级为空状态；
+// - v1 单项目状态文件在加载时自动迁移为 v2，不丢任何字段；
 // - 对外错误统一为 ProjectBoundaryError（含稳定 code）。
 // ─────────────────────────────────────────────────────────────
-import { readFile, writeFile, rename, unlink, stat } from "node:fs/promises";
+import { readFile, writeFile, rename, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 
 import { GitInspectorError } from "./git-inspector.js";
 
@@ -38,6 +40,10 @@ async function isExistingDir(candidate) {
   }
 }
 
+function projectIdFor(repoRoot) {
+  return createHash("sha1").update(repoRoot).digest("hex").slice(0, 12);
+}
+
 const INSPECTION_FIELDS = [
   "inspectedAt", "branch", "detached", "hasCommits", "headCommit",
   "counts", "entries", "truncated", "remotes",
@@ -51,8 +57,20 @@ function sanitizeInspection(inspection) {
   return clean;
 }
 
+function isValidRecord(record) {
+  return (
+    record &&
+    typeof record.repoRoot === "string" &&
+    typeof record.inputPath === "string" &&
+    typeof record.selectedAt === "string" &&
+    record.selectionSnapshot &&
+    record.lastInspection
+  );
+}
+
 export function createProjectBoundary({ inspector, statePath, now = () => Date.now() }) {
-  let record = null;
+  let projects = new Map(); // id -> record（保持插入顺序，selectedAt 升序由重选更新维护）
+  let activeProjectId = null;
   let loaded = false;
 
   async function ensureLoaded() {
@@ -64,44 +82,55 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
     } catch {
       return; // 文件不存在 → 空状态
     }
+    let parsed;
     try {
-      const parsed = JSON.parse(raw);
-      if (
-        parsed &&
-        parsed.version === 1 &&
-        parsed.project &&
-        typeof parsed.project.repoRoot === "string" &&
-        typeof parsed.project.inputPath === "string" &&
-        typeof parsed.project.selectedAt === "string" &&
-        parsed.project.selectionSnapshot &&
-        parsed.project.lastInspection
-      ) {
-        record = parsed.project;
-      }
+      parsed = JSON.parse(raw);
     } catch {
       console.warn("[project-boundary] state file unreadable; starting with no selection");
+      return;
     }
+    if (parsed && parsed.version === 1 && isValidRecord(parsed.project)) {
+      // v1 → v2 迁移：保留全部字段，单项目直接成为活动项目
+      const record = parsed.project;
+      const id = projectIdFor(record.repoRoot);
+      projects.set(id, { id, ...record });
+      activeProjectId = id;
+      try {
+        await persist();
+      } catch {
+        console.warn("[project-boundary] v1 state migrated in memory but v2 persist failed");
+      }
+      return;
+    }
+    if (parsed && parsed.version === 2 && parsed.projects && typeof parsed.projects === "object") {
+      for (const [id, record] of Object.entries(parsed.projects)) {
+        if (typeof id === "string" && isValidRecord(record)) {
+          projects.set(id, { ...record, id });
+        }
+      }
+      activeProjectId =
+        typeof parsed.activeProjectId === "string" && projects.has(parsed.activeProjectId)
+          ? parsed.activeProjectId
+          : null;
+      return;
+    }
+    console.warn("[project-boundary] state file has unknown shape; starting with no selection");
   }
 
   async function persist() {
-    const data = JSON.stringify({ version: 1, project: record }, null, 2);
+    const data = JSON.stringify(
+      { version: 2, activeProjectId, projects: Object.fromEntries(projects) },
+      null,
+      2
+    );
     const tmpPath = `${statePath}.tmp`;
     await writeFile(tmpPath, data, "utf8");
     await rename(tmpPath, statePath);
   }
 
-  async function dropFile() {
-    try {
-      await unlink(statePath);
-    } catch {
-      /* 不存在也视为已清空（幂等） */
-    }
-  }
-
-  function buildPayload(stale) {
-    if (!record) return { selected: false };
+  function buildPayload(record, stale) {
     return {
-      selected: true,
+      id: record.id,
       inputPath: record.inputPath,
       resolvedPath: record.resolvedPath,
       repoRoot: record.repoRoot,
@@ -114,9 +143,14 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
 
   async function getStatus() {
     await ensureLoaded();
-    if (!record) return { selected: false };
-    const alive = await isExistingDir(record.repoRoot);
-    return buildPayload(!alive);
+    const list = [];
+    for (const record of projects.values()) {
+      const alive = await isExistingDir(record.repoRoot);
+      list.push(buildPayload(record, !alive));
+    }
+    list.sort((a, b) => (a.selectedAt < b.selectedAt ? -1 : a.selectedAt > b.selectedAt ? 1 : 0));
+    const active = list.find((p) => p.id === activeProjectId) ?? null;
+    return { projects: list, activeProjectId: active ? activeProjectId : null, active };
   }
 
   async function select(inputPath) {
@@ -129,7 +163,9 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
     }
     const selectedAt = new Date(now()).toISOString();
     const cleanInspection = sanitizeInspection(inspection);
-    record = {
+    const id = projectIdFor(inspection.repoRoot);
+    const record = {
+      id,
       inputPath: inspection.inputPath,
       resolvedPath: inspection.resolvedPath,
       repoRoot: inspection.repoRoot,
@@ -137,17 +173,44 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
       selectionSnapshot: structuredClone(cleanInspection),
       lastInspection: cleanInspection,
     };
+    projects.delete(id); // 重选保持按 selectedAt 排序的插入顺序语义
+    projects.set(id, record);
     try {
       await persist();
     } catch {
       throw new ProjectBoundaryError("internal_error", { retryable: true });
     }
-    return buildPayload(false);
+    return buildPayload(record, false);
   }
 
-  async function refresh() {
+  async function setActive(id) {
     await ensureLoaded();
-    if (!record) throw new ProjectBoundaryError("no_project_selected");
+    const record = projects.get(id);
+    if (!record) throw new ProjectBoundaryError("project_not_found");
+    activeProjectId = id;
+    try {
+      await persist();
+    } catch {
+      throw new ProjectBoundaryError("internal_error", { retryable: true });
+    }
+    return { activeProjectId: id };
+  }
+
+  function resolveId(id) {
+    if (id !== undefined && id !== null) {
+      const record = projects.get(id);
+      if (!record) throw new ProjectBoundaryError("project_not_found");
+      return record;
+    }
+    if (!activeProjectId || !projects.has(activeProjectId)) {
+      throw new ProjectBoundaryError("no_project_selected");
+    }
+    return projects.get(activeProjectId);
+  }
+
+  async function refresh(id) {
+    await ensureLoaded();
+    const record = resolveId(id);
     let inspection;
     try {
       inspection = await inspector.inspect(record.repoRoot);
@@ -166,15 +229,21 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
     } catch {
       throw new ProjectBoundaryError("internal_error", { retryable: true });
     }
-    return buildPayload(false);
+    return buildPayload(record, false);
   }
 
-  async function clear() {
+  async function clear(id) {
     await ensureLoaded();
-    record = null;
-    await dropFile();
-    return { selected: false };
+    const record = resolveId(id);
+    projects.delete(record.id);
+    if (activeProjectId === record.id) activeProjectId = null;
+    try {
+      await persist();
+    } catch {
+      throw new ProjectBoundaryError("internal_error", { retryable: true });
+    }
+    return { removed: true, id: record.id };
   }
 
-  return { getStatus, select, refresh, clear };
+  return { getStatus, select, setActive, refresh, clear };
 }
