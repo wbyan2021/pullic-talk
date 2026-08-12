@@ -7,7 +7,7 @@ status: active
 stage: build
 current_slice: S02b-multi-project
 slice_status: active
-work_branch: codex/v0.1-s02b-multi-project（自 main HEAD `219c435` 创建）
+work_branch: codex/v0.1-s02b-multi-project
 base_commit: 219c435
 risk_level: medium
 last_verified_commit: 44eee58
