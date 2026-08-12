@@ -5,26 +5,28 @@ import { EventEmitter } from "node:events";
 import projectRoutes from "../src/routes/project.js";
 import { ProjectBoundaryError } from "../src/services/project-boundary.js";
 
-const SAFE_PAYLOAD = {
-  selected: true,
+const SAFE_PROJECT = {
+  id: "abc123def456",
   inputPath: "/tmp/repo",
   resolvedPath: "/private/tmp/repo",
   repoRoot: "/private/tmp/repo",
-  selectedAt: "2026-08-06T12:00:00.000Z",
+  selectedAt: "2026-08-12T12:00:00.000Z",
   stale: false,
   inspection: {
-    inspectedAt: "2026-08-06T12:00:00.000Z",
+    inspectedAt: "2026-08-12T12:00:00.000Z",
     branch: "main",
     detached: false,
     hasCommits: true,
-    headCommit: { hash: "abc1234", date: "2026-08-06", subject: "base" },
+    headCommit: { hash: "abc1234", date: "2026-08-12", subject: "base" },
     counts: { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 },
     entries: [],
     truncated: false,
     remotes: [],
   },
-  selectionSnapshotAt: "2026-08-06T12:00:00.000Z",
+  selectionSnapshotAt: "2026-08-12T12:00:00.000Z",
 };
+
+const PROJECT_KEYS = ["id", "inputPath", "resolvedPath", "repoRoot", "selectedAt", "stale", "inspection", "selectionSnapshotAt"];
 
 class FakeApp {
   constructor() { this.routes = new Map(); }
@@ -45,13 +47,17 @@ class FakeResponse extends EventEmitter {
 }
 
 function createService(overrides = {}) {
-  const calls = { status: 0, select: [], refresh: 0, clear: 0 };
+  const calls = { status: 0, select: [], activate: [], refresh: [], clear: [] };
   return {
     calls,
-    async getStatus() { calls.status += 1; return { ...SAFE_PAYLOAD }; },
-    async select(path) { calls.select.push(path); return { ...SAFE_PAYLOAD, inputPath: path }; },
-    async refresh() { calls.refresh += 1; return { ...SAFE_PAYLOAD }; },
-    async clear() { calls.clear += 1; return { selected: false }; },
+    async getStatus() {
+      calls.status += 1;
+      return { projects: [{ ...SAFE_PROJECT }], activeProjectId: SAFE_PROJECT.id, active: { ...SAFE_PROJECT } };
+    },
+    async select(path) { calls.select.push(path); return { ...SAFE_PROJECT, inputPath: path }; },
+    async setActive(id) { calls.activate.push(id); return { activeProjectId: id }; },
+    async refresh(id) { calls.refresh.push(id); return { ...SAFE_PROJECT }; },
+    async clear(id) { calls.clear.push(id); return { removed: true, id }; },
     ...overrides,
   };
 }
@@ -72,11 +78,12 @@ async function invoke(app, key, { body } = {}) {
 
 // ── 注册与成功路径 ──
 
-test("registers the four project endpoints", () => {
+test("registers the five project endpoints", () => {
   const { app } = setup();
   for (const key of [
     "GET /api/project/status",
     "POST /api/project/select",
+    "POST /api/project/activate",
     "POST /api/project/refresh",
     "POST /api/project/clear",
   ]) {
@@ -84,21 +91,37 @@ test("registers the four project endpoints", () => {
   }
 });
 
-test("GET status passes service payload through", async () => {
+test("GET status returns the project list and activeProjectId", async () => {
   const { app, service } = setup();
   const res = await invoke(app, "GET /api/project/status");
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.ok, true);
-  assert.equal(res.body.project.selected, true);
-  assert.equal(res.body.project.inspection.branch, "main");
+  assert.equal(res.body.projects.length, 1);
+  assert.equal(res.body.projects[0].id, SAFE_PROJECT.id);
+  assert.equal(res.body.projects[0].inspection.branch, "main");
+  assert.equal(res.body.activeProjectId, SAFE_PROJECT.id);
+  assert.ok(!("project" in res.body), "v2 status has no single-project field");
+  assert.ok(!("active" in res.body), "active payload is not duplicated in the response");
   assert.equal(service.calls.status, 1);
 });
 
-test("POST select forwards path to service", async () => {
+test("GET status with no projects returns an empty list", async () => {
+  const service = createService({
+    async getStatus() { return { projects: [], activeProjectId: null, active: null }; },
+  });
+  const { app } = setup(service);
+  const res = await invoke(app, "GET /api/project/status");
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { ok: true, projects: [], activeProjectId: null });
+});
+
+test("POST select forwards path to service and returns the single project", async () => {
   const { app, service } = setup();
   const res = await invoke(app, "POST /api/project/select", { body: { path: "/tmp/repo" } });
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.ok, true);
+  assert.equal(res.body.project.id, SAFE_PROJECT.id);
+  assert.equal(res.body.project.inputPath, "/tmp/repo");
   assert.deepEqual(service.calls.select, ["/tmp/repo"]);
 });
 
@@ -113,16 +136,56 @@ test("POST select rejects missing or non-string path without calling service", a
   }
 });
 
-test("POST refresh and clear pass through", async () => {
+test("POST activate forwards id and returns activeProjectId", async () => {
   const { app, service } = setup();
-  const refreshed = await invoke(app, "POST /api/project/refresh");
-  assert.equal(refreshed.statusCode, 200);
-  assert.equal(service.calls.refresh, 1);
+  const res = await invoke(app, "POST /api/project/activate", { body: { id: "abc123def456" } });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { ok: true, activeProjectId: "abc123def456" });
+  assert.deepEqual(service.calls.activate, ["abc123def456"]);
+});
 
-  const cleared = await invoke(app, "POST /api/project/clear");
+test("POST activate rejects missing or non-string id without calling service", async () => {
+  for (const body of [undefined, {}, { id: 123 }, { id: "" }, { id: "   " }]) {
+    const { app, service } = setup();
+    const res = await invoke(app, "POST /api/project/activate", { body });
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.body.ok, false);
+    assert.equal(res.body.code, "invalid_id");
+    assert.equal(service.calls.activate.length, 0);
+  }
+});
+
+test("POST refresh and clear forward an optional id to the service", async () => {
+  const { app, service } = setup();
+
+  const refreshed = await invoke(app, "POST /api/project/refresh", { body: { id: "abc123def456" } });
+  assert.equal(refreshed.statusCode, 200);
+  assert.equal(refreshed.body.project.id, SAFE_PROJECT.id);
+  assert.deepEqual(service.calls.refresh, ["abc123def456"]);
+
+  const cleared = await invoke(app, "POST /api/project/clear", { body: { id: "abc123def456" } });
   assert.equal(cleared.statusCode, 200);
-  assert.equal(cleared.body.project.selected, false);
-  assert.equal(service.calls.clear, 1);
+  assert.deepEqual(cleared.body, { ok: true });
+  assert.deepEqual(service.calls.clear, ["abc123def456"]);
+});
+
+test("POST refresh and clear work without an id (active project fallback)", async () => {
+  const { app, service } = setup();
+  await invoke(app, "POST /api/project/refresh");
+  await invoke(app, "POST /api/project/clear");
+  assert.deepEqual(service.calls.refresh, [undefined]);
+  assert.deepEqual(service.calls.clear, [undefined]);
+});
+
+test("POST refresh and clear reject a non-string id without calling service", async () => {
+  for (const key of ["POST /api/project/refresh", "POST /api/project/clear"]) {
+    const { app, service } = setup();
+    const res = await invoke(app, key, { body: { id: 42 } });
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.body.code, "invalid_id");
+    assert.equal(service.calls.refresh.length, 0);
+    assert.equal(service.calls.clear.length, 0);
+  }
 });
 
 // ── 错误映射 ──
@@ -134,6 +197,7 @@ const ERROR_MAPPING = [
   ["forbidden_root", 400],
   ["not_a_git_repo", 400],
   ["no_project_selected", 400],
+  ["project_not_found", 404],
   ["project_stale", 409],
   ["git_unavailable", 424],
   ["git_timeout", 504],
@@ -158,6 +222,17 @@ test("service errors map to stable codes and safe fixed messages", async () => {
   }
 });
 
+test("activate surfaces project_not_found as 404", async () => {
+  const service = createService({
+    async setActive() { throw new ProjectBoundaryError("project_not_found"); },
+  });
+  const { app } = setup(service);
+  const res = await invoke(app, "POST /api/project/activate", { body: { id: "missing00000" } });
+  assert.equal(res.statusCode, 404);
+  assert.equal(res.body.code, "project_not_found");
+  assert.ok(!JSON.stringify(res.body).includes("missing00000"), "raw id must not be echoed");
+});
+
 test("unknown errors become internal_error without leaking details", async () => {
   for (const error of [new Error("boom with secret"), new ProjectBoundaryError("mystery_code")]) {
     const service = createService({
@@ -174,10 +249,14 @@ test("unknown errors become internal_error without leaking details", async () =>
 
 // ── 字段白名单 ──
 
-test("response payload is whitelisted even if service returns extra keys", async () => {
+test("list items are whitelisted even if the service returns extra keys", async () => {
   const service = createService({
     async getStatus() {
-      return { ...SAFE_PAYLOAD, __secret: "leak", inspection: { ...SAFE_PAYLOAD.inspection, env: process.env } };
+      return {
+        projects: [{ ...SAFE_PROJECT, __secret: "leak", inspection: { ...SAFE_PROJECT.inspection, env: process.env } }],
+        activeProjectId: SAFE_PROJECT.id,
+        active: null,
+      };
     },
   });
   const { app } = setup(service);
@@ -185,22 +264,9 @@ test("response payload is whitelisted even if service returns extra keys", async
   const text = JSON.stringify(res.body);
   assert.ok(!text.includes("__secret"));
   assert.ok(!text.includes("HOME"));
+  assert.deepEqual(Object.keys(res.body.projects[0]).sort(), [...PROJECT_KEYS].sort());
   assert.deepEqual(
-    Object.keys(res.body.project).sort(),
-    ["inspection", "inputPath", "repoRoot", "resolvedPath", "selected", "selectedAt", "selectionSnapshotAt", "stale"].sort()
-  );
-  assert.deepEqual(
-    Object.keys(res.body.project.inspection).sort(),
+    Object.keys(res.body.projects[0].inspection).sort(),
     ["branch", "counts", "detached", "entries", "hasCommits", "headCommit", "inspectedAt", "remotes", "truncated"]
   );
-});
-
-test("unselected status returns minimal payload", async () => {
-  const service = createService({
-    async getStatus() { return { selected: false }; },
-  });
-  const { app } = setup(service);
-  const res = await invoke(app, "GET /api/project/status");
-  assert.equal(res.statusCode, 200);
-  assert.deepEqual(res.body.project, { selected: false });
 });
