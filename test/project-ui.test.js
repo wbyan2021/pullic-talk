@@ -44,16 +44,28 @@ test("project.js uses the authenticated OPS api and no browser persistence", () 
   assert.ok(!PROJECT_JS.includes("indexedDB"), "browser persistence is forbidden");
 });
 
-test("project.js implements an explicit confirm-before-clear flow", () => {
-  assert.ok(PROJECT_JS.includes("confirming"), "clear must require an inline confirmation state");
+test("project.js implements an explicit confirm-before-clear flow per card", () => {
+  assert.ok(PROJECT_JS.includes("confirmingId"), "clear must require an inline confirmation state per card");
 });
 
-test("project.js talks only to the four project endpoints", () => {
+test("project.js talks to the five project endpoints", () => {
   const endpoints = [...PROJECT_JS.matchAll(/["'](\/api\/[^"']+)["']/g)].map((m) => m[1]);
   assert.ok(endpoints.length > 0);
   for (const endpoint of endpoints) {
     assert.ok(endpoint.startsWith("/api/project/"), `unexpected endpoint ${endpoint}`);
   }
+  for (const required of ["status", "select", "activate", "refresh", "clear"]) {
+    assert.ok(
+      endpoints.includes(`/api/project/${required}`),
+      `endpoint /api/project/${required} missing`
+    );
+  }
+});
+
+test("project.js renders an ACTIVE badge and a set-active action", () => {
+  assert.ok(PROJECT_JS.includes("ACTIVE"), "active badge missing");
+  assert.ok(PROJECT_JS.includes("设为活动"), "set-active action missing");
+  assert.ok(PROJECT_JS.includes("activeProjectId"), "must track activeProjectId from status");
 });
 
 // ── 样式存在且非空 ──
@@ -61,4 +73,6 @@ test("project.js talks only to the four project endpoints", () => {
 test("project.css exists and styles the project view", () => {
   assert.ok(PROJECT_CSS.trim().length > 100, "project.css must not be empty");
   assert.ok(PROJECT_CSS.includes("#project-wrap"), "project.css must style #project-wrap");
+  assert.ok(PROJECT_CSS.includes(".project-list"), "project.css must style the project list");
+  assert.ok(PROJECT_CSS.includes(".project-badge.active"), "project.css must style the ACTIVE badge");
 });

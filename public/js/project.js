@@ -1,7 +1,8 @@
 "use strict";
 /* ═══════════════════════════════════════════
-   AI·OPS COCKPIT — 项目 view（S02 Git 项目安全边界）
-   - 只读识别：选择本地 Git 项目并展示工作区状态
+   AI·OPS COCKPIT — 项目 view（S02b 多项目并行管理）
+   - 多项目录入：列表查看各自只读识别状态，逐项刷新/移除
+   - 活动项目：唯一 ACTIVE 标记，作为后续 S03 Pi 任务的工作边界
    - 安全：所有动态内容使用 createElement/textContent，不做 HTML 字符串注入
    - 数据：一切以服务端为准，浏览器不做任何持久化
    ═══════════════════════════════════════════ */
@@ -12,10 +13,11 @@
   const state = {
     loading: false,
     busy: false,
-    project: null, // { selected: false } 或完整快照
-    error: null,   // { code, message, action }
+    projects: [],        // 服务端返回的项目列表（selectedAt 升序）
+    activeProjectId: null,
+    error: null,         // { code, message, action }
   };
-  let confirming = false;
+  let confirmingId = null;
   let confirmTimer = null;
 
   // ── API ──
@@ -40,7 +42,8 @@
     render();
     try {
       const payload = await request("/api/project/status");
-      state.project = payload.project || { selected: false };
+      state.projects = Array.isArray(payload.projects) ? payload.projects : [];
+      state.activeProjectId = payload.activeProjectId || null;
     } catch (error) {
       state.error = pickError(error);
     } finally {
@@ -49,29 +52,34 @@
     }
   }
 
-  async function act(pathname, body, { keepErrorSource = null } = {}) {
+  async function act(pathname, body) {
     if (state.busy) return;
     state.busy = true;
     state.error = null;
     render();
     try {
-      const payload = await request(pathname, body ? { method: "POST", json: body } : { method: "POST" });
-      state.project = payload.project || { selected: false };
-      confirming = false;
+      await request(pathname, { method: "POST", json: body ?? {} });
+      clearConfirm();
+      await loadStatus(); // 服务端是唯一事实源
     } catch (error) {
-      state.error = pickError(error, keepErrorSource);
+      state.error = pickError(error);
     } finally {
       state.busy = false;
       render();
     }
   }
 
-  function pickError(error, fallback) {
+  function pickError(error) {
     return {
       code: error.code || "request_failed",
       message: error.message || "请求失败，请稍后重试。",
       action: error.action || "重新加载页面",
     };
+  }
+
+  function clearConfirm() {
+    confirmingId = null;
+    clearTimeout(confirmTimer);
   }
 
   // ── DOM 构建（仅使用安全 API） ──
@@ -91,21 +99,31 @@
     return node;
   }
 
+  function dirName(repoRoot) {
+    if (!repoRoot) return "未命名项目";
+    const parts = repoRoot.split("/").filter(Boolean);
+    return parts[parts.length - 1] || repoRoot;
+  }
+
   function render() {
     wrap.textContent = "";
     const root = el("div", "project-root");
 
     root.appendChild(renderHead());
+    root.appendChild(renderSelectForm());
+
+    if (state.error) root.appendChild(renderErrorCard());
 
     if (state.loading) {
       root.appendChild(el("p", "project-note", "正在读取项目状态…"));
-    } else if (state.error) {
-      root.appendChild(renderErrorCard());
-      if (!state.project || state.project.selected === false) root.appendChild(renderSelectForm());
-    } else if (!state.project || state.project.selected === false) {
+    } else if (state.projects.length === 0) {
       root.appendChild(renderEmpty());
     } else {
-      root.appendChild(renderSelected(state.project));
+      const list = el("div", "project-list");
+      for (const project of state.projects) {
+        list.appendChild(renderProjectCard(project));
+      }
+      root.appendChild(list);
     }
 
     wrap.appendChild(root);
@@ -114,7 +132,8 @@
   function renderHead() {
     const head = el("div", "project-head");
     head.appendChild(el("h2", "project-title", "项目与任务系统"));
-    head.appendChild(el("p", "project-sub", "选择一个本地 Git 项目。识别全程只读：不会修改、提交或清理你的仓库。"));
+    head.appendChild(el("p", "project-sub",
+      "录入多个本地 Git 项目并指定一个活动项目。识别全程只读：不会修改、提交或清理你的仓库。"));
     return head;
   }
 
@@ -127,7 +146,7 @@
     input.spellcheck = false;
     input.maxLength = 1024;
 
-    const submit = button("project-btn primary", state.busy ? "识别中…" : "选择并识别", () => {
+    const submit = button("project-btn primary", state.busy ? "识别中…" : "录入并识别", () => {
       const path = input.value.trim();
       if (!path) return;
       act("/api/project/select", { path });
@@ -148,12 +167,11 @@
 
   function renderEmpty() {
     const box = el("section", "project-card");
-    box.appendChild(el("h3", "project-card-title", "未选择项目"));
+    box.appendChild(el("h3", "project-card-title", "尚未录入项目"));
     box.appendChild(el("p", "project-note",
-      "选择后，驾驶舱会只读识别该仓库的分支、未提交改动、未跟踪文件、最近提交与远端，并把路径记录为后续 Pi 任务的工作边界（S03 生效）。"));
+      "录入后，驾驶舱会只读识别该仓库的分支、未提交改动、未跟踪文件、最近提交与远端；被标记为 ACTIVE 的仓库根将作为后续 Pi 任务的工作边界（S03 生效）。"));
     box.appendChild(el("p", "project-note",
       "本切片不会创建恢复点、不会做任何 Git 写操作；恢复能力在 S05 提供。"));
-    box.appendChild(renderSelectForm());
     return box;
   }
 
@@ -169,15 +187,22 @@
     return card;
   }
 
-  function renderSelected(project) {
+  function renderProjectCard(project) {
+    const isActive = project.id && project.id === state.activeProjectId;
     const box = el("section", "project-card");
+    if (project.stale) box.classList.add("stale");
+
+    // 标题行：目录名 + 徽标
+    const titleRow = el("div", "project-card-head");
+    titleRow.appendChild(el("h3", "project-card-name", dirName(project.repoRoot)));
+    const badges = el("span", "project-card-badges");
+    if (isActive) badges.appendChild(el("span", "project-badge active", "ACTIVE"));
+    if (project.stale) badges.appendChild(el("span", "project-badge warn", "已失效"));
+    titleRow.appendChild(badges);
+    box.appendChild(titleRow);
 
     if (project.stale) {
-      box.classList.add("stale");
-      box.appendChild(el("h3", "project-card-title", "项目路径已失效"));
-      box.appendChild(el("p", "project-note", "该目录已不存在或不再是 Git 仓库。请移除后重新选择。"));
-    } else {
-      box.appendChild(el("h3", "project-card-title", "已选择项目"));
+      box.appendChild(el("p", "project-note", "该目录已不存在或不再是 Git 仓库。请移除后重新录入。"));
     }
 
     // 路径
@@ -235,32 +260,38 @@
     // 远端
     const remotes = Array.isArray(inspection.remotes) ? inspection.remotes : [];
     box.appendChild(kv("远端", remotes.length > 0 ? remotes.join("、") : "无远端"));
-    box.appendChild(kv("选择时间", project.selectedAt || ""));
+    box.appendChild(kv("录入时间", project.selectedAt || ""));
 
-    box.appendChild(el("p", "project-boundary-note", "该仓库根将作为后续 Pi 任务的工作边界（S03 生效）。"));
+    if (isActive && !project.stale) {
+      box.appendChild(el("p", "project-boundary-note", "该仓库根将作为后续 Pi 任务的工作边界（S03 生效）。"));
+    }
 
     // 操作区
     const actions = el("div", "project-actions");
+    if (!isActive) {
+      actions.appendChild(button("project-btn", "设为活动", () => {
+        act("/api/project/activate", { id: project.id });
+      }, { disabled: state.busy || project.stale }));
+    }
     actions.appendChild(button("project-btn", state.busy ? "识别中…" : "重新识别", () => {
-      act("/api/project/refresh");
+      act("/api/project/refresh", { id: project.id });
     }, { disabled: state.busy || project.stale }));
 
-    if (confirming) {
+    if (confirmingId === project.id) {
       actions.appendChild(button("project-btn danger", "确认移除？再点一次", () => {
-        confirming = false;
-        clearTimeout(confirmTimer);
-        act("/api/project/clear");
+        clearConfirm();
+        act("/api/project/clear", { id: project.id });
       }));
     } else {
       actions.appendChild(button("project-btn danger-outline", "移除项目", () => {
-        confirming = true;
+        confirmingId = project.id;
         render();
         clearTimeout(confirmTimer);
         confirmTimer = setTimeout(() => {
-          confirming = false;
+          confirmingId = null;
           render();
         }, 4000);
-      }));
+      }, { disabled: state.busy }));
     }
     box.appendChild(actions);
 

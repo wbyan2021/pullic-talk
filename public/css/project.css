@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════
-   AI·OPS COCKPIT — 项目 view（S02）
+   AI·OPS COCKPIT — 项目 view（S02b 多项目）
    ═══════════════════════════════════════════ */
 
 #project-view [hidden] { display: none !important; }
@@ -151,6 +151,40 @@
   border-color: color-mix(in srgb, #f59e0b 60%, var(--line-2));
   color: #f59e0b;
 }
+
+.project-badge.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.project-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.project-card-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.project-card-badges { flex: none; }
+
+.project-select-form { margin-bottom: 2px; }
 
 .project-counts {
   display: grid;
