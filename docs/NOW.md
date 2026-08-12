@@ -10,7 +10,7 @@ slice_status: active
 work_branch: codex/v0.1-s02b-multi-project
 base_commit: 219c435
 risk_level: medium
-last_verified_commit: 44eee58
+last_verified_commit: c2c15a6
 updated: 2026-08-12
 ---
 
@@ -163,10 +163,10 @@ updated: 2026-08-12
 
 | 需求 | 自动证据 | 真实/人工证据 | 当前状态 |
 |---|---|---|---|
-| 多项目录入幂等 | 服务多项目增删/幂等测试 | 用户录入 2+ 个真实项目，列表核对 | 待实现 |
-| 逐项刷新/移除 + 活动项目 | 路由契约测试 + 活动切换测试 | 用户切换活动项目并核对 UI 徽标 | 待实现 |
-| v1→v2 迁移不丢数据 | 迁移夹具测试（真实旧格式） | 用户确认原「个人资产管理」项目仍在 | 待实现 |
-| 只读识别不回归 | 全量 `npm test` + 零写入探针 | 用户核对 `git status` 前后一致 | 待实现 |
+| 多项目录入幂等 | 服务多项目增删/幂等测试通过（`671e2ef` 起 22 项） | 用户录入 2+ 个真实项目，列表核对 | 自动通过，待真实验收 |
+| 逐项刷新/移除 + 活动项目 | 路由契约 14 项 + 活动切换测试通过 | 用户切换活动项目并核对 UI 徽标 | 自动通过，待真实验收 |
+| v1→v2 迁移不丢数据 | 迁移夹具测试通过（真实 v1 格式含 selectionSnapshot/lastInspection） | 用户确认原「个人资产管理」项目仍在 | 自动通过，待真实验收 |
+| 只读识别不回归 | 全量 `npm test` 127/127 + 禁改路径 diff 审计通过 | 用户核对 `git status` 前后一致 | 自动通过，待真实验收 |
 
 ### S03 · Pi 受控运行（candidate，设计中）
 
@@ -273,6 +273,7 @@ S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求—证据映�
 - 2026-08-06（S02）：全部已跟踪 JS 文件 `node --check` 通过；`git diff --check` 自基线干净；隔离端口 43212 健康检查 `ok: true`，无 Token 访问 `/api/project/status` 返回 401；验证实例随后关闭。
 - 2026-08-06（S02）：禁改路径审计通过：`git diff --name-only main...HEAD` 仅含 9 个新增文件、`src/server.js`、`public/index.html`、`public/js/index.js` 与 `docs/`；护航、群聊、终端、安装、`public/vendor/` 等全部未触碰。真实验收（三场景 + 零写入证明）待用户在分支代码上完成。
 - 2026-08-06（S02）：用户在 `http://localhost:3210/` 完成真实验收：选择本仓库识别出 `.gitignore` 的未暂存改动、分支 `main` 与最近提交；干净仓库计数全 0；非 Git 目录（声音世界）返回 `not_a_git_repo` 错误卡；不存在路径与文件路径均返回可区分错误；移除项目双击确认后清空。零写入证明通过：验收前后 `git status --porcelain` 与 `git stash list` 完全一致。
+- 2026-08-12（S02b）：Task 1–5 自动验证在候选提交 `c2c15a6` 通过：`npm test` 127/127（含 v1→v2 迁移夹具、多项目增删幂等、活动项目、按 id 刷新/移除、路由契约 14 项、UI 静态回归 9 项）；全部已跟踪 JS `node --check` 通过；`git diff --check main...HEAD` 干净；diff 仅含允许范围文件（git-inspector/护航/群聊/终端/安装/vendor 均未触碰）；隔离端口 43215 `/api/health` 返回 `ok: true`，无 Token 与错 Token 访问 `/api/project/status` 均 401。全程未触碰真实 `projects.local.json`（仍为 v1，已另存 `.bak`）。真实验收待用户完成。
 
 ## 阻塞
 
@@ -280,9 +281,16 @@ S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求—证据映�
 
 ## 唯一下一步
 
-按 [S02b 实现计划](plans/2026-08-12-s02b-multi-project-implementation.md) 在 `codex/v0.1-s02b-multi-project` 分支上执行 Task 1–5（TDD：v2 数据模型与迁移 → 活动项目与按 id 刷新/移除 → 路由契约 → 列表 UI → 全量验证与禁改审计），随后引导用户完成 Task 6 真实验收（迁移保留「个人资产管理」、多项目录入、活动切换、零写入证明）。验收通过后标记 `done` 并 fast-forward 合并回 `main`。
+引导用户完成 [S02b 实现计划](plans/2026-08-12-s02b-multi-project-implementation.md) Task 6 真实验收：用分支代码重启服务后，依次验证 ① v1→v2 迁移保留「个人资产管理」且自动标为活动项目；② 再录入 2 个真实项目并验证重复录入幂等；③ 切换活动项目并核对 ACTIVE 徽标与 `activeProjectId`；④ 逐项刷新/移除（双击确认），移除活动项目后活动标记置空；⑤ 验收前后各仓库 `git status --porcelain` 与 `git stash list` 完全一致；⑥ 护航/群聊/终端冒烟。全部通过后标记 `done`、回写证据并 fast-forward 合并回 `main`。
 
 ## 最近交接
+
+### 2026-08-12 · S02b 自动验证完成，等待真实验收
+
+- 当前阶段：`build`；切片：`S02b-multi-project (active)`；工作分支：`codex/v0.1-s02b-multi-project`（候选提交 `c2c15a6`，4 个实现提交）。
+- 已完成：Task 1–5（v2 数据模型与 v1 迁移、活动项目与按 id 刷新/移除、路由契约扩展、列表 UI）；`npm test` 127/127；`node --check` 与 `git diff --check` 通过；禁改路径审计通过（diff 仅含允许范围文件）；隔离端口 43215 健康检查 `ok: true`，无 Token/错 Token 均 401；真实 `projects.local.json` 未受影响（仍 v1），已备份为 `projects.local.json.bak`（不提交）。
+- 未完成：Task 6 用户真实验收（迁移核对、多项目录入、活动切换、零写入证明、旧链路冒烟）。
+- 恢复动作：先读本文件；用分支代码重启服务，引导用户按计划 Task 6 完成验收并回写证据；验收未过不标 `done`。
 
 ### 2026-08-12 · S02b Ready，进入实现
 
@@ -338,6 +346,13 @@ S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求—证据映�
 - 若要改动 S01，只限于已发现缺陷并补回归测试。
 
 ## 会话记录
+
+### 2026-08-12 · S02b Task 1–5 实现与自动验证
+
+- 完成：v2 数据模型与 v1 迁移、活动项目（setActive）、按 id 刷新/移除、路由契约（activate + project_not_found 404）、列表 UI（ACTIVE 徽标、按卡片确认）；127/127 测试、语法/差异/隔离端口健康与 401 闸门、禁改路径审计全部通过。
+- 决定：Task 1+2 服务层合并为一个提交；状态文件不再随 clear 删除，空状态为 v2 空 `projects`；真实 `projects.local.json` 验收前备份为 `.bak`。
+- 注意：会话期间发现另一会话修改了 S03 设计稿（标记 accepted）并新增 S03 实现计划文件，均为用户资产，保持未暂存不动。
+- 下一步：Task 6 用户真实验收。
 
 ### 2026-08-12 · S02b 批准与 Ready
 
