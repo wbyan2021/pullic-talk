@@ -4,13 +4,13 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: release
+stage: design
 current_slice: S03-pi-controlled-run
 slice_status: done
-work_branch: codex/v0.1-s03-pi-controlled-run
-base_commit: 0a2b44e
+work_branch: none
+base_commit: 8a72e99
 risk_level: high
-last_verified_commit: f045073
+last_verified_commit: 8a72e99
 updated: 2026-08-12
 ---
 
@@ -105,13 +105,13 @@ updated: 2026-08-12
 
 - 代码地图：[CODEMAP.md](CODEMAP.md)
 - 稳定分支：`main`
-- 稳定基线：`b371ba4`（S01 + S02 + S02b 均已 fast-forward 合并入 main）
-- 产品工作分支：无；S03 达到 Ready 后从新基线创建
+- 稳定基线：`8a72e99`（S01 + S02 + S02b + S03 均已 fast-forward 合并入 main）
+- 产品工作分支：无；S04 达到 Ready 后从新基线创建
 - 依赖检查：`npm ls --depth=0`
 - 语法检查：`git ls-files '*.js' | xargs -n1 node --check`
 - 自动化测试：`npm test`
 - 健康检查：`PORT=43211 npm start` 后访问 `/api/health`
-- 当前状态：S02b 已合并入 main（基线 `b371ba4`）并删除工作分支；`npm test` 127/127 在合并提交上通过；本地 main 领先 `origin/main`，是否推送由用户决定。
+- 当前状态：S03 已合并入 main（基线 `8a72e99`）并删除工作分支；`npm test` 161/161 在合并提交上复跑；本地 main 领先 `origin/main`，是否推送由用户决定。
 
 ## 当前切片
 

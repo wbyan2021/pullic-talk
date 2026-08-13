@@ -22,8 +22,8 @@ updated: 2026-08-06
 - Agent 流式协议：SSE；终端协议：WebSocket
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
-- 稳定基线：`b371ba4`
-- 当前验证基线：依赖完整；127 项默认测试（S01/S02 110 + S02b 净增 17）和 12/12 macOS 无写入 PTY 探针通过；隔离端口健康检查和禁改路径审计通过；没有 lint、CI 或 build 脚本。
+- 稳定基线：`8a72e99`
+- 当前验证基线：依赖完整；161 项默认测试（S01/S02 110 + S02b 净增 17 + S03 34）和 12/12 macOS 无写入 PTY 探针通过；隔离端口健康检查和禁改路径审计通过；没有 lint、CI 或 build 脚本。
 
 ## 关键路径
 
@@ -46,6 +46,9 @@ updated: 2026-08-06
 | `src/routes/project.js` | 项目选择、只读识别、刷新与移除的认证 HTTP 契约 | 项目应用层 |
 | `src/services/git-inspector.js` | 只读 Git 适配器：命令白名单、超时、输出截断与路径安全 | 项目适配层 |
 | `src/services/project-boundary.js` | 项目选择状态机、`projects.local.json` 持久化与失效检测 | 项目领域层 |
+| `src/services/pi-executor.js` | Pi 受控执行：auth 检查、spawn（cwd=活动项目）、NDJSON 流式解析、停止、超时与进程清理 | 执行适配层 |
+| `src/routes/execution.js` | Pi 运行状态、SSE 启动流与停止的认证 HTTP 契约 | 执行应用层 |
+| `public/js/execution.js`、`public/css/execution.css` | 项目 view 内 Pi 运行面板：风险确认、流式输出、停止与状态灯 | 执行表现层 |
 | `src/terminal.js` | 完整本机 PTY Shell | 高权限适配层 |
 | `src/utils/auth.js` | 随机 Token、认证中间件与写盘 | 安全边界 |
 | `public/` | 控制台、群聊、安装器和终端页面 | 表现层 |
@@ -87,7 +90,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 
 - 远程仓库：`origin` → `git@github.com:wbyan2021/pullic-talk.git`
 - 稳定分支：`main`
-- S01 工作分支 `codex/v0.1-s01-escort-online`、S02 工作分支 `codex/v0.1-s02-git-safety-boundary` 与 S02b 工作分支 `codex/v0.1-s02b-multi-project` 均已 fast-forward 合并入 `main`（当前基线 `b371ba4`）并删除；S03 分支待 Ready 后创建。
+- S01、S02、S02b 与 S03 工作分支均已 fast-forward 合并入 `main`（当前基线 `8a72e99`）并删除；S04 分支待 Ready 后创建。
 - 当前唯一保留为未提交用户资产的是 `.gitignore` 中的 `.superpowers/` 规则，不覆盖、不暂存、不丢弃。
 - 产品代码使用 `codex/<版本>-<切片>-<短名称>`；同一时间只保留一个产品工作分支。
 
@@ -137,13 +140,14 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 | `src/services/credential-store.js` | 接触真实 Provider Key 与系统钥匙串 | 绝对命令路径、shell 禁用、受控 PTY 固定提示、输出边界、超时回收、无明文回退 |
 | `src/providers/deepseek.js`、`src/routes/escort.js` | 付费外部请求与错误/秘密泄露 | 超时、单并发、频率、状态字段白名单、原始错误不透传 |
 | `src/services/git-inspector.js`、`src/routes/project.js` | 任意路径输入与 Git 子进程 | 只读命令白名单、无 shell、超时、输出截断、realpath 校验、禁止根 |
+| `src/services/pi-executor.js`、`src/routes/execution.js` | Pi 在活动项目内以完整用户权限执行 | 无 shell、argv 永不含密钥、cwd 限定活动项目 repoRoot、SIGTERM+超时回收、单实例 busy、UI 风险确认后才启动 |
 | `public/js/chat.js` | 单文件较大，状态、DOM 与流式逻辑耦合 | XSS、会话兼容、停止流程和现有交互回归 |
 | `agents.config.json` | 可改变真实 CLI 命令和参数 | 不含秘密、命令合法、输出解析契约可验证 |
 | 外部 AI CLI | 版本、登录和输出格式随上游变化 | 版本探测、最小真实调用和失败降级 |
 
 ## 已知工程缺口
 
-- 已有 109 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
+- 已有 161 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
 - `public/js/chat.js` 体量较大，修改容易产生跨功能回归。
 - Agent 默认工作目录是用户主目录，不具备项目级 Workspace 边界。
 - 默认端口 `3210` 曾被早于 S01 的旧实例占用；2026-08-06 已查明并经用户授权结束，现运行 S01 合并后的代码。
