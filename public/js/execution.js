@@ -53,7 +53,7 @@
         request("/api/project/status"),
         request("/api/project/execution/status"),
       ]);
-      state.active = executionIsActive(projectPayload) ? projectPayload.active : null;
+      state.active = findActiveProject(projectPayload);
       state.execution = executionPayload.execution || { state: "idle" };
     } catch (error) {
       state.error = pickError(error);
@@ -63,8 +63,11 @@
     }
   }
 
-  function executionIsActive(projectPayload) {
-    return Boolean(projectPayload && projectPayload.active && projectPayload.activeProjectId);
+  function findActiveProject(projectPayload) {
+    // 状态接口返回 { projects, activeProjectId }；活动项目从列表中推导（D8）
+    if (!projectPayload || !projectPayload.activeProjectId) return null;
+    const list = Array.isArray(projectPayload.projects) ? projectPayload.projects : [];
+    return list.find((p) => p.id === projectPayload.activeProjectId) || null;
   }
 
   function pickError(error) {
