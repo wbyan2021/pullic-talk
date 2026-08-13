@@ -16,7 +16,7 @@ facts: ../NOW.md
 
 > 设计决策 D1–D6 已由用户在 2026-08-06 确认；设计稿全文同日获用户批准（“批准”），标记 `accepted`。实现必须另按 `writing-plans` 生成的逐步计划执行。
 >
-> **2026-08-12 修订（D7–D9，用户确认）**：① auth 检查命令改为 `pi auth check --provider <P> --json`（0.84.1 必须带 provider，原稿命令实测无效）；② 边界从 S02「已选项目」改为 S02b「活动项目」（ACTIVE）；③ 基线更新为 `0a2b44e`，测试基线 127 项。
+> **2026-08-12 修订（D7–D10，用户确认）**：① auth 检查命令改为 `pi auth check --provider <P> --json`（0.84.1 必须带 provider，原稿命令实测无效）；② 边界从 S02「已选项目」改为 S02b「活动项目」（ACTIVE）；③ 基线更新为 `0a2b44e`，测试基线 127 项；④（D10，验收中发现）调用增加 `--mode json`：pi 文本模式会把输出全部缓存到结束才一次性吐出，无法流式；改为解析 NDJSON，仅 assistant `text_delta` 的 `delta` 进入输出流，thinking 与其他事件不进流。
 
 ## 1. 这次要交付什么
 
@@ -123,11 +123,13 @@ flowchart LR
 固定调用（独立于 agent-catalog，避免群聊耦合）：
 
 ```text
-/usr/bin/env pi -p "<task>" --no-session
+/usr/bin/env pi -p "<task>" --no-session --mode json
 cwd = active project repoRoot（S02b 活动项目）
 env = process.env（Pi 需要 PATH 和自身配置）
 stdio = ["ignore", "pipe", "pipe"]
 ```
+
+D10：`--mode json` 输出 NDJSON；PiExecutor 逐行解析，仅 `message_update.assistantMessageEvent.type === "text_delta"` 的 `delta` 字段作为流式输出；`thinking_delta`、其他事件与非 JSON 行一律丢弃（不外泄）。
 
 不传 `--model`（用 Pi 默认 provider/model）；不传 `--api-key`（Pi 用自身 auth）；不传 `--thinking`（用默认）。
 
@@ -244,7 +246,7 @@ execution.js/css + index.html 装配 + SSE 路由 + UI 回归 + 用户用测试�
 
 - `npm test`：既有 127 + 新增约 25 项全部通过；
 - PiExecutor 测试使用假 pi 二进制（输出 chunk 后退出 / 模拟 auth 失败 / 模拟超时），不发起真实 API 请求；
-- 命令行只含 `-p`、`--no-session`，不传 `--api-key`（测试断言）；
+- 命令行只含 `-p`、`--no-session`、`--mode json`，不传 `--api-key`（测试断言）；
 - 新增文件 `node --check`；`git diff --check`；隔离端口健康检查；严格结构校验。
 
 ### 11.2 人工验收（D6）

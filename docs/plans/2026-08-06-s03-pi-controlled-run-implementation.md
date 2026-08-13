@@ -17,7 +17,7 @@ design: ./2026-08-06-s03-pi-controlled-run-design.md
 
 **Goal:** Let the user run Pi CLI inside the **active (ACTIVE) project** directory (S02b multi-project model) from the cockpit project view, with streaming output, a stop button, single-run enforcement, and no credential passing.
 
-> **2026-08-12 amendments (D7–D9):** auth check is `pi auth check --provider <P> --json` (P = `PI_AUTH_PROVIDER` env > `PI_PROVIDER` env > `"google"`); boundary reads the S02b v2 `getStatus()` shape and uses `active`; baseline `0a2b44e`, existing tests 127; acceptance starts the server with `PI_AUTH_PROVIDER=aliyun-token-plan`.
+> **2026-08-12 amendments (D7–D10):** auth check is `pi auth check --provider <P> --json` (P = `PI_AUTH_PROVIDER` env > `PI_PROVIDER` env > `"google"`); boundary reads the S02b v2 `getStatus()` shape and uses `active`; baseline `0a2b44e`, existing tests 127; acceptance starts the server with `PI_AUTH_PROVIDER=aliyun-token-plan`; D10: spawn adds `--mode json` and the executor streams only assistant `text_delta` content (text mode buffers output until exit).
 
 **Architecture:** Independent execution chain: `PiExecutor` (auth check + spawn with cwd=repoRoot + stream + stop + timeout + cleanup via activeProcs) → authenticated SSE routes → run panel inside the existing project view. No existing chain is modified beyond small assembly points.
 
@@ -71,7 +71,7 @@ Test list:
 
 1. `checkAuth()` happy path → `{ ready: true }`, argv contains `["auth", "check", "--provider", <P>, "--json"]`; authfail (`{"status":"not_ready"}`) → `{ ready: false }`; ENOENT binary → `{ ready: false, code: "pi_not_found" }`. Provider resolution: explicit option > `PI_AUTH_PROVIDER` env > `PI_PROVIDER` env > `"google"`.
 2. `start("列出文件")` success → events `start`, `chunk`(multiple), `done` with `state: "exited"`, `exitCode: 0`; `getStatus()` reflects it.
-3. argv audit: after run, dump file contains exactly `-p <task> --no-session`; assert no `--api-key`; assert task with spaces/quotes is one argument.
+3. argv audit: after run, dump file contains exactly `-p <task> --no-session --mode json` (D10); assert no `--api-key`; assert task with spaces/quotes is one argument.
 4. cwd constraint: dump output contains `CWD:<repoRoot>` equal to boundary repoRoot.
 5. stop: start slow pi, call `stop()` → `state: "stopped"`; process gone; `stop()` when idle → no-op (no throw).
 6. timeout: `createPiExecutor({ timeoutMs: 300 })` with slow pi → final state `error`, `lastError.code === "timeout"`; process killed.
