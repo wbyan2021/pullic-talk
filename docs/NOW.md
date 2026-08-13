@@ -10,7 +10,7 @@ slice_status: done
 work_branch: none
 base_commit: 8a72e99
 risk_level: high
-last_verified_commit: 8a72e99
+last_verified_commit: c31ba80
 updated: 2026-08-12
 ---
 
@@ -279,6 +279,7 @@ S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求—证据映�
 - 2026-08-12（S03）：Task 1–4 自动验证在候选提交 `1423922` 通过：`npm test` 160/160（既有 127 + PiExecutor 16 + 执行路由 10 + 运行面板 UI 7）；PiExecutor 全部用 tmpdir 假 pi 夹具，argv 断言仅 `-p <task> --no-session` 且永不含 `--api-key`，auth 检查断言 `auth check --provider <P> --json` 与 provider 解析链；全部已跟踪 JS `node --check` 通过；`git diff --check` 干净；diff 仅含计划内 9 个文件（agent-caller/群聊/终端/安装/护航/S02 文件均未触碰）；隔离端口 43213 `/api/health` 返回 `ok: true`，无 Token 访问 execution status/start 均 401。未发起任何真实 Pi 调用与计费请求；真实验收待用户完成。
 - 2026-08-13（S03）：用户真实验收发现并修复三处问题，均在分支内修复后复验通过：① 运行面板误读不存在的 `payload.active` 字段导致始终显示「尚未设置活动项目」（`b037817`，改为从 `projects` + `activeProjectId` 推导）；② pi 文本模式将输出全部缓存至结束才吐出，无法流式（D10，`1c5c906`，改 `--mode json` NDJSON 解析，仅 assistant text_delta 进流，thinking 不外泄）；③ 运行面板挤压项目列表空间（`f045073`，项目视图改为整体滚动流）。修复后全量 161/161 通过。
 - 2026-08-13（S03）：用户在 3210（`PI_AUTH_PROVIDER=aliyun-token-plan` 启动）完成真实验收：风险双击确认门禁生效；真实 Pi（aliyun-token-plan / qwen3.8-max）在 `/tmp/s03-acceptance` 内流式执行多个任务，cwd 正确；运行中停止生效、状态灯变 STOPPED；运行中二次启动被 busy 拒绝；无活动项目时面板正确拦截。不越界证明通过：验收前后 `find /tmp/s03-acceptance -type f` 完全一致、测试仓库 `git status --porcelain` 与 `stash list` 为空、`pgrep -f "pi -p"` 无残留。
+- 2026-08-14（热修复）：用户测试时首页打不开，根因为旧代码 `watchHtml` 在文件写入半途的 watch 事件读到空文件并缓存，导致 `/` 永久返回 0 字节（既有缺陷，非 S03 引入）。修复 `c31ba80`：50ms 防抖 + 空读保留旧缓存；实测截空 index.html 时服务仍返回旧缓存、恢复后热加载正常；`npm test` 161/161 复跑通过。
 
 ## 阻塞
 
@@ -380,6 +381,12 @@ S03 收尾：fast-forward 合并回 `main`、删除工作分支、更新稳定�
 - 若要改动 S01，只限于已发现缺陷并补回归测试。
 
 ## 会话记录
+
+### 2026-08-14 · 首页空白热修复
+
+- 完成：定位并修复 `watchHtml` 空读缓存缺陷（`c31ba80`，防抖 + 空读保护），服务已重启恢复访问；161/161 复跑通过。
+- 发现：该缺陷为既有代码问题（S01 前就存在），被桌面文件同步/编辑器类写入在 watch 事件窗口内触发；S03 功能未受影响。
+- 下一步：用户继续 S03 自由测试；之后进入 S04 设计。
 
 ### 2026-08-13 · S03 真实验收通过与修复
 
