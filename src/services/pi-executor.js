@@ -175,7 +175,7 @@ export function createPiExecutor({
 
     let proc;
     try {
-      proc = spawnImpl(piBinary, ["-p", task, "--no-session"], {
+      proc = spawnImpl(piBinary, ["-p", task, "--no-session", "--mode", "json"], {
         cwd: active.repoRoot,
         env: process.env,
         shell: false,
@@ -206,9 +206,13 @@ export function createPiExecutor({
 
     activeProcs.add(proc);
 
-    proc.stdout.on("data", (chunk) => {
+    // D10：pi 文本模式会把输出全部缓存到结束才一次性吐出，无法流式；
+    // 改用 --mode json（NDJSON）后逐条增量到达。只提取 assistant text_delta 的
+    // delta 文本进入输出流；thinking/其他事件与非 JSON 行一律不进流。
+    let stdoutLineBuffer = "";
+
+    function appendOutput(text) {
       if (!run || run.truncated) return;
-      const text = chunk.toString();
       const remaining = outputLimit - Buffer.byteLength(run.output);
       if (Buffer.byteLength(text) <= remaining) {
         run.output += text;
@@ -220,6 +224,28 @@ export function createPiExecutor({
           run.output += slice;
           emit("chunk", { text: slice });
         }
+      }
+    }
+
+    function extractDelta(line) {
+      const trimmed = line.trim();
+      if (!trimmed) return null;
+      let parsed;
+      try { parsed = JSON.parse(trimmed); } catch { return null; }
+      if (!parsed || parsed.type !== "message_update") return null;
+      const evt = parsed.assistantMessageEvent;
+      if (!evt || evt.type !== "text_delta" || typeof evt.delta !== "string") return null;
+      return evt.delta;
+    }
+
+    proc.stdout.on("data", (chunk) => {
+      stdoutLineBuffer += chunk.toString();
+      let idx;
+      while ((idx = stdoutLineBuffer.indexOf("\n")) !== -1) {
+        const line = stdoutLineBuffer.slice(0, idx);
+        stdoutLineBuffer = stdoutLineBuffer.slice(idx + 1);
+        const delta = extractDelta(line);
+        if (delta) appendOutput(delta);
       }
     });
 

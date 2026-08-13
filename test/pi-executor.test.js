@@ -23,13 +23,14 @@ function makeFakePi(t, scriptBody, name = "pi") {
   return bin;
 }
 
-// 成功 pi：auth 就绪；运行时打印 cwd/task/chunks 后退出 0
+// 成功 pi：auth 就绪；运行时以 NDJSON text_delta 流式输出（同真实 pi --mode json）后退出 0
 const SUCCESS_PI = `
 if [ "$1" = "auth" ]; then echo '{"status":"ready","provider":"test-provider","authType":"api_key"}'; exit 0; fi
-echo "CWD:$(pwd)"
-echo "TASK:$2"
-echo "chunk-1"
-echo "chunk-2"
+printf '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":1,"delta":"CWD:%s"}}\n' "$(pwd)"
+printf '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":1,"delta":"TASK:%s"}}\n' "$2"
+echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":1,"delta":"chunk-1"}}'
+echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":1,"delta":"chunk-2"}}'
+echo '{"type":"agent_end"}'
 exit 0
 `;
 
@@ -38,7 +39,7 @@ function argvDumpScript(dumpPath) {
   return `
 if [ "$1" = "auth" ]; then printf '%s\\n' "$@" > "${dumpPath}"; echo '{"status":"ready"}'; exit 0; fi
 printf '%s\\n' "$@" > "${dumpPath}"
-echo ok
+echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":1,"delta":"ok"}}'
 exit 0
 `;
 }
@@ -63,11 +64,23 @@ echo "secret-internal-detail" 1>&2
 exit 3
 `;
 
-// 大输出 pi
+// 大输出 pi（NDJSON text_delta）
 const LOUD_PI = `
 if [ "$1" = "auth" ]; then echo '{"status":"ready"}'; exit 0; fi
 i=0
-while [ $i -lt 50 ]; do echo "line-$i-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"; i=$((i+1)); done
+while [ $i -lt 50 ]; do
+  printf '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":1,"delta":"line-%s-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}\n' "$i"
+  i=$((i+1))
+done
+exit 0
+`;
+
+// 噪声 pi：thinking_delta 与非 JSON 行不得进入输出流
+const NOISY_PI = `
+if [ "$1" = "auth" ]; then echo '{"status":"ready"}'; exit 0; fi
+echo '{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","contentIndex":0,"delta":"SECRET-THINKING"}}'
+echo 'not-a-json-line'
+echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":1,"delta":"visible-text"}}'
 exit 0
 `;
 
@@ -230,7 +243,9 @@ test("argv contains exactly -p <task> --no-session and never --api-key", async (
   assert.equal(argv[0], "-p");
   assert.equal(argv[1], 'task with spaces and "quotes"', "task must be one single argument");
   assert.equal(argv[2], "--no-session");
-  assert.equal(argv.length, 3);
+  assert.equal(argv[3], "--mode");
+  assert.equal(argv[4], "json", "D10: json mode is required for streaming output");
+  assert.equal(argv.length, 5);
   assert.ok(!argv.includes("--api-key"), "--api-key must never be passed");
 });
 
@@ -320,6 +335,20 @@ test("start with missing pi binary rejects pi_not_found; auth not ready rejects 
 });
 
 // ── 输出与错误边界 ──
+
+test("only text_delta content is streamed; thinking and non-JSON lines are dropped", async (t) => {
+  const repoRoot = makeTmpDir(t, "repo");
+  const pi = makeFakePi(t, NOISY_PI);
+  const executor = createPiExecutor({ projectBoundary: makeBoundary({ repoRoot }), piBinary: pi, authProvider: "test-provider" });
+  const { events, unsubscribe } = collect(executor);
+
+  await executor.start("noisy");
+  await waitDone(events);
+  unsubscribe();
+  const output = events.filter((e) => e.type === "chunk").map((e) => e.data.text).join("");
+  assert.equal(output, "visible-text");
+  assert.ok(!JSON.stringify(executor.getStatus()).includes("SECRET-THINKING"));
+});
 
 test("output beyond limit is truncated and flagged", async (t) => {
   const repoRoot = makeTmpDir(t, "repo");
