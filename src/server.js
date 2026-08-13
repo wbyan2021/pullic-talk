@@ -114,13 +114,24 @@ const injectToken = (html) => html.replace("<!--OPS:TOKEN-->", TOKEN_SNIPPET);
 function watchHtml(name) {
   const file = join(ROOT, "public", name);
   let cache = readFileSync(file, "utf-8");
+  let reloadTimer = null;
   const watcher = watch(file, () => {
-    try {
-      cache = readFileSync(file, "utf-8");
-      log(`✓ ${name} reloaded`);
-    } catch (e) {
-      log(`⚠️ ${name} 热加载失败: ${e.message}`);
-    }
+    // 防抖 + 空读保护：写入中途的变更事件可能读到空/半截文件，
+    // 空内容不覆盖缓存，避免首页永久空白（2026-08-14 用户实测发现）
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      try {
+        const next = readFileSync(file, "utf-8");
+        if (next.length === 0) {
+          log(`⚠️ ${name} 热加载跳过：读到空文件，保留旧缓存`);
+          return;
+        }
+        cache = next;
+        log(`✓ ${name} reloaded`);
+      } catch (e) {
+        log(`⚠️ ${name} 热加载失败: ${e.message}`);
+      }
+    }, 50);
   });
   watcher.on("error", (e) => log(`⚠️ ${name} watcher 错误: ${e.message}`));
   return () => cache;
