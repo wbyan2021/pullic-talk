@@ -4,13 +4,13 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: design
-current_slice: S02b-multi-project
-slice_status: done
-work_branch: none
-base_commit: b371ba4
-risk_level: medium
-last_verified_commit: b371ba4
+stage: build
+current_slice: S03-pi-controlled-run
+slice_status: active
+work_branch: codex/v0.1-s03-pi-controlled-run
+base_commit: 0a2b44e
+risk_level: high
+last_verified_commit: 0a2b44e
 updated: 2026-08-12
 ---
 
@@ -97,7 +97,7 @@ updated: 2026-08-12
 | S01 | 护航 AI 独立上线 | 配置 DeepSeek 后能检测连接、对话并显示可靠状态 | done      |
 | S02 | Git 项目安全边界 | 选择项目后识别并保护现有工作区状态            | done |
 | S02b | 多项目并行管理 | 可同时录入多个 Git 项目，列表查看、刷新、移除，并指定活动项目 | done   |
-| S03 | Pi 受控运行    | Pi 只在活动项目内启动，并可暂停、继续、终止        | candidate   |
+| S03 | Pi 受控运行    | Pi 只在活动项目内启动，并可暂停、继续、终止        | active   |
 | S04 | 证据与黑匣子     | 可查看状态时间线、文件变化和验收证据           | pending   |
 | S05 | 恢复与总览闭环    | 可恢复到检查点，并从总仪表完成整条任务          | pending   |
 
@@ -168,7 +168,7 @@ updated: 2026-08-12
 | v1→v2 迁移不丢数据 | 迁移夹具测试通过（真实 v1 格式含 selectionSnapshot/lastInspection） | 用户确认原「个人资产管理」项目迁移后仍在且自动标记活动；磁盘文件已为 v2 结构 | 自动与真实验收通过 |
 | 只读识别不回归 | 全量 `npm test` 127/127 + 禁改路径 diff 审计通过 | 验收前后本仓库与「个人资产管理」的 `git status --porcelain` 与 `git stash list` 完全一致 | 自动与真实验收通过 |
 
-### S03 · Pi 受控运行（candidate，设计中）
+### S03 · Pi 受控运行（active，实现中）
 
 ### 目标
 
@@ -176,9 +176,9 @@ updated: 2026-08-12
 
 ### 验收标准
 
-- [ ] 项目已选且非失效时，可输入任务并启动 Pi。
-- [ ] Pi 的 cwd 严格为选定项目的 repoRoot；不传 `--api-key`。
-- [ ] 启动前检查 `pi auth` 就绪；未就绪给出明确指引。
+- [ ] 活动项目已设置且非失效时，可输入任务并启动 Pi。
+- [ ] Pi 的 cwd 严格为活动项目的 repoRoot；不传 `--api-key`。
+- [ ] 启动前检查 `pi auth check --provider <P> --json` 就绪（P：`PI_AUTH_PROVIDER` > `PI_PROVIDER` > `google`，D7）；未就绪给出明确指引。
 - [ ] 输出流式可见，状态灯准确（idle/running/stopped/exited/error）。
 - [ ] 停止按钮发 SIGTERM 终止当前运行；服务关闭时清理进程无孤儿。
 - [ ] 同时只允许 1 个 Pi 运行；运行中拒绝新启动（busy）。
@@ -205,12 +205,12 @@ updated: 2026-08-12
 - [x] 非目标明确
 - [x] 修改范围精确到文件或目录
 - [x] 代码入口和验证命令明确
-- [x] 基线状态已记录
-- [x] 唯一工作分支名称已确定（`codex/v0.1-s03-pi-controlled-run`，自 `main` 当前 HEAD `be2b595`）
-- [x] 未知改动已识别并有保护方案（工作区干净）
-- [x] 关键决策已确认（D1–D6，2026-08-06 用户确认）
-- [ ] 设计稿获用户批准（当前 `draft`）
-- [ ] 实现计划已产出
+- [x] 基线状态已记录（main HEAD `0a2b44e`，S02b 合并后）
+- [x] 唯一工作分支名称已确定（`codex/v0.1-s03-pi-controlled-run`，自 `main` HEAD `0a2b44e`）
+- [x] 未知改动已识别并有保护方案（另一会话产出的 S03 两份文档已随 D7–D9 修订一并提交）
+- [x] 关键决策已确认（D1–D6，2026-08-06 用户确认；D7–D9，2026-08-12 用户确认）
+- [x] 设计稿获用户批准（2026-08-06 批准；2026-08-12 修订后再次确认）
+- [x] 实现计划已产出（[S03 实现计划](plans/2026-08-06-s03-pi-controlled-run-implementation.md)，已含 D7–D9 修订）
 
 S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求—证据映射保留在下方存档段落。
 
@@ -281,9 +281,17 @@ S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求—证据映�
 
 ## 唯一下一步
 
-S02b 收尾：fast-forward 合并回 `main`、删除工作分支、更新稳定基线并复跑全量验证。随后进入 S03「Pi 受控运行」：其设计稿已获批准（另一会话 2026-08-12 标记 `accepted`），需核对 DoR 与实现计划状态后从 S02b 合并后的新基线创建 `codex/v0.1-s03-pi-controlled-run` 开工。
+按 [S03 实现计划](plans/2026-08-06-s03-pi-controlled-run-implementation.md) 在 `codex/v0.1-s03-pi-controlled-run` 分支上执行 Task 1–4（TDD：PiExecutor + 假 pi 夹具 → SSE 路由与装配 → 运行面板 → 全量验证与禁改审计），随后引导用户完成 Task 5 真实验收（`PI_AUTH_PROVIDER=aliyun-token-plan` 启动服务，测试仓库 `/tmp/s03-acceptance` 内跑最小任务：流式输出、cwd 正确、停止有效、busy 拒绝、不越界）。验收通过后标记 `done` 并 fast-forward 合并回 `main`。高风险切片：Mock 证据不能替代真实验收。
 
 ## 最近交接
+
+### 2026-08-12 · S03 Ready，进入实现
+
+- 当前阶段：`build`；切片：`S03-pi-controlled-run (active)`；工作分支：`codex/v0.1-s03-pi-controlled-run`（自 main HEAD `0a2b44e` 创建）；风险：high。
+- 已完成：S02b 合并（基线 `b371ba4`→记录提交 `0a2b44e`）；前端优化插播任务经审计后由用户取消（零改动）；S03 两份文档审读，发现并修正三处冲突（D7 auth 命令需带 provider；D8 边界改为活动项目；D9 基线/测试数更新），用户确认；DoR 全部满足。
+- Pi CLI 实测：v0.84.1；`-p`/`--no-session` 存在；`pi auth check` 必须带 `--provider`/`--model`；本机 provider `aliyun-token-plan` ready，默认 `google` not_ready。
+- 未完成：Task 1–5 全部实现与验收。
+- 恢复动作：先读本文件；按计划从 Task 1（PiExecutor + 假 pi 夹具，测试先行）开工；范围变化先回设计稿。
 
 ### 2026-08-12 · S02b 真实验收通过，待合并
 
@@ -353,6 +361,12 @@ S02b 收尾：fast-forward 合并回 `main`、删除工作分支、更新稳定�
 - 若要改动 S01，只限于已发现缺陷并补回归测试。
 
 ## 会话记录
+
+### 2026-08-12 · S02b 合并与 S03 开工
+
+- 完成：S02b 真实验收通过并 fast-forward 合并入 main（`b371ba4`，记录提交 `0a2b44e`），工作分支删除；前端优化插播任务完成审计（字体被 CSP 拦截、窄屏溢出、小点击目标、favicon 404）后由用户取消，零改动；S03 设计稿与实现计划审读，D7–D9 修订获用户确认。
+- 决定：auth 检查用 `pi auth check --provider <P> --json`（P：`PI_AUTH_PROVIDER` > `PI_PROVIDER` > `google`）；Pi cwd 取活动项目 repoRoot；验收以 `PI_AUTH_PROVIDER=aliyun-token-plan` 启动服务；不推送 origin（用户决定）。
+- 下一步：建分支，从 Task 1 开工。
 
 ### 2026-08-12 · S02b Task 1–5 实现与自动验证
 

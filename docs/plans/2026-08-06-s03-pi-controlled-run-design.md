@@ -4,30 +4,32 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 slice: S03-pi-controlled-run
-status: draft
+status: accepted
 risk_level: high
-updated: 2026-08-06
-approved_at: null
+updated: 2026-08-12
+approved_at: 2026-08-06
 source_of_truth: false
 facts: ../NOW.md
 ---
 
 # S03 · Pi 受控运行设计
 
-> 设计决策 D1–D6 已由用户在 2026-08-06 确认（Pi 认证独立、暂停=停止、边界=固定 cwd、UI 在项目 view、风险 high、测试仓库验收）。本文稿为 `draft`，待用户确认后标记 `accepted`。
+> 设计决策 D1–D6 已由用户在 2026-08-06 确认；设计稿全文同日获用户批准（“批准”），标记 `accepted`。实现必须另按 `writing-plans` 生成的逐步计划执行。
+>
+> **2026-08-12 修订（D7–D9，用户确认）**：① auth 检查命令改为 `pi auth check --provider <P> --json`（0.84.1 必须带 provider，原稿命令实测无效）；② 边界从 S02「已选项目」改为 S02b「活动项目」（ACTIVE）；③ 基线更新为 `0a2b44e`，测试基线 127 项。
 
 ## 1. 这次要交付什么
 
-用户在项目 view 选择一个 Git 项目后，可以：
+用户在项目 view 设置活动（ACTIVE）Git 项目后，可以：
 
-1. 看到该项目的边界已就绪（S02 记录的 repoRoot）；
+1. 看到该项目的边界已就绪（S02b 记录的活动项目 repoRoot）；
 2. 输入一条明确的任务提示词；
 3. 确认风险提示后，启动 Pi 在**该项目目录内**执行；
 4. 实时观察 Pi 的流式输出与运行状态；
 5. 随时停止（SIGTERM 终止）当前运行；
 6. 运行结束后看到退出状态与输出摘要。
 
-可观察起点是「项目已选，Pi 待命」；可观察终点是「Pi 在项目内完成一次任务，输出可见，停止有效，全程不越界」。
+可观察起点是「活动项目已设置，Pi 待命」；可观察终点是「Pi 在项目内完成一次任务，输出可见，停止有效，全程不越界」。
 
 S03 建立的是**受控执行能力**：把 Pi 从「在主目录自由运行」变成「在用户选定的项目内受控运行，可观察、可停止」。它不实现真正的暂停/恢复（Pi `-p` 是单次执行），不实现沙箱隔离（Pi 拥有用户完整权限），不做会话级上下文恢复。
 
@@ -39,6 +41,9 @@ S03 建立的是**受控执行能力**：把 Pi 从「在主目录自由运行�
 - D4：UI 在项目 view 内。选项目后出现任务输入 + Pi 运行面板（流式输出、状态灯、停止按钮）。
 - D5：风险 high。开工前完成威胁分析；实现时先建可替换边界和停止语义。
 - D6：真实验收用测试仓库执行最小任务，验证 cwd、输出、停止与不越界。
+- D7（2026-08-12）：auth 检查命令为 `pi auth check --provider <P> --json`（0.84.1 实测要求必须带 `--provider`/`--model`，原稿 `pi auth check --json` 无效）。P 的解析优先级：`PI_AUTH_PROVIDER` 环境变量 > `PI_PROVIDER` > `google`（pi 文档默认值）。只解析输出 JSON 的 `status` 字段，不读取、不传递任何凭据。本机验收时以 `PI_AUTH_PROVIDER=aliyun-token-plan npm start` 启动服务。
+- D8（2026-08-12）：S02b 后项目服务为多项目模型；Pi 的 cwd 取**活动（ACTIVE）项目**的 `repoRoot`；无活动项目时报 `no_project_selected`，文案「请先在项目列表中设置活动项目」；活动项目失效时报 `project_stale`。
+- D9（2026-08-12）：分支自 `main` HEAD `0a2b44e` 创建；自动化测试基线 127 项；隔离端口验证用 43213。
 - Pi 固定版本 `0.84.1`。
 - 沿用独立链路模式：Pi Executor Service -> 认证 SSE 路由 -> 项目 view 内运行面板；不修改 agent-caller.js、群聊、终端、安装链路。
 
@@ -56,7 +61,7 @@ S03 建立的是**受控执行能力**：把 Pi 从「在主目录自由运行�
 
 ```mermaid
 flowchart TB
-    A["项目 view：项目已选"] --> B{"Pi auth 是否就绪"}
+    A["项目 view：已设置活动项目"] --> B{"Pi auth 是否就绪"}
     B -->|"否"| C["显示未就绪：运行 pi auth 配置"]
     B -->|"是"| D["显示任务输入框 + 启动按钮 + 风险提示"]
     D --> E["用户输入任务并确认启动"]
@@ -107,7 +112,7 @@ flowchart LR
 ### 5.1 依赖规则
 
 - PiExecutor 是唯一接触 Pi 子进程的地方。
-- 启动前必须从 ProjectBoundary 取到当前选择；未选或失效时拒绝。
+- 启动前必须从 ProjectBoundary 取到**活动项目**（v2 `getStatus()` 的 `active` 字段）；无活动项目或失效时拒绝。
 - 同一时刻最多 1 个 Pi 运行在内存中。
 - 不导入 agent-caller.js、群聊路由、护航或终端。
 
@@ -119,16 +124,16 @@ flowchart LR
 
 ```text
 /usr/bin/env pi -p "<task>" --no-session
-cwd = selected project repoRoot
+cwd = active project repoRoot（S02b 活动项目）
 env = process.env（Pi 需要 PATH 和自身配置）
 stdio = ["ignore", "pipe", "pipe"]
 ```
 
 不传 `--model`（用 Pi 默认 provider/model）；不传 `--api-key`（Pi 用自身 auth）；不传 `--thinking`（用默认）。
 
-### 6.2 Auth 就绪检查
+### 6.2 Auth 就绪检查（D7）
 
-启动前异步执行 `pi auth check --json`（超时 10 秒）；非零退出或 JSON 表示未就绪时，返回 `pi_not_authenticated` 错误，建议用户在终端运行 `pi auth` 配置。不读取或传递任何密钥。
+启动前异步执行 `pi auth check --provider <P> --json`（超时 10 秒）。P 的解析优先级：executor 选项/环境变量 `PI_AUTH_PROVIDER` > 环境变量 `PI_PROVIDER` > 字符串 `google`。输出 JSON 的 `status === "ready"` 才放行；`not_ready`/`invalid`/非零退出/超时返回 `pi_not_authenticated`，建议用户在终端运行 `pi auth` 配置或检查 `PI_AUTH_PROVIDER` 设置。ENOENT 返回 `pi_not_found`。不读取或传递任何密钥；provider 名称可出现在文案中（非秘密）。
 
 ### 6.3 进程生命周期
 
@@ -140,7 +145,7 @@ running ──spawn fail──> spawn_failed
 running ──server shutdown──> stopped（SIGTERM 清理）
 ```
 
-- **start(task)**：校验 project 已选且非 stale -> check auth -> spawn Pi -> 注册进程 -> 返回 runId
+- **start(task)**：校验活动项目存在且非 stale -> check auth -> spawn Pi -> 注册进程 -> 返回 runId
 - **stop()**：SIGTERM -> 3 秒后 SIGKILL -> 注销进程 -> 状态 stopped
 - **stream**：stdout chunk -> SSE event；stderr 仅用于错误归类，不透传原文
 - **超时**：默认 600 秒（10 分钟），可配置；超时后 SIGTERM
@@ -150,7 +155,7 @@ running ──server shutdown──> stopped（SIGTERM 清理）
 ### 6.4 安全边界
 
 - task 输入：trim，长度上限 4000 字符，拒绝 NUL
-- cwd：严格来自 ProjectBoundary 的 `repoRoot`（已经 S02 realpath 校验）
+- cwd：严格来自 ProjectBoundary 活动项目的 `repoRoot`（已经 S02 realpath 校验）
 - 无沙箱：Pi 继承当前用户权限，UI 必须在启动前显示风险确认
 - 进程清理：服务关闭时对所有 running 进程发 SIGTERM
 - 不传密钥：Pi auth 完全独立
@@ -171,7 +176,7 @@ running ──server shutdown──> stopped（SIGTERM 清理）
 
 | 错误码 | 触发 | 建议 |
 |---|---|---|
-| `no_project_selected` | 未选项目 | 先选择项目 |
+| `no_project_selected` | 未设置活动项目 | 先在项目列表中设置活动项目 |
 | `project_stale` | 项目路径已失效 | 移除或重新选择 |
 | `pi_not_found` | 找不到 pi 命令 | 安装 Pi CLI |
 | `pi_not_authenticated` | pi auth check 未就绪 | 在终端运行 `pi auth` 配置 |
@@ -214,9 +219,10 @@ SSE 事件格式沿用群聊 SSE（`event: <type>\ndata: <json>\n\n`）。
 
 | 文件 | 修改 |
 |---|---|
-| `src/server.js` | 构造 piExecutor 并挂载 executionRoutes（约 3 行） |
-| `public/index.html` | 项目 view 内增加运行面板容器 + 引入 execution.css/js |
-| `public/js/project.js` | 项目已选时渲染运行面板入口（或由 execution.js 自行挂载到约定容器） |
+| `src/server.js` | 构造 piExecutor 并挂载 executionRoutes（约 4 行） |
+| `public/index.html` | 项目 view 内增加 `#execution-panel` 静态容器 + 引入 execution.css/js |
+
+`public/js/execution.js` 完全自包含（IIFE 自初始化、独立拉取状态），不需要修改 `public/js/project.js`（实现时从设计稿收拢，范围更小）。
 
 ### 9.3 禁止修改
 
@@ -236,19 +242,20 @@ execution.js/css + index.html 装配 + SSE 路由 + UI 回归 + 用户用测试�
 
 ### 11.1 自动证据
 
-- `npm test`：既有 109 + 新增约 25 项全部通过；
+- `npm test`：既有 127 + 新增约 25 项全部通过；
 - PiExecutor 测试使用假 pi 二进制（输出 chunk 后退出 / 模拟 auth 失败 / 模拟超时），不发起真实 API 请求；
 - 命令行只含 `-p`、`--no-session`，不传 `--api-key`（测试断言）；
 - 新增文件 `node --check`；`git diff --check`；隔离端口健康检查；严格结构校验。
 
 ### 11.2 人工验收（D6）
 
-1. 在测试仓库（`/tmp/s03-acceptance`，git init + 1 提交）选择项目；
+0. 服务以 `PI_AUTH_PROVIDER=aliyun-token-plan PORT=3210 npm start` 启动（D7）；
+1. 在测试仓库（`/tmp/s03-acceptance`，git init + 1 提交）录入项目并**设为活动项目**；
 2. 输入最小任务（如「列出当前目录的文件」）；
 3. 确认风险提示后启动 Pi；
 4. 验证：输出流式可见、cwd 正确（Pi 在测试仓库内执行）、停止按钮有效、退出状态正确；
 5. 验证不越界：Pi 未在测试仓库外产生文件（前后 `find /tmp/s03-acceptance` 对比）；
-6. 验证未选项目时无法启动；
+6. 验证未设置活动项目时无法启动；
 7. 验证运行中无法二次启动（busy）。
 
 ### 11.3 安全验证
@@ -284,7 +291,7 @@ execution.js/css + index.html 装配 + SSE 路由 + UI 回归 + 用户用测试�
 | 验收-证据映射 | ✅ §11（实现计划细化） |
 | 风险分级与验证策略 | ✅ high，§11–§12 |
 | 文件范围与保护路径 | ✅ §9 |
-| 分支提案 | ✅ `codex/v0.1-s03-pi-controlled-run`，自 `main` 当前 HEAD |
-| 既有改动分类与保护 | ✅ 工作区干净 |
-| 无未决关键决策 | ⏳ 待用户确认本设计稿 |
+| 分支提案 | ✅ `codex/v0.1-s03-pi-controlled-run`，自 `main` HEAD `0a2b44e` |
+| 既有改动分类与保护 | ✅ 另一会话产出的 S03 两份文档随本次修订一并提交，工作区其余干净 |
+| 无未决关键决策 | ✅ D1–D6（2026-08-06）+ D7–D9（2026-08-12）均获用户确认 |
 | 实现计划深度 | 高风险：实现前另出逐步实现计划 |
