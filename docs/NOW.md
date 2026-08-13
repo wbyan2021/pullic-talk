@@ -4,13 +4,13 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: build
+stage: release
 current_slice: S03-pi-controlled-run
-slice_status: active
+slice_status: done
 work_branch: codex/v0.1-s03-pi-controlled-run
 base_commit: 0a2b44e
 risk_level: high
-last_verified_commit: 1423922
+last_verified_commit: f045073
 updated: 2026-08-12
 ---
 
@@ -97,7 +97,7 @@ updated: 2026-08-12
 | S01 | 护航 AI 独立上线 | 配置 DeepSeek 后能检测连接、对话并显示可靠状态 | done      |
 | S02 | Git 项目安全边界 | 选择项目后识别并保护现有工作区状态            | done |
 | S02b | 多项目并行管理 | 可同时录入多个 Git 项目，列表查看、刷新、移除，并指定活动项目 | done   |
-| S03 | Pi 受控运行    | Pi 只在活动项目内启动，并可暂停、继续、终止        | active   |
+| S03 | Pi 受控运行    | Pi 只在活动项目内启动，并可暂停、继续、终止        | done   |
 | S04 | 证据与黑匣子     | 可查看状态时间线、文件变化和验收证据           | pending   |
 | S05 | 恢复与总览闭环    | 可恢复到检查点，并从总仪表完成整条任务          | pending   |
 
@@ -168,7 +168,7 @@ updated: 2026-08-12
 | v1→v2 迁移不丢数据 | 迁移夹具测试通过（真实 v1 格式含 selectionSnapshot/lastInspection） | 用户确认原「个人资产管理」项目迁移后仍在且自动标记活动；磁盘文件已为 v2 结构 | 自动与真实验收通过 |
 | 只读识别不回归 | 全量 `npm test` 127/127 + 禁改路径 diff 审计通过 | 验收前后本仓库与「个人资产管理」的 `git status --porcelain` 与 `git stash list` 完全一致 | 自动与真实验收通过 |
 
-### S03 · Pi 受控运行（active，实现中）
+### S03 · Pi 受控运行（done，2026-08-13 用户验收通过）
 
 ### 目标
 
@@ -176,14 +176,14 @@ updated: 2026-08-12
 
 ### 验收标准
 
-- [ ] 活动项目已设置且非失效时，可输入任务并启动 Pi。
-- [ ] Pi 的 cwd 严格为活动项目的 repoRoot；不传 `--api-key`。
-- [ ] 启动前检查 `pi auth check --provider <P> --json` 就绪（P：`PI_AUTH_PROVIDER` > `PI_PROVIDER` > `google`，D7）；未就绪给出明确指引。
-- [ ] 输出流式可见，状态灯准确（idle/running/stopped/exited/error）。
-- [ ] 停止按钮发 SIGTERM 终止当前运行；服务关闭时清理进程无孤儿。
-- [ ] 同时只允许 1 个 Pi 运行；运行中拒绝新启动（busy）。
-- [ ] UI 启动前显示风险确认；动态内容仅用 textContent。
-- [ ] 不修改 agent-caller、群聊、终端、安装、护航与 S02 项目边界代码。
+- [x] 活动项目已设置且非失效时，可输入任务并启动 Pi。
+- [x] Pi 的 cwd 严格为活动项目的 repoRoot；不传 `--api-key`。
+- [x] 启动前检查 `pi auth check --provider <P> --json` 就绪（P：`PI_AUTH_PROVIDER` > `PI_PROVIDER` > `google`，D7）；未就绪给出明确指引。
+- [x] 输出流式可见，状态灯准确（idle/running/stopped/exited/error）。
+- [x] 停止按钮发 SIGTERM 终止当前运行；服务关闭时清理进程无孤儿。
+- [x] 同时只允许 1 个 Pi 运行；运行中拒绝新启动（busy）。
+- [x] UI 启动前显示风险确认；动态内容仅用 textContent。
+- [x] 不修改 agent-caller、群聊、终端、安装、护航与 S02 项目边界代码。
 
 ### 明确不做
 
@@ -220,12 +220,12 @@ S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求—证据映�
 
 | 需求 | 自动证据 | 真实/人工证据 | 当前状态 |
 |---|---|---|---|
-| Pi 只在活动项目内启动（D8） | PiExecutor cwd=活动项目 repoRoot 断言 + 假 pi 夹具测试（`ebb2453` 16 项） | 测试仓库中 Pi 执行，cwd 正确、不越界 | 自动通过，待真实验收 |
-| 启动前 auth 就绪检查（D7） | `pi auth check --provider <P> --json` 就绪/失败/ENOENT/provider 解析链测试 | 用户验证未认证时得到指引 | 自动通过，待真实验收 |
-| 输出流式可见 | SSE chunk 事件回放/直播 + 输出截断测试 | 用户观察流式输出与状态灯 | 自动通过，待真实验收 |
-| 可停止（SIGTERM） | 停止生命周期（exit 事件收尾）+ 超时回收测试 | 用户点停止按钮验证终止 | 自动通过，待真实验收 |
-| 单运行实例 | busy 拒绝测试 | 用户验证运行中无法二次启动 | 自动通过，待真实验收 |
-| 风险告知 + UI 安全 | UI 静态回归断言无 innerHTML/EventSource、含 riskConfirmed、仅 4 个端点 | 用户确认风险提示后才启动 | 自动通过，待真实验收 |
+| Pi 只在活动项目内启动（D8） | PiExecutor cwd=活动项目 repoRoot 断言 + 假 pi 夹具测试（`ebb2453` 16 项） | 用户在 `/tmp/s03-acceptance` 真实运行，cwd 正确；验收前后 `find` 对比完全一致，Pi 零写入 | 自动与真实验收通过 |
+| 启动前 auth 就绪检查（D7） | `pi auth check --provider <P> --json` 就绪/失败/ENOENT/provider 解析链测试 | 用户以 `PI_AUTH_PROVIDER=aliyun-token-plan` 启动服务，真实认证检查通过后运行 | 自动与真实验收通过 |
+| 输出流式可见 | SSE chunk 事件回放/直播 + 输出截断测试；D10 改 `--mode json` NDJSON 解析（text 模式实测无法流式） | 用户观察文字逐段流出（thinking 期几秒安静属预期） | 自动与真实验收通过 |
+| 可停止（SIGTERM） | 停止生命周期（exit 事件收尾）+ 超时回收测试；真实 pi SIGTERM 0 秒退出实测 | 用户运行中点停止，状态灯变 STOPPED，`pgrep` 无残留 | 自动与真实验收通过 |
+| 单运行实例 | busy 拒绝测试 | 用户验证运行中二次启动被拒 | 自动与真实验收通过 |
+| 风险告知 + UI 安全 | UI 静态回归断言无 innerHTML/EventSource、含 riskConfirmed、仅 4 个端点；运行面板不挤压项目列表（`f045073`） | 用户双击确认后才启动；布局反馈修复后复验通过 | 自动与真实验收通过 |
 
 ## 需求—证据映射（S02 存档记录）
 
@@ -277,16 +277,25 @@ S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求—证据映�
 - 2026-08-06（S02）：用户在 `http://localhost:3210/` 完成真实验收：选择本仓库识别出 `.gitignore` 的未暂存改动、分支 `main` 与最近提交；干净仓库计数全 0；非 Git 目录（声音世界）返回 `not_a_git_repo` 错误卡；不存在路径与文件路径均返回可区分错误；移除项目双击确认后清空。零写入证明通过：验收前后 `git status --porcelain` 与 `git stash list` 完全一致。
 - 2026-08-12（S02b）：用户在分支代码（3210 端口）完成真实验收：迁移后「个人资产管理」保留且自动标记活动；录入多个真实项目并验证重复录入幂等；切换 ACTIVE 徽标跟随；逐项刷新/移除（双击确认）与移除活动项目后置空均正常；护航、群聊、终端冒烟通过。零写入证明通过：验收前后本仓库与「个人资产管理」的 `git status --porcelain` / `git stash list` 完全一致；磁盘 `projects.local.json` 已核对为 v2 结构且 selectionSnapshot/lastInspection 完整。用户反馈列表不可滚动与用途文案不清，已在 `cbc4d18` 修复（`#project-wrap` 滚动 + 用途说明），修复后用户复验确认无问题；`npm test` 127/127 复跑通过。
 - 2026-08-12（S03）：Task 1–4 自动验证在候选提交 `1423922` 通过：`npm test` 160/160（既有 127 + PiExecutor 16 + 执行路由 10 + 运行面板 UI 7）；PiExecutor 全部用 tmpdir 假 pi 夹具，argv 断言仅 `-p <task> --no-session` 且永不含 `--api-key`，auth 检查断言 `auth check --provider <P> --json` 与 provider 解析链；全部已跟踪 JS `node --check` 通过；`git diff --check` 干净；diff 仅含计划内 9 个文件（agent-caller/群聊/终端/安装/护航/S02 文件均未触碰）；隔离端口 43213 `/api/health` 返回 `ok: true`，无 Token 访问 execution status/start 均 401。未发起任何真实 Pi 调用与计费请求；真实验收待用户完成。
+- 2026-08-13（S03）：用户真实验收发现并修复三处问题，均在分支内修复后复验通过：① 运行面板误读不存在的 `payload.active` 字段导致始终显示「尚未设置活动项目」（`b037817`，改为从 `projects` + `activeProjectId` 推导）；② pi 文本模式将输出全部缓存至结束才吐出，无法流式（D10，`1c5c906`，改 `--mode json` NDJSON 解析，仅 assistant text_delta 进流，thinking 不外泄）；③ 运行面板挤压项目列表空间（`f045073`，项目视图改为整体滚动流）。修复后全量 161/161 通过。
+- 2026-08-13（S03）：用户在 3210（`PI_AUTH_PROVIDER=aliyun-token-plan` 启动）完成真实验收：风险双击确认门禁生效；真实 Pi（aliyun-token-plan / qwen3.8-max）在 `/tmp/s03-acceptance` 内流式执行多个任务，cwd 正确；运行中停止生效、状态灯变 STOPPED；运行中二次启动被 busy 拒绝；无活动项目时面板正确拦截。不越界证明通过：验收前后 `find /tmp/s03-acceptance -type f` 完全一致、测试仓库 `git status --porcelain` 与 `stash list` 为空、`pgrep -f "pi -p"` 无残留。
 
 ## 阻塞
 
-- 无。S03 Task 1–4 完成，等待用户真实验收（Task 5）。
+- 无。S03 已完成验收，待合并回 `main`。
 
 ## 唯一下一步
 
-引导用户完成 [S03 实现计划](plans/2026-08-06-s03-pi-controlled-run-implementation.md) Task 5 真实验收：以 `PI_AUTH_PROVIDER=aliyun-token-plan PORT=3210 npm start` 启动分支代码，在 `/tmp/s03-acceptance` 测试仓库（git init + 1 提交，录入并设为活动项目）中依次验证：① 风险确认后才可启动；② 最小任务流式输出可见、cwd 正确；③ 运行中停止有效、进程无孤儿；④ 未设活动项目无法启动、运行中二次启动被拒（busy）；⑤ 不越界（验收前后 `find /tmp/s03-acceptance -type f` 对比）。全部通过后标记 `done`、回写证据并 fast-forward 合并回 `main`。高风险切片：Mock 证据不能替代真实验收。
+S03 收尾：fast-forward 合并回 `main`、删除工作分支、更新稳定基线与 CODEMAP、复跑全量验证。随后进入 S04「证据与黑匣子」设计：任务时间线、文件变化与验收证据的可观察化（S03 的运行记录目前只留在内存，S04 需要持久化与展示）。
 
 ## 最近交接
+
+### 2026-08-13 · S03 真实验收通过，待合并
+
+- 当前阶段：`build -> release`；切片：`S03-pi-controlled-run (done)`；工作分支：`codex/v0.1-s03-pi-controlled-run`，待合并。
+- 已完成：用户真实验收全部通过（风险门禁、流式、停止、busy、不越界、无孤儿）；验收中发现的三处问题（活动项目推导、流式模式、布局挤压）均已在分支修复并复验；161/161 测试在候选提交通过。
+- 未完成：合并回 `main`、更新基线；S04 设计。
+- 恢复动作：先读本文件；按 S01/S02/S02b 仪式 fast-forward 合并并删除工作分支；合并后运行中的 3210 服务仍是分支代码（与 main 合并后内容一致），无需立即重启。
 
 ### 2026-08-12 · S03 Task 1–4 自动验证完成，等待真实验收
 
@@ -371,6 +380,12 @@ S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求—证据映�
 - 若要改动 S01，只限于已发现缺陷并补回归测试。
 
 ## 会话记录
+
+### 2026-08-13 · S03 真实验收通过与修复
+
+- 完成：用户真实验收 S03（风险门禁、流式输出、停止、busy 拒绝、不越界、无孤儿进程）；验收中发现并修复三处：活动项目推导（`b037817`）、`--mode json` 流式（D10，`1c5c906`）、运行面板布局挤压（`f045073`）；161/161 复跑通过；证据回写。
+- 决定：pi 调用契约为 `-p <task> --no-session --mode json`（D10 记入设计稿）；运行面板与项目列表改为整体滚动流，不互相挤压。
+- 下一步：合并回 main；S04 设计。
 
 ### 2026-08-12 · S02b 合并与 S03 开工
 
