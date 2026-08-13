@@ -15,11 +15,13 @@ import launchRoutes from "./routes/launch.js";
 import installRoutes from "./routes/install.js";
 import escortRoutes from "./routes/escort.js";
 import projectRoutes from "./routes/project.js";
+import executionRoutes from "./routes/execution.js";
 import { createCredentialStore } from "./services/credential-store.js";
 import { createDeepSeekProvider } from "./providers/deepseek.js";
 import { createEscortService } from "./services/escort-service.js";
 import { createGitInspector } from "./services/git-inspector.js";
 import { createProjectBoundary } from "./services/project-boundary.js";
+import { createPiExecutor } from "./services/pi-executor.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,6 +38,8 @@ const projectBoundary = createProjectBoundary({
   inspector: createGitInspector(),
   statePath: join(ROOT, "projects.local.json"),
 });
+// S03：Pi 受控执行（cwd = 活动项目 repoRoot；认证独立，不传密钥）
+const piExecutor = createPiExecutor({ projectBoundary });
 
 // ===== 安全加固 =====
 // CSP 头：第三方库已全部本地化（public/vendor/），不再依赖 CDN。
@@ -143,6 +147,7 @@ app.get("/terminal", serveHtml(getTermHtml));
 app.use("/api", authGate);
 escortRoutes(app, { escortService });
 projectRoutes(app, { projectBoundary });
+executionRoutes(app, { piExecutor });
 apiRoutes(app);
 toolsRoutes(app);
 launchRoutes(app);
