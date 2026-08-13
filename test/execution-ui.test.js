@@ -74,4 +74,5 @@ test("execution.css exists and styles the panel", () => {
   assert.ok(EXECUTION_CSS.trim().length > 100, "execution.css must not be empty");
   assert.ok(EXECUTION_CSS.includes("#execution-panel"), "must style #execution-panel");
   assert.ok(EXECUTION_CSS.includes(".exec-status-light"), "must style the status light");
+  assert.ok(EXECUTION_CSS.includes("#project-view.active"), "panel must not squeeze the project list: view becomes one scroll flow");
 });

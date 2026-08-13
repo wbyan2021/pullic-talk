@@ -2,6 +2,14 @@
    AI·OPS COCKPIT — Pi 受控运行面板（S03）
    ═══════════════════════════════════════════ */
 
+/* 布局：项目视图整体滚动，列表与运行面板上下堆叠，
+   运行面板不得挤压项目列表空间（验收反馈修复） */
+#project-view.active {
+  display: block;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 #execution-panel {
   max-width: 860px;
   margin: 0 auto;
