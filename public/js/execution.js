@@ -25,6 +25,7 @@
   };
   let confirmTimer = null;
   let pollTimer = null;
+  let elapsedTimer = null; // 运行态每秒刷新已运行时长
   let streamAbort = null;
   let draftTask = ""; // 跨渲染保留用户已输入的任务文本
 
@@ -190,11 +191,20 @@
   }
 
   async function refreshExecution() {
+    let next;
     try {
       const payload = await request("/api/project/execution/status");
-      state.execution = payload.execution || state.execution;
-    } catch { /* 保持旧状态 */ }
+      next = payload.execution || state.execution;
+    } catch { return; /* 保持旧状态，不重渲染 */ }
+    // 只有状态真的变化才重渲染，避免轮询周期性销毁用户正在输入的输入框
+    if (executionSnapshot(next) === executionSnapshot(state.execution)) return;
+    state.execution = next;
     render();
+  }
+
+  function executionSnapshot(ex) {
+    if (!ex) return "";
+    return [ex.state, ex.runId, ex.exitCode, ex.truncated, ex.durationMs, ex.output, ex.task].join("\u0001");
   }
 
   // ── DOM 构建（仅使用安全 API） ──
@@ -225,6 +235,12 @@
   }
 
   function render() {
+    // 重建前记住输入框的焦点与光标，重建后恢复，避免打断用户输入
+    const prevTask = panel.querySelector(".exec-task");
+    const hadFocus = prevTask && document.activeElement === prevTask;
+    const selStart = hadFocus ? prevTask.selectionStart : 0;
+    const selEnd = hadFocus ? prevTask.selectionEnd : 0;
+
     panel.textContent = "";
     const root = el("div", "exec-root");
 
@@ -254,6 +270,14 @@
     }
 
     panel.appendChild(root);
+    // 恢复输入焦点与光标（若重建前用户正在输入）
+    if (hadFocus) {
+      const nextTask = panel.querySelector(".exec-task");
+      if (nextTask) {
+        nextTask.focus({ preventScroll: true });
+        try { nextTask.setSelectionRange(selStart, selEnd); } catch { /* 忽略 */ }
+      }
+    }
     startPolling();
   }
 
@@ -294,6 +318,11 @@
     box.appendChild(el("p", "exec-note", stopping ? "正在停止…" : "Pi 正在执行，可随时停止。"));
     if (state.execution.task) box.appendChild(el("p", "exec-task-line", `任务：${state.execution.task}`));
 
+    // 已运行时长：让用户明确看到任务在跑、停止是有效操作
+    const elapsed = el("p", "exec-elapsed", "已运行 0 秒");
+    box.appendChild(elapsed);
+    startElapsedTicker(elapsed);
+
     const out = el("pre", "exec-output", state.liveOutput || state.execution.output || "");
     box.appendChild(out);
 
@@ -301,6 +330,21 @@
     actions.appendChild(button("exec-btn danger", state.busy ? "停止中…" : "停止", () => stopRun(), { disabled: state.busy || stopping }));
     box.appendChild(actions);
     return box;
+  }
+
+  function startElapsedTicker(target) {
+    clearTimeout(elapsedTimer);
+    const startedAt = state.execution.startedAt;
+    if (!startedAt) return;
+    const startMs = new Date(startedAt).getTime();
+    const tick = () => {
+      const secs = Math.max(0, Math.round((Date.now() - startMs) / 1000));
+      if (target.isConnected) target.textContent = `已运行 ${secs} 秒`;
+      if (state.execution.state === "running" || state.execution.state === "stopping") {
+        elapsedTimer = setTimeout(tick, 1000);
+      }
+    };
+    tick();
   }
 
   function renderIdleForm(exState) {
@@ -333,7 +377,6 @@
         clearTimeout(confirmTimer);
         state.riskConfirmed = false;
         const task = textarea.value.trim();
-        draftTask = "";
         if (!task) {
           state.error = { message: "任务内容不能为空。", action: "输入一条明确的任务" };
           render();

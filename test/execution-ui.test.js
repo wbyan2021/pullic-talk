@@ -41,6 +41,12 @@ test("execution.js requires explicit risk confirmation before starting", () => {
   assert.ok(EXECUTION_JS.includes("riskConfirmed"), "start must be gated by an explicit risk confirmation state");
 });
 
+test("execution.js protects user input from polling re-renders", () => {
+  assert.ok(EXECUTION_JS.includes("executionSnapshot"), "polling must skip re-render when execution state is unchanged");
+  assert.ok(EXECUTION_JS.includes("setSelectionRange"), "textarea focus and caret must survive re-renders");
+  assert.ok(EXECUTION_JS.includes("exec-elapsed"), "running view must show elapsed time");
+});
+
 test("execution.js consumes SSE via fetch reader + TextDecoder (no EventSource token leakage)", () => {
   assert.ok(EXECUTION_JS.includes("getReader"), "SSE must be consumed via response.body.getReader()");
   assert.ok(EXECUTION_JS.includes("TextDecoder"), "SSE bytes must be decoded with TextDecoder");

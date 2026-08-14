@@ -121,6 +121,13 @@
   word-break: break-all;
 }
 
+.exec-elapsed {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--dim);
+  font-family: var(--font-m, ui-monospace, monospace);
+}
+
 .exec-task {
   width: 100%;
   min-height: 64px;
