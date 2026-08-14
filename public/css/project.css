@@ -187,6 +187,69 @@
 
 .project-card-badges { flex: none; }
 
+.project-card-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* ── 专注折叠：存在活动项目时，其他项目折叠为单行 ── */
+
+.project-card.collapsed {
+  padding: 8px 12px;
+  gap: 0;
+  opacity: .82;
+}
+
+.project-card.collapsed:hover { opacity: 1; }
+
+.project-fold-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.project-fold-row .project-card-name {
+  flex: none;
+  max-width: 38%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.project-fold-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--dim);
+}
+
+.project-fold-btn {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dim);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.project-fold-btn:hover,
+.project-fold-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: none;
+}
+
 .project-select-form { margin-bottom: 2px; }
 
 .project-counts {

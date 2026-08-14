@@ -62,6 +62,13 @@ test("project.js talks to the five project endpoints", () => {
   }
 });
 
+test("project.js supports focus folding: non-active projects collapse when an active project exists", () => {
+  assert.ok(PROJECT_JS.includes("expandedIds"), "fold state (expandedIds) missing");
+  assert.ok(PROJECT_JS.includes("收起"), "collapse action missing");
+  assert.ok(PROJECT_JS.includes("展开"), "expand action missing");
+  assert.ok(PROJECT_JS.includes("renderCollapsedCard"), "collapsed card renderer missing");
+});
+
 test("project.js renders an ACTIVE badge and a set-active action", () => {
   assert.ok(PROJECT_JS.includes("ACTIVE"), "active badge missing");
   assert.ok(PROJECT_JS.includes("设为活动"), "set-active action missing");
@@ -75,4 +82,6 @@ test("project.css exists and styles the project view", () => {
   assert.ok(PROJECT_CSS.includes("#project-wrap"), "project.css must style #project-wrap");
   assert.ok(PROJECT_CSS.includes(".project-list"), "project.css must style the project list");
   assert.ok(PROJECT_CSS.includes(".project-badge.active"), "project.css must style the ACTIVE badge");
+  assert.ok(PROJECT_CSS.includes(".project-card.collapsed"), "project.css must style the collapsed card");
+  assert.ok(PROJECT_CSS.includes(".project-fold-row"), "project.css must style the fold row");
 });

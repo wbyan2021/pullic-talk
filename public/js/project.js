@@ -19,6 +19,10 @@
   };
   let confirmingId = null;
   let confirmTimer = null;
+  // 专注折叠：存在活动项目时，其他项目默认折叠成一行；
+  // 手动展开的 id 只保留在会话内存中（浏览器不做持久化）。
+  const expandedIds = new Set();
+  let lastActiveProjectId = undefined;
 
   // ── API ──
 
@@ -44,6 +48,11 @@
       const payload = await request("/api/project/status");
       state.projects = Array.isArray(payload.projects) ? payload.projects : [];
       state.activeProjectId = payload.activeProjectId || null;
+      if (state.activeProjectId !== lastActiveProjectId) {
+        // 活动项目变化（开始/切换/清空）：收起手动展开状态，让视觉重新聚焦
+        expandedIds.clear();
+        lastActiveProjectId = state.activeProjectId;
+      }
     } catch (error) {
       state.error = pickError(error);
     } finally {
@@ -189,16 +198,28 @@
 
   function renderProjectCard(project) {
     const isActive = project.id && project.id === state.activeProjectId;
+    const hasActive = Boolean(state.activeProjectId);
+    const collapsed = hasActive && !isActive && !expandedIds.has(project.id);
+    if (collapsed) return renderCollapsedCard(project);
+
     const box = el("section", "project-card");
     if (project.stale) box.classList.add("stale");
 
-    // 标题行：目录名 + 徽标
+    // 标题行：目录名 + 徽标（+ 折叠按钮）
     const titleRow = el("div", "project-card-head");
     titleRow.appendChild(el("h3", "project-card-name", dirName(project.repoRoot)));
+    const headRight = el("div", "project-card-head-right");
     const badges = el("span", "project-card-badges");
     if (isActive) badges.appendChild(el("span", "project-badge active", "ACTIVE"));
     if (project.stale) badges.appendChild(el("span", "project-badge warn", "已失效"));
-    titleRow.appendChild(badges);
+    headRight.appendChild(badges);
+    if (hasActive && !isActive) {
+      headRight.appendChild(button("project-fold-btn", "▾ 收起", () => {
+        expandedIds.delete(project.id);
+        render();
+      }));
+    }
+    titleRow.appendChild(headRight);
     box.appendChild(titleRow);
 
     if (project.stale) {
@@ -296,6 +317,35 @@
     box.appendChild(actions);
 
     return box;
+  }
+
+  // 折叠态卡片：单行摘要（目录名 + 徽标 + 分支/改动概要），点击展开
+  function renderCollapsedCard(project) {
+    const box = el("section", "project-card collapsed");
+    if (project.stale) box.classList.add("stale");
+
+    const row = el("div", "project-fold-row");
+    row.appendChild(button("project-fold-btn", "▸ 展开", () => {
+      expandedIds.add(project.id);
+      render();
+    }));
+    row.appendChild(el("h3", "project-card-name", dirName(project.repoRoot)));
+    if (project.stale) {
+      row.appendChild(el("span", "project-badge warn", "已失效"));
+    }
+    row.appendChild(el("span", "project-fold-summary", foldSummary(project)));
+    box.appendChild(row);
+    return box;
+  }
+
+  function foldSummary(project) {
+    if (project.stale) return "目录已失效，请移除后重新录入";
+    const inspection = project.inspection || {};
+    const counts = inspection.counts || {};
+    const changed = (counts.staged || 0) + (counts.unstaged || 0)
+      + (counts.untracked || 0) + (counts.conflicted || 0);
+    const branch = inspection.detached ? "detached HEAD" : (inspection.branch || "未知分支");
+    return `${branch} · ${changed} 处改动`;
   }
 
   function kv(label, value) {
