@@ -4,7 +4,7 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 slice: S03-pi-controlled-run
-status: active
+status: completed
 risk_level: high
 branch: codex/v0.1-s03-pi-controlled-run
 updated: 2026-08-12
@@ -20,6 +20,8 @@ design: ./2026-08-06-s03-pi-controlled-run-design.md
 > **2026-08-12 amendments (D7–D10):** auth check is `pi auth check --provider <P> --json` (P = `PI_AUTH_PROVIDER` env > `PI_PROVIDER` env > `"google"`); boundary reads the S02b v2 `getStatus()` shape and uses `active`; baseline `0a2b44e`, existing tests 127; acceptance starts the server with `PI_AUTH_PROVIDER=aliyun-token-plan`; D10: spawn adds `--mode json` and the executor streams only assistant `text_delta` content (text mode buffers output until exit).
 
 **Architecture:** Independent execution chain: `PiExecutor` (auth check + spawn with cwd=repoRoot + stream + stop + timeout + cleanup via activeProcs) → authenticated SSE routes → run panel inside the existing project view. No existing chain is modified beyond small assembly points.
+
+> Completion record: user acceptance passed on 2026-08-13 after fixes for active-project derivation, JSON streaming, and run-panel layout. The slice was merged into `main`; current maintenance/UI regression verification is recorded in [NOW.md](../NOW.md).
 
 **Tech Stack:** Node.js ESM, `node:child_process.spawn`, `activeProcs` registry, Node built-in test runner, Express 4, SSE (fetch + ReadableStream), native HTML/CSS/JS.
 

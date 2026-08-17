@@ -5,7 +5,7 @@ status: active
 workflow_version: 4
 baseline_status: accepted
 baseline_accepted_at: 2026-08-05
-updated: 2026-08-06
+updated: 2026-08-18
 ---
 
 # AI·OPS COCKPIT 产品文档
@@ -186,6 +186,14 @@ AI 护航是贯穿能力，不是第九个业务模块。统一状态与事件�
 | ✅ | 可重复自动验证 | 62 项 Node 原生测试覆盖凭据、Provider、状态机、路由与护航 UI；另有 12/12 无写入 macOS PTY 探针。 |
 
 本功能的当前验收状态与唯一下一步以 [NOW.md](NOW.md) 为准；实现决策见 [ADR-002](decisions/ADR-002-provider-control-plane-and-keychain.md)。
+
+### 5.0.1 项目与执行能力（S02、S02b、S03：已验收）
+
+| 状态 | 功能 | 当前行为 |
+|---|---|---|
+| ✅ | Git 项目边界 | 可录入、识别、刷新、移除多个 Git 项目，并指定一个活动项目；识别保持只读，已有改动不被覆盖。 |
+| ✅ | Pi 受控运行 | Pi 只在活动项目目录内启动；启动前检查认证，输出可观察，可停止，运行中拒绝重复启动，不向 Pi 传递 DeepSeek Key。 |
+| 🟡 | 证据与黑匣子 | 产品目标已确认，但任务时间线、文件变化和验收证据的持久化展示尚未进入 S04 设计。 |
 
 ### 5.1 工具控制台
 

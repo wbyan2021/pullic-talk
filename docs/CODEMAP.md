@@ -3,7 +3,7 @@ type: codemap
 project: AI·OPS COCKPIT
 status: active
 workflow_version: 4
-updated: 2026-08-06
+updated: 2026-08-18
 ---
 
 # AI·OPS COCKPIT · 代码地图
@@ -23,7 +23,7 @@ updated: 2026-08-06
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
 - 稳定基线：`8a72e99`
-- 当前验证基线：依赖完整；161 项默认测试（S01/S02 110 + S02b 净增 17 + S03 34）和 12/12 macOS 无写入 PTY 探针通过；隔离端口健康检查和禁改路径审计通过；没有 lint、CI 或 build 脚本。
+- 当前验证基线：依赖完整；163 项默认测试（含项目列表专注折叠回归）和 12/12 macOS 无写入 PTY 探针通过；隔离端口健康检查和禁改路径审计通过；没有 lint、CI 或 build 脚本。
 
 ## 关键路径
 
@@ -72,7 +72,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 | 扫描工具 | `npm run scan` | 本轮未执行；会更新本地 `tools.json` |
 | 完整安装引导 | `npm run setup` | 本轮未执行；包含环境检查、安装和扫描 |
 | JavaScript 语法检查 | `git ls-files '*.js' | xargs -n1 node --check` | 初始化 28 个文件通过；S01 新增/装配文件再次通过 |
-| 自动化测试 | `npm test` | 109 项通过（S01 62 + S02 47）；`RUN_MACOS_KEYCHAIN_PROMPT_PROBE=1 node --test test/credential-store.test.js` 另有 12/12 无写入 macOS 探针 |
+| 自动化测试 | `npm test` | 163 项通过；`RUN_MACOS_KEYCHAIN_PROMPT_PROBE=1 node --test test/credential-store.test.js` 另有 12/12 无写入 macOS 探针 |
 | lint | 未配置 | 不可用 |
 | build | 无需前端构建，且未配置 build 脚本 | 不适用 |
 
@@ -147,7 +147,7 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 
 ## 已知工程缺口
 
-- 已有 161 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
+- 已有 163 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
 - `public/js/chat.js` 体量较大，修改容易产生跨功能回归。
 - Agent 默认工作目录是用户主目录，不具备项目级 Workspace 边界。
 - 默认端口 `3210` 曾被早于 S01 的旧实例占用；2026-08-06 已查明并经用户授权结束，现运行 S01 合并后的代码。
