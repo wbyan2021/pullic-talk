@@ -112,11 +112,27 @@ export default function executionRoutes(app, { piExecutor = null, taskEvidence =
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
     });
-    const unsubscribe = service.subscribe((type, data) => {
+    let streamClosed = false;
+    let unsubscribe = () => {};
+    const finishStream = () => {
+      if (streamClosed) return;
+      streamClosed = true;
+      try { unsubscribe(); } catch { /* 已取消 */ }
+      if (!res.writableEnded) res.end();
+    };
+    unsubscribe = service.subscribe((type, data) => {
+      if (streamClosed) return;
       res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+      if (type === "done") finishStream();
     });
+    // subscribe may replay a terminal event synchronously before returning.
+    if (streamClosed) {
+      try { unsubscribe(); } catch { /* 已取消 */ }
+    }
     // 客户端断开只取消订阅，不停止 Pi（进程归属服务，继续运行直至自然结束或手动停止）
     res.on("close", () => {
+      if (streamClosed) return;
+      streamClosed = true;
       try { unsubscribe(); } catch { /* 已取消 */ }
     });
   });

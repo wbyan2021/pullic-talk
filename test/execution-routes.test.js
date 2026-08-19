@@ -201,6 +201,14 @@ test("POST start success opens an SSE stream with buffered and live events", asy
   assert.ok(written.includes('"exitCode":0'));
 });
 
+test("SSE response closes after the terminal done event", async () => {
+  const { app, executor } = setup();
+  const res = await invoke(app, "POST /api/project/execution/start", { body: { task: "可停止任务" } });
+
+  assert.equal(res.writableEnded, true, "terminal event must release the client stream");
+  assert.equal(executor.listeners.size, 0, "terminal stream must unsubscribe from executor events");
+});
+
 test("client close unsubscribes from events without stopping the executor", async () => {
   const { app, executor } = setup();
   const res = await invoke(app, "POST /api/project/execution/start", { body: { task: "列出文件" } });

@@ -173,7 +173,11 @@
       state.execution.state = data.state || "exited";
       state.execution.exitCode = data.exitCode ?? null;
       state.execution.truncated = Boolean(data.truncated);
+      // The server closes the SSE after done; release the running view immediately
+      // so a stopped task can be continued without waiting for a second poll.
+      state.streaming = false;
       render();
+      refreshEvidence();
     } else if (eventType === "status") {
       if (data.state) state.execution.state = data.state;
       render();

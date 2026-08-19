@@ -47,6 +47,11 @@ test("execution.js protects user input from polling re-renders", () => {
   assert.ok(EXECUTION_JS.includes("exec-elapsed"), "running view must show elapsed time");
 });
 
+test("execution.js leaves the running view when a terminal SSE event arrives", () => {
+  assert.ok(EXECUTION_JS.includes('state.streaming = false'), "done event must release the streaming UI state");
+  assert.ok(EXECUTION_JS.includes('eventType === "done"'), "terminal SSE event must be handled explicitly");
+});
+
 test("execution.js consumes SSE via fetch reader + TextDecoder (no EventSource token leakage)", () => {
   assert.ok(EXECUTION_JS.includes("getReader"), "SSE must be consumed via response.body.getReader()");
   assert.ok(EXECUTION_JS.includes("TextDecoder"), "SSE bytes must be decoded with TextDecoder");

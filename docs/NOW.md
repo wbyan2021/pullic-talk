@@ -68,7 +68,7 @@ updated: 2026-08-20
 | Pi CLI | 登录、模型配置、输出格式和停止行为可能变化 | 当前代码能发现 CLI，但未形成受控任务契约 | S03 前固定版本并做最小真实调用 |
 | 本机 Shell 与子进程 | 继承当前用户权限，不是真正沙箱 | 当前已有 node-pty 和命令启动能力 | 明确工作目录、子进程归属、暂停与终止语义 |
 | Git 工作区 | 用户可能已有分支、未提交改动和未跟踪文件 | 当前仓库本身已有未知改动 | S02 先验证只读识别和保护策略 |
-| 自动化验证 | 暂无 CI 和 lint，外部服务不能由 Mock 代替 | 当前候选实现 206/206 默认测试、语法与差异检查通过；含临时真实 Git 项目端到端、恢复、argv-only 命令和跨平台 realpath 校验 | 运行隔离端口健康检查，并由用户完成真实页面验收；后续版本再评估 CI |
+| 自动化验证 | 暂无 CI 和 lint，外部服务不能由 Mock 代替 | 当前候选实现 208/208 默认测试、语法与差异检查通过；含临时真实 Git 项目端到端、恢复、argv-only 命令、跨平台 realpath 校验和停止后 SSE 收口回归 | 运行隔离端口健康检查，并由用户完成真实页面验收；后续版本再评估 CI |
 | S04 项目交接写入与验收命令 | high | 已实现显式启用、脱敏原子写入、追加黑匣子、Git 前后快照、Pi 生命周期、argv-only 验收命令、失败/恢复和安全路由 | 用户在本地页面确认一次成功或 needs_review 闭环；确认后才将切片标为 done |
 | 默认端口 3210 | 曾被 7 月 31 日的旧实例占用 | 2026-08-06 经用户授权结束旧实例（PID 25068），S01 合并后的服务已在 3210 正常运行 | 无需进一步处理 |
 
@@ -110,7 +110,7 @@ updated: 2026-08-20
 - 语法检查：`git ls-files '*.js' | xargs -n1 node --check`
 - 自动化测试：`npm test`
 - 健康检查：`PORT=43211 npm start` 后访问 `/api/health`
-- 当前状态：S03 已合并入 main；S04 候选实现位于 `codex/v0.1-s04-ai-handoff-blackbox`，已验证提交 `0d081f4`；`npm test` 206/206、S04 临时 Git 端到端 2/2、语法检查和差异检查已通过；严格状态校验通过；本地 main 领先 `origin/main`，是否推送由用户决定。
+- 当前状态：S03 已合并入 main；S04 候选实现位于 `codex/v0.1-s04-ai-handoff-blackbox`；`npm test` 208/208、S04 临时 Git 端到端 2/2、停止后 SSE 收口回归、语法检查和差异检查已通过；严格状态校验通过；本地 main 领先 `origin/main`，是否推送由用户决定。
 
 ## 当前切片
 
@@ -164,6 +164,7 @@ updated: 2026-08-20
 | argv-only 验收命令 | `src/services/validation-runner.js`、`src/routes/evidence.js`；shell=false、活动项目 cwd、审批、超时、输出上限 | 自动化 verified，待页面验收 |
 | 脱敏、原子当前交接、追加历史 | `src/services/safe-redactor.js`、`src/services/ai-handoff.js`；`docs/ai-ops/NOW.md` 与 `records/` | 自动化 verified |
 | 失败、停止、中断和证据不足 | 统一 error code、`needs_review`、黑匣子恢复；未运行验证不可 accepted | 自动化 verified |
+| 停止后可继续输入新任务 | `src/routes/execution.js` 在 `done` 后关闭 SSE；`public/js/execution.js` 收到终态立即释放 streaming；执行路由和 UI 回归测试 | 自动化 verified，待用户页面复验 |
 
 ### 最近交接
 
