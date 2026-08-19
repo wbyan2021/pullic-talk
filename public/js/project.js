@@ -285,6 +285,7 @@
 
     if (isActive && !project.stale) {
       box.appendChild(el("p", "project-boundary-note", "ACTIVE：后续 Pi 任务将只在此仓库根目录内运行（S03 生效）。"));
+      box.appendChild(renderHandoff(project));
     }
 
     // 操作区
@@ -317,6 +318,23 @@
     box.appendChild(actions);
 
     return box;
+  }
+
+  function renderHandoff(project) {
+    const card = el("section", "project-handoff");
+    const handoff = project.handoff;
+    card.appendChild(el("h4", "project-handoff-title", "AI 交接记录"));
+    if (handoff && handoff.enabled) {
+      card.appendChild(el("p", "project-note", "已启用：每次任务完成后，AI 可读取当前状态、历史记录和唯一下一步。"));
+      card.appendChild(kv("当前交接", handoff.currentPath || "docs/ai-ops/NOW.md"));
+      card.appendChild(kv("历史记录", handoff.recordsPath || "docs/ai-ops/records"));
+      return card;
+    }
+    card.appendChild(el("p", "project-note", "尚未启用。启用后会在项目内写入受控的 AI 交接入口；不会自动覆盖已有文档。"));
+    card.appendChild(button("project-btn primary", state.busy ? "启用中…" : "启用 AI 交接", () => {
+      act("/api/project/handoff/enable", { id: project.id });
+    }, { disabled: state.busy }));
+    return card;
   }
 
   // 折叠态卡片：单行摘要（目录名 + 徽标 + 分支/改动概要），点击展开

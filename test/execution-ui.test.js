@@ -61,6 +61,10 @@ test("execution.js talks only to project endpoints", () => {
     "/api/project/execution/status",
     "/api/project/execution/start",
     "/api/project/execution/stop",
+    "/api/evidence/status",
+    "/api/evidence/validation/preview",
+    "/api/evidence/validation/run",
+    "/api/evidence/close",
   ]);
   for (const endpoint of endpoints) {
     assert.ok(allowed.has(endpoint), `unexpected endpoint ${endpoint}`);
@@ -71,6 +75,12 @@ test("execution.js talks only to project endpoints", () => {
     "/api/project/execution/stop",
   ]) {
     assert.ok(endpoints.includes(required), `${required} missing`);
+  }
+});
+
+test("execution.js exposes timeline, Git evidence, validation, and acceptance states", () => {
+  for (const marker of ["时间线", "Git 证据", "验收", "validation", "accepted", "needs_review", "interrupted", "/api/evidence/status", "/api/evidence/close"]) {
+    assert.ok(EXECUTION_JS.includes(marker), `missing S04 UI marker: ${marker}`);
   }
 });
 

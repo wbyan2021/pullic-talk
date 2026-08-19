@@ -307,6 +307,22 @@
   color: var(--text);
 }
 
+.project-handoff {
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--accent-soft) 42%, var(--bg-2));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-handoff-title {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
 .project-error-message { margin: 0; font-size: 12.5px; color: var(--text); }
 .project-error-action { margin: 0; font-size: 12px; color: var(--dim); }
 

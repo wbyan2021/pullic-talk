@@ -19,9 +19,13 @@
     streaming: false,
     active: null,          // 活动项目 payload（来自 /api/project/status）
     execution: { state: "idle", runId: null, output: "", task: null },
+    evidence: { state: "idle", acceptanceStatus: "pending", validation: { result: "not_run" } },
     error: null,           // { message, action }
     riskConfirmed: false,  // 启动前的显式风险确认
     liveOutput: "",        // 运行中实时累积的输出
+    validationBusy: false,
+    validationConfirm: false,
+    acceptanceConfirm: false,
   };
   let confirmTimer = null;
   let pollTimer = null;
@@ -50,12 +54,14 @@
     state.error = null;
     render();
     try {
-      const [projectPayload, executionPayload] = await Promise.all([
+      const [projectPayload, executionPayload, evidencePayload] = await Promise.all([
         request("/api/project/status"),
         request("/api/project/execution/status"),
+        request("/api/evidence/status"),
       ]);
       state.active = findActiveProject(projectPayload);
       state.execution = executionPayload.execution || { state: "idle" };
+      state.evidence = evidencePayload.evidence || { state: "idle", acceptanceStatus: "pending", validation: { result: "not_run" } };
     } catch (error) {
       state.error = pickError(error);
     } finally {
@@ -200,6 +206,80 @@
     if (executionSnapshot(next) === executionSnapshot(state.execution)) return;
     state.execution = next;
     render();
+    await refreshEvidence();
+  }
+
+  async function refreshEvidence() {
+    try {
+      const payload = await request("/api/evidence/status");
+      state.evidence = payload.evidence || state.evidence;
+      render();
+    } catch { /* 保持当前证据摘要，不覆盖执行状态 */ }
+  }
+
+  function parseValidationDraft() {
+    const executable = panel.querySelector(".exec-validation-executable")?.value.trim() || "";
+    const argsText = panel.querySelector(".exec-validation-args")?.value.trim() || "";
+    const args = argsText ? argsText.split(/\s+/).filter(Boolean) : [];
+    return { executable, args, cwd: state.active?.repoRoot, approvedByUser: false };
+  }
+
+  async function previewValidation() {
+    if (state.validationBusy) return;
+    const command = parseValidationDraft();
+    state.validationBusy = true;
+    state.error = null;
+    try {
+      await request("/api/evidence/validation/preview", { method: "POST", json: command });
+      state.validationConfirm = true;
+    } catch (error) {
+      state.error = pickError(error);
+    } finally {
+      state.validationBusy = false;
+      render();
+    }
+  }
+
+  async function runValidation() {
+    if (state.validationBusy) return;
+    const command = parseValidationDraft();
+    command.approvedByUser = true;
+    state.validationBusy = true;
+    state.error = null;
+    try {
+      await request("/api/evidence/validation/run", { method: "POST", json: command });
+      state.validationConfirm = false;
+      await refreshEvidence();
+    } catch (error) {
+      state.error = pickError(error);
+    } finally {
+      state.validationBusy = false;
+      render();
+    }
+  }
+
+  async function closeEvidence(acceptanceStatus) {
+    if (state.busy) return;
+    if (acceptanceStatus === "accepted" && !state.acceptanceConfirm) {
+      state.acceptanceConfirm = true;
+      render();
+      return;
+    }
+    state.busy = true;
+    state.error = null;
+    try {
+      await request("/api/evidence/close", {
+        method: "POST",
+        json: { acceptanceStatus, userConfirmed: acceptanceStatus === "accepted" },
+      });
+      state.acceptanceConfirm = false;
+      await refreshEvidence();
+    } catch (error) {
+      state.error = pickError(error);
+    } finally {
+      state.busy = false;
+      render();
+    }
   }
 
   function executionSnapshot(ex) {
@@ -261,6 +341,7 @@
     }
 
     root.appendChild(renderBoundary());
+    root.appendChild(renderEvidence());
 
     const exState = state.execution.state || "idle";
     if (exState === "running" || exState === "stopping" || state.streaming) {
@@ -298,6 +379,46 @@
     const box = el("section", "exec-card");
     box.appendChild(el("p", "exec-boundary", `工作边界：${state.active.repoRoot}`));
     box.appendChild(el("p", "exec-risk", "风险提示：Pi 在该目录内拥有你的完整用户权限，无沙箱隔离；不会向目录外主动写入，但执行破坏性命令（如删除文件）前请务必确认任务内容。"));
+    return box;
+  }
+
+  function renderEvidence() {
+    const box = el("section", "exec-card exec-evidence");
+    box.appendChild(el("h4", "exec-evidence-title", "任务时间线与验收"));
+    const evidence = state.evidence || {};
+    box.appendChild(el("p", "exec-note", `执行：${evidence.executionStatus || evidence.state || "idle"} · Git 证据：${evidence.evidence?.git || "unknown"} · 验收：${evidence.acceptanceStatus || "pending"}`));
+    if (evidence.before || evidence.after) {
+      const timeline = el("div", "exec-timeline");
+      timeline.appendChild(el("div", "exec-timeline-item", `before · ${evidence.before?.branch || "unknown"} · ${evidence.before?.head || "—"}`));
+      timeline.appendChild(el("div", "exec-timeline-item", `after · ${evidence.after?.branch || "unknown"} · ${evidence.after?.head || "—"}`));
+      timeline.appendChild(el("div", "exec-timeline-item", `validation · ${evidence.validation?.result || "not_run"}`));
+      box.appendChild(timeline);
+    }
+    const terminal = ["exited", "stopped", "failed", "interrupted"].includes(evidence.executionStatus || evidence.state);
+    if (terminal && evidence.acceptanceStatus === "pending") {
+      const validation = el("div", "exec-validation");
+      validation.appendChild(el("p", "exec-note", "验收命令使用程序 + 参数模型运行，不接受 shell 命令字符串。"));
+      const executable = document.createElement("input");
+      executable.className = "exec-validation-executable";
+      executable.placeholder = "程序，例如 npm";
+      const args = document.createElement("input");
+      args.className = "exec-validation-args";
+      args.placeholder = "参数，例如 test";
+      validation.appendChild(executable);
+      validation.appendChild(args);
+      validation.appendChild(button("exec-btn primary", state.validationConfirm ? "确认执行验收" : "预览验收命令", () => {
+        if (state.validationConfirm) runValidation();
+        else previewValidation();
+      }, { disabled: state.validationBusy }));
+      box.appendChild(validation);
+      const actions = el("div", "exec-actions");
+      actions.appendChild(button("exec-btn", state.acceptanceConfirm ? "确认 accepted" : "标记 accepted", () => closeEvidence("accepted"), { disabled: state.busy || evidence.validation?.result !== "passed" }));
+      actions.appendChild(button("exec-btn", "标记 needs_review", () => closeEvidence("needs_review"), { disabled: state.busy }));
+      actions.appendChild(button("exec-btn danger-outline", "标记 rejected", () => closeEvidence("rejected"), { disabled: state.busy }));
+      box.appendChild(actions);
+    } else if (evidence.acceptanceStatus && evidence.acceptanceStatus !== "pending") {
+      box.appendChild(el("p", "exec-note", `验收结果：${evidence.acceptanceStatus}`));
+    }
     return box;
   }
 

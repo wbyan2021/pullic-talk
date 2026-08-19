@@ -75,6 +75,13 @@ test("project.js renders an ACTIVE badge and a set-active action", () => {
   assert.ok(PROJECT_JS.includes("activeProjectId"), "must track activeProjectId from status");
 });
 
+test("project.js requires explicit AI handoff enablement before project writes", () => {
+  assert.ok(PROJECT_JS.includes("/api/project/handoff/enable"), "handoff enable endpoint missing");
+  assert.ok(PROJECT_JS.includes("启用 AI 交接"), "explicit handoff action missing");
+  assert.ok(PROJECT_JS.includes("交接记录"), "handoff explanation missing");
+  assert.ok(!PROJECT_JS.includes("localStorage"));
+});
+
 // ── 样式存在且非空 ──
 
 test("project.css exists and styles the project view", () => {
