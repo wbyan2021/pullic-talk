@@ -161,14 +161,14 @@ export function createBlackboxStore({
     });
   }
 
-  async function appendEvent({ projectId, taskId, type, data = {} } = {}) {
+  async function appendEvent({ projectId, taskId, type, data = {}, allowAfterTerminal = false } = {}) {
     assertType(type);
     const filePath = fileFor(projectId, taskId);
     return withLock(filePath, async () => {
       const state = await readState(filePath);
       const last = state.events.at(-1);
       if (!last) throw new BlackboxStoreError("task_not_found");
-      if (TERMINAL_TYPES.has(last.type)) throw new BlackboxStoreError("task_closed");
+      if (TERMINAL_TYPES.has(last.type) && !allowAfterTerminal) throw new BlackboxStoreError("task_closed");
       await repairPartialTail(filePath, state);
       const event = {
         seq: last.seq + 1,
@@ -198,7 +198,7 @@ export function createBlackboxStore({
       projectId,
       taskId,
       events: state.events,
-      closed: Boolean(last && TERMINAL_TYPES.has(last.type)),
+      closed: state.events.some((event) => TERMINAL_TYPES.has(event.type)),
     };
   }
 
@@ -227,7 +227,7 @@ export function createBlackboxStore({
         const filePath = fileFor(projectEntry.name, taskId);
         const state = await readState(filePath);
         const last = state.events.at(-1);
-        if (!last || TERMINAL_TYPES.has(last.type)) continue;
+        if (!last || state.events.some((event) => TERMINAL_TYPES.has(event.type))) continue;
         await appendEvent({
           projectId: projectEntry.name,
           taskId,

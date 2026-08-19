@@ -108,6 +108,20 @@ function terminalForDone(data) {
   return "failed";
 }
 
+function compactSnapshot(wrapper) {
+  const snapshot = wrapper?.snapshot ?? wrapper;
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const counts = snapshot.counts && typeof snapshot.counts === "object" ? snapshot.counts : {};
+  return {
+    repoRoot: typeof snapshot.repoRoot === "string" ? snapshot.repoRoot : null,
+    branch: typeof snapshot.branch === "string" ? snapshot.branch : null,
+    head: snapshot.headCommit?.hash ?? null,
+    worktree: (Number(counts.staged) + Number(counts.unstaged) + Number(counts.untracked) + Number(counts.conflicted)) > 0 ? "modified" : "clean",
+    changedPaths: Array.isArray(snapshot.entries) ? snapshot.entries.slice(0, MAX_ENTRIES).map((entry) => entry.path).filter(Boolean) : [],
+    truncated: Boolean(snapshot.truncated),
+  };
+}
+
 export function createTaskEvidence({
   projectBoundary,
   gitInspector,
@@ -220,8 +234,8 @@ export function createTaskEvidence({
     }
   }
 
-  function appendEvent(type, data) {
-    if (!current || current.closed) return Promise.resolve(null);
+  function appendEvent(type, data, { allowAfterTerminal = false } = {}) {
+    if (!current || (current.closed && !allowAfterTerminal)) return Promise.resolve(null);
     const task = current;
     eventQueue = eventQueue.then(async () => {
       const event = await blackboxStore.appendEvent({
@@ -229,6 +243,7 @@ export function createTaskEvidence({
         taskId: task.taskId,
         type,
         data: safePayload(data),
+        allowAfterTerminal,
       });
       return event;
     });
@@ -274,6 +289,9 @@ export function createTaskEvidence({
     task.closed = true;
     task.finishing = false;
     task.state = type;
+    task.executionStatus = type;
+    task.after = after;
+    task.gitEvidence = classification;
     task.exitCode = data.exitCode ?? null;
     task.durationMs = Number.isFinite(data.durationMs) ? data.durationMs : null;
     if (unsubscribePi) {
@@ -334,6 +352,13 @@ export function createTaskEvidence({
       events: [],
       lastError: null,
       finishing: false,
+      task: safeText(rawTask),
+      after: null,
+      gitEvidence: null,
+      executionStatus: "running",
+      validation: { result: "not_run", exitCode: null, output: "", withheld: false, truncated: false },
+      acceptanceStatus: "pending",
+      handoffWritten: false,
     };
     current = task;
     try {
@@ -369,6 +394,7 @@ export function createTaskEvidence({
       return task.runId;
     } catch (error) {
       task.state = "failed";
+      task.executionStatus = "failed";
       task.lastError = { code: error?.code ?? "spawn_failed", retryable: error?.retryable === true };
       await appendEvent("state_changed", { state: "failed", code: task.lastError.code });
       await eventQueue;
@@ -416,6 +442,98 @@ export function createTaskEvidence({
     };
   }
 
+  async function getEvidenceStatus() {
+    if (!current) {
+      return {
+        taskId: null,
+        projectId: null,
+        repoRoot: null,
+        runId: null,
+        state: "idle",
+        executionStatus: "idle",
+        before: null,
+        after: null,
+        gitEvidence: null,
+        validation: { result: "not_run" },
+        evidence: { execution: "unknown", git: "unknown", validation: "not_run" },
+        acceptanceStatus: "pending",
+        task: null,
+        lastError: null,
+      };
+    }
+    if (current.completionPromise) await current.completionPromise;
+    await eventQueue;
+    const execution = ["exited", "stopped", "failed", "interrupted"].includes(current.executionStatus)
+      ? "verified"
+      : "unknown";
+    const git = current.gitEvidence && current.gitEvidence.certainty !== "unknown" ? "verified" : "unknown";
+    return {
+      taskId: current.taskId,
+      projectId: current.projectId,
+      repoRoot: current.repoRoot,
+      runId: current.runId,
+      state: current.state,
+      executionStatus: current.executionStatus,
+      before: compactSnapshot(current.before),
+      after: compactSnapshot(current.after),
+      gitEvidence: current.gitEvidence ? safePayload(current.gitEvidence) : null,
+      validation: safePayload(current.validation),
+      evidence: { execution, git, validation: current.validation?.result ?? "not_run" },
+      acceptanceStatus: current.acceptanceStatus,
+      task: safeText(current.task),
+      lastError: current.lastError ? { code: current.lastError.code, retryable: Boolean(current.lastError.retryable) } : null,
+    };
+  }
+
+  async function recordValidation(result) {
+    if (!current) throw new TaskEvidenceError("no_task");
+    if (!["exited", "stopped", "failed", "interrupted"].includes(current.executionStatus)) {
+      throw new TaskEvidenceError("task_running");
+    }
+    const safe = safePayload(result && typeof result === "object" ? result : {});
+    const normalized = {
+      executable: safe.executable ?? null,
+      args: Array.isArray(safe.args) ? safe.args.slice(0, 64) : [],
+      cwd: safe.cwd ?? null,
+      approvedByUser: safe.approvedByUser === true,
+      result: ["passed", "failed", "stopped", "not_run"].includes(safe.result) ? safe.result : "failed",
+      exitCode: Number.isInteger(safe.exitCode) ? safe.exitCode : null,
+      output: typeof safe.output === "string" ? safe.output : "",
+      withheld: safe.withheld === true,
+      truncated: safe.truncated === true,
+      code: safe.code ?? null,
+    };
+    await appendEvent("validation", normalized, { allowAfterTerminal: true });
+    current.validation = normalized;
+    emit("validation", normalized);
+    return normalized;
+  }
+
+  async function closeTask({ acceptanceStatus = "needs_review", userConfirmed = false, handoffWritten = false } = {}) {
+    if (!current) throw new TaskEvidenceError("no_task");
+    if (current.completionPromise) await current.completionPromise;
+    if (current.acceptanceStatus !== "pending") {
+      if (current.acceptanceStatus === acceptanceStatus) return getEvidenceStatus();
+      throw new TaskEvidenceError("task_already_closed");
+    }
+    if (!["accepted", "needs_review", "rejected"].includes(acceptanceStatus)) {
+      throw new TaskEvidenceError("invalid_acceptance_status");
+    }
+    if (!["exited", "stopped", "failed", "interrupted"].includes(current.executionStatus)) {
+      throw new TaskEvidenceError("task_running");
+    }
+    if (acceptanceStatus === "accepted") {
+      if (current.validation?.result !== "passed") throw new TaskEvidenceError("validation_required");
+      if (!current.gitEvidence || current.gitEvidence.certainty === "unknown") throw new TaskEvidenceError("evidence_required");
+      if (!userConfirmed) throw new TaskEvidenceError("user_confirmation_required");
+      if (!handoffWritten) throw new TaskEvidenceError("handoff_not_written");
+    }
+    await appendEvent("acceptance", { acceptanceStatus, userConfirmed, handoffWritten }, { allowAfterTerminal: true });
+    current.acceptanceStatus = acceptanceStatus;
+    current.handoffWritten = handoffWritten;
+    return getEvidenceStatus();
+  }
+
   function subscribe(listener) {
     if (typeof listener !== "function") return () => {};
     if (current) for (const event of current.events) {
@@ -437,6 +555,9 @@ export function createTaskEvidence({
     start,
     stop,
     getStatus,
+    getEvidenceStatus,
+    recordValidation,
+    closeTask,
     subscribe,
     recoverIncomplete,
   };

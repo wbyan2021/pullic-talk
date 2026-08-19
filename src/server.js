@@ -16,6 +16,7 @@ import installRoutes from "./routes/install.js";
 import escortRoutes from "./routes/escort.js";
 import projectRoutes from "./routes/project.js";
 import executionRoutes from "./routes/execution.js";
+import evidenceRoutes from "./routes/evidence.js";
 import { createCredentialStore } from "./services/credential-store.js";
 import { createDeepSeekProvider } from "./providers/deepseek.js";
 import { createEscortService } from "./services/escort-service.js";
@@ -24,6 +25,8 @@ import { createProjectBoundary } from "./services/project-boundary.js";
 import { createPiExecutor } from "./services/pi-executor.js";
 import { createBlackboxStore } from "./services/blackbox-store.js";
 import { createTaskEvidence } from "./services/task-evidence.js";
+import { createAiHandoff } from "./services/ai-handoff.js";
+import { createValidationRunner } from "./services/validation-runner.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -41,6 +44,7 @@ const projectBoundary = createProjectBoundary({
   inspector: gitInspector,
   statePath: join(ROOT, "projects.local.json"),
 });
+const aiHandoff = createAiHandoff();
 // S03：Pi 受控执行（cwd = 活动项目 repoRoot；认证独立，不传密钥）
 const piExecutor = createPiExecutor({ projectBoundary });
 // S04：任务证据由单一协调器记录；黑匣子属于本机生成数据，不进入产品代码仓库
@@ -51,6 +55,7 @@ const taskEvidence = createTaskEvidence({
   blackboxStore,
   piExecutor,
 });
+const validationRunner = createValidationRunner({ projectBoundary });
 void taskEvidence.recoverIncomplete().catch(() => {
   log("⚠️ 黑匣子任务恢复失败，保留现有服务并等待下一次启动重试");
 });
@@ -171,8 +176,9 @@ app.get("/terminal", serveHtml(getTermHtml));
 // 认证闸门：除白名单（/api/health）外，所有 /api/* 需携带 token
 app.use("/api", authGate);
 escortRoutes(app, { escortService });
-projectRoutes(app, { projectBoundary });
+projectRoutes(app, { projectBoundary, aiHandoff });
 executionRoutes(app, { piExecutor, taskEvidence });
+evidenceRoutes(app, { taskEvidence, validationRunner, aiHandoff, projectBoundary });
 apiRoutes(app);
 toolsRoutes(app);
 launchRoutes(app);
