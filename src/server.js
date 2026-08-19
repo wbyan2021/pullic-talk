@@ -22,6 +22,8 @@ import { createEscortService } from "./services/escort-service.js";
 import { createGitInspector } from "./services/git-inspector.js";
 import { createProjectBoundary } from "./services/project-boundary.js";
 import { createPiExecutor } from "./services/pi-executor.js";
+import { createBlackboxStore } from "./services/blackbox-store.js";
+import { createTaskEvidence } from "./services/task-evidence.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -34,12 +36,24 @@ const HOST = process.env.HOST || "127.0.0.1";
 const credentialStore = createCredentialStore();
 const deepSeekProvider = createDeepSeekProvider();
 const escortService = createEscortService({ credentialStore, provider: deepSeekProvider });
+const gitInspector = createGitInspector();
 const projectBoundary = createProjectBoundary({
-  inspector: createGitInspector(),
+  inspector: gitInspector,
   statePath: join(ROOT, "projects.local.json"),
 });
 // S03：Pi 受控执行（cwd = 活动项目 repoRoot；认证独立，不传密钥）
 const piExecutor = createPiExecutor({ projectBoundary });
+// S04：任务证据由单一协调器记录；黑匣子属于本机生成数据，不进入产品代码仓库
+const blackboxStore = createBlackboxStore({ rootDir: join(ROOT, "blackbox.local") });
+const taskEvidence = createTaskEvidence({
+  projectBoundary,
+  gitInspector,
+  blackboxStore,
+  piExecutor,
+});
+void taskEvidence.recoverIncomplete().catch(() => {
+  log("⚠️ 黑匣子任务恢复失败，保留现有服务并等待下一次启动重试");
+});
 
 // ===== 安全加固 =====
 // CSP 头：第三方库已全部本地化（public/vendor/），不再依赖 CDN。
@@ -158,7 +172,7 @@ app.get("/terminal", serveHtml(getTermHtml));
 app.use("/api", authGate);
 escortRoutes(app, { escortService });
 projectRoutes(app, { projectBoundary });
-executionRoutes(app, { piExecutor });
+executionRoutes(app, { piExecutor, taskEvidence });
 apiRoutes(app);
 toolsRoutes(app);
 launchRoutes(app);
@@ -202,12 +216,16 @@ server.on("error", (err) => {
   throw err;
 });
 
-function shutdown() {
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
   const activePtys = getActivePtys();
   log(`收到退出信号，正在终止 ${activeProcs.size} 个子进程、${activePtys.size} 个终端…`);
+  await taskEvidence.recoverIncomplete().catch(() => {});
   for (const p of activeProcs) { try { p.kill("SIGTERM"); } catch {} }
   for (const t of activePtys) { try { t.kill(); } catch {} }
   setTimeout(() => process.exit(0), 500);
 }
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGINT", () => { void shutdown(); });
+process.on("SIGTERM", () => { void shutdown(); });

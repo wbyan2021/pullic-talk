@@ -10,6 +10,7 @@
 // - start 成功时以 SSE 流式回放/直播执行事件；客户端断开只取消订阅，不停止 Pi。
 // ─────────────────────────────────────────────────────────────
 import { PiExecutorError } from "../services/pi-executor.js";
+import { TaskEvidenceError } from "../services/task-evidence.js";
 
 // code → [message, action, retryable]
 const ERROR_INFO = {
@@ -45,7 +46,7 @@ const UNKNOWN_ERROR = {
 
 const EXECUTION_FIELDS = [
   "state", "runId", "startedAt", "exitCode",
-  "truncated", "durationMs", "output", "task",
+  "truncated", "durationMs", "output", "task", "taskId", "projectId",
 ];
 
 function pick(source, fields) {
@@ -68,7 +69,7 @@ function safeExecution(payload) {
 }
 
 function sendError(res, error) {
-  if (!(error instanceof PiExecutorError) || !SAFE_HTTP_STATUS[error.code]) {
+  if (!(error instanceof PiExecutorError || error instanceof TaskEvidenceError) || !SAFE_HTTP_STATUS[error.code]) {
     return res.status(500).json(UNKNOWN_ERROR);
   }
   const [message, action, retryable] = ERROR_INFO[error.code] ?? ERROR_INFO.internal_error;
@@ -81,12 +82,13 @@ function sendError(res, error) {
   });
 }
 
-export default function executionRoutes(app, { piExecutor }) {
-  if (!piExecutor) throw new TypeError("piExecutor is required");
+export default function executionRoutes(app, { piExecutor = null, taskEvidence = null }) {
+  const service = taskEvidence ?? piExecutor;
+  if (!service) throw new TypeError("piExecutor or taskEvidence is required");
 
   app.get("/api/project/execution/status", async (_req, res) => {
     try {
-      const status = await piExecutor.getStatus();
+      const status = await service.getStatus();
       res.json({ ok: true, execution: safeExecution(status) });
     } catch (error) {
       sendError(res, error);
@@ -99,7 +101,7 @@ export default function executionRoutes(app, { piExecutor }) {
       return res.status(400).json({ ok: false, code: "invalid_task", message, action, retryable });
     }
     try {
-      await piExecutor.start(req.body.task);
+      await service.start(req.body.task);
     } catch (error) {
       return sendError(res, error);
     }
@@ -110,7 +112,7 @@ export default function executionRoutes(app, { piExecutor }) {
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
     });
-    const unsubscribe = piExecutor.subscribe((type, data) => {
+    const unsubscribe = service.subscribe((type, data) => {
       res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
     });
     // 客户端断开只取消订阅，不停止 Pi（进程归属服务，继续运行直至自然结束或手动停止）
@@ -121,7 +123,7 @@ export default function executionRoutes(app, { piExecutor }) {
 
   app.post("/api/project/execution/stop", async (_req, res) => {
     try {
-      const status = await piExecutor.stop();
+      const status = await service.stop();
       res.json({ ok: true, execution: safeExecution(status) });
     } catch (error) {
       sendError(res, error);

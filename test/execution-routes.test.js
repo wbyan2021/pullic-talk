@@ -84,6 +84,12 @@ function setup(executor = createFakeExecutor()) {
   return { app, executor };
 }
 
+function setupWithEvidence(taskEvidence, executor = null) {
+  const app = new FakeApp();
+  executionRoutes(app, { piExecutor: executor, taskEvidence });
+  return { app, taskEvidence };
+}
+
 async function invoke(app, key, { body } = {}) {
   const handler = app.routes.get(key);
   assert.ok(handler, `route ${key} must be registered`);
@@ -229,4 +235,25 @@ test("POST stop passes executor status through", async () => {
   assert.equal(res.body.ok, true);
   assert.equal(res.body.execution.state, "stopped");
   assert.equal(executor.calls.stop, 1);
+});
+
+test("execution routes prefer the task evidence coordinator when provided", async () => {
+  const calls = { start: [], stop: 0 };
+  const events = [{ type: "start", data: { runId: "task-run" } }, { type: "done", data: { state: "exited", exitCode: 0 } }];
+  const taskEvidence = {
+    async getStatus() { return { ...SAFE_EXECUTION, taskId: "task_001", projectId: "project_001" }; },
+    async start(task) { calls.start.push(task); return "task-run"; },
+    async stop() { calls.stop += 1; return { ...SAFE_EXECUTION, state: "stopped", taskId: "task_001", projectId: "project_001" }; },
+    subscribe(listener) { for (const event of events) listener(event.type, event.data); return () => {}; },
+  };
+  const { app } = setupWithEvidence(taskEvidence, {
+    async start() { throw new Error("must not be used"); },
+    async stop() { throw new Error("must not be used"); },
+  });
+  const status = await invoke(app, "GET /api/project/execution/status");
+  assert.equal(status.body.execution.taskId, "task_001");
+  await invoke(app, "POST /api/project/execution/start", { body: { task: "证据任务" } });
+  await invoke(app, "POST /api/project/execution/stop");
+  assert.deepEqual(calls.start, ["证据任务"]);
+  assert.equal(calls.stop, 1);
 });
