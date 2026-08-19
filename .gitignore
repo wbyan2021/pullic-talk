@@ -13,3 +13,4 @@ tools.json
 logs/
 .superpowers/
 projects.local.json
+blackbox.local/
