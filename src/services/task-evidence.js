@@ -1,0 +1,443 @@
+"use strict";
+
+import { GitInspectorError } from "./git-inspector.js";
+import { REDACTION_MARKER, redactText } from "./safe-redactor.js";
+
+const MAX_ENTRIES = 200;
+const MAX_PATH_LENGTH = 1024;
+const SNAPSHOT_FIELDS = [
+  "repoRoot", "branch", "detached", "hasCommits", "headCommit",
+  "counts", "entries", "truncated", "remotes", "inspectedAt",
+];
+
+export class TaskEvidenceError extends Error {
+  constructor(code, { retryable = false } = {}) {
+    super(code);
+    this.name = "TaskEvidenceError";
+    this.code = code;
+    this.retryable = retryable;
+  }
+}
+
+function wrapError(error) {
+  if (error instanceof TaskEvidenceError) return error;
+  if (error instanceof GitInspectorError) {
+    const retryable = error.retryable === true;
+    const code = error.code === "path_not_found" || error.code === "not_a_git_repo"
+      ? "project_stale"
+      : error.code;
+    return new TaskEvidenceError(code, { retryable });
+  }
+  return new TaskEvidenceError("internal_error", { retryable: true });
+}
+
+function copyCounts(counts) {
+  const clean = {};
+  for (const key of ["staged", "unstaged", "untracked", "conflicted"]) {
+    if (Number.isInteger(counts?.[key]) && counts[key] >= 0) clean[key] = counts[key];
+  }
+  return clean;
+}
+
+function sanitizeSnapshot(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const result = {};
+  for (const field of SNAPSHOT_FIELDS) {
+    if (!(field in source)) continue;
+    if (field === "repoRoot" || field === "branch" || field === "inspectedAt") {
+      if (typeof source[field] === "string" && source[field].length <= MAX_PATH_LENGTH) {
+        result[field] = source[field];
+      }
+    } else if (field === "headCommit") {
+      if (source[field] && typeof source[field] === "object") {
+        result.headCommit = {
+          hash: typeof source[field].hash === "string" ? source[field].hash.slice(0, 128) : null,
+          date: typeof source[field].date === "string" ? source[field].date.slice(0, 32) : null,
+          subject: typeof source[field].subject === "string" ? source[field].subject.slice(0, 200) : null,
+        };
+      } else {
+        result.headCommit = null;
+      }
+    } else if (field === "counts") {
+      result.counts = copyCounts(source[field]);
+    } else if (field === "entries") {
+      result.entries = Array.isArray(source[field])
+        ? source[field].slice(0, MAX_ENTRIES).flatMap((entry) => {
+          if (!entry || typeof entry !== "object") return [];
+          if (typeof entry.status !== "string" || typeof entry.path !== "string") return [];
+          return [{ status: entry.status.slice(0, 2), path: entry.path.slice(0, MAX_PATH_LENGTH) }];
+        })
+        : [];
+    } else if (field === "remotes") {
+      result.remotes = Array.isArray(source[field])
+        ? source[field].filter((remote) => typeof remote === "string").slice(0, 20).map((remote) => remote.slice(0, MAX_PATH_LENGTH))
+        : [];
+    } else if (field === "detached" || field === "hasCommits" || field === "truncated") {
+      result[field] = Boolean(source[field]);
+    }
+  }
+  return result;
+}
+
+function entryMap(snapshot) {
+  const entries = Array.isArray(snapshot?.entries) ? snapshot.entries : [];
+  return new Map(entries.map((entry) => [entry.path, entry.status]));
+}
+
+function safeText(value, maxBytes = 8 * 1024) {
+  const result = redactText(typeof value === "string" ? value : "", { maxBytes });
+  return result.withheld ? REDACTION_MARKER : result.text;
+}
+
+function safePayload(value, depth = 0) {
+  if (typeof value === "string") return safeText(value);
+  if (value === null || typeof value === "number" || typeof value === "boolean") return value;
+  if (depth >= 3) return REDACTION_MARKER;
+  if (Array.isArray(value)) return value.slice(0, 64).map((item) => safePayload(item, depth + 1));
+  if (value && typeof value === "object") {
+    const output = {};
+    for (const [key, item] of Object.entries(value).slice(0, 64)) output[key] = safePayload(item, depth + 1);
+    return output;
+  }
+  return REDACTION_MARKER;
+}
+
+function terminalForDone(data) {
+  if (data?.state === "stopped") return "stopped";
+  if (data?.state === "exited" && data?.exitCode === 0) return "exited";
+  return "failed";
+}
+
+export function createTaskEvidence({
+  projectBoundary,
+  gitInspector,
+  blackboxStore,
+  piExecutor = null,
+  now = () => Date.now(),
+  taskIdFactory = null,
+} = {}) {
+  if (!projectBoundary) throw new TypeError("projectBoundary is required");
+  if (!gitInspector) throw new TypeError("gitInspector is required");
+  if (!blackboxStore) throw new TypeError("blackboxStore is required");
+
+  let taskCounter = 0;
+  let current = null;
+  let unsubscribePi = null;
+  let eventQueue = Promise.resolve();
+  const listeners = new Set();
+
+  function createTaskId() {
+    const generated = typeof taskIdFactory === "function"
+      ? taskIdFactory()
+      : `task_${now().toString(36)}_${(++taskCounter).toString(36)}`;
+    if (typeof generated !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(generated)) {
+      throw new TaskEvidenceError("invalid_task_id");
+    }
+    return generated;
+  }
+
+  async function captureSnapshot() {
+    let status;
+    try {
+      status = await projectBoundary.getStatus();
+    } catch {
+      throw new TaskEvidenceError("internal_error", { retryable: true });
+    }
+    const active = status?.active;
+    if (!active) throw new TaskEvidenceError("no_project_selected");
+    if (active.stale) throw new TaskEvidenceError("project_stale");
+    if (typeof active.id !== "string" || typeof active.repoRoot !== "string") {
+      throw new TaskEvidenceError("project_stale");
+    }
+    let inspection;
+    try {
+      inspection = await gitInspector.inspect(active.repoRoot);
+    } catch (error) {
+      throw wrapError(error);
+    }
+    const snapshot = sanitizeSnapshot({ ...inspection, repoRoot: active.repoRoot });
+    return {
+      projectId: active.id,
+      repoRoot: active.repoRoot,
+      capturedAt: snapshot.inspectedAt ?? new Date(now()).toISOString(),
+      snapshot,
+    };
+  }
+
+  function classifySnapshots(before, after) {
+    const beforeSnapshot = before?.snapshot ?? before;
+    const afterSnapshot = after?.snapshot ?? after;
+    if (!beforeSnapshot || !afterSnapshot || beforeSnapshot.truncated || afterSnapshot.truncated) {
+      return {
+        certainty: "unknown",
+        reason: "snapshot_truncated",
+        causality: "not_proven",
+        newPaths: [],
+        changedPaths: [],
+        preexistingPaths: [],
+      };
+    }
+    if (before.repoRoot && after.repoRoot && before.repoRoot !== after.repoRoot) {
+      return {
+        certainty: "unknown",
+        reason: "project_changed",
+        causality: "not_proven",
+        newPaths: [],
+        changedPaths: [],
+        preexistingPaths: [],
+      };
+    }
+    const beforeEntries = entryMap(beforeSnapshot);
+    const afterEntries = entryMap(afterSnapshot);
+    const newPaths = [];
+    const changedPaths = [];
+    const preexistingPaths = [];
+    for (const [filePath, status] of afterEntries) {
+      if (!beforeEntries.has(filePath)) newPaths.push(filePath);
+      else {
+        preexistingPaths.push(filePath);
+        if (beforeEntries.get(filePath) !== status) changedPaths.push(filePath);
+      }
+    }
+    return {
+      certainty: "observed",
+      reason: null,
+      causality: "not_proven",
+      newPaths: newPaths.slice(0, MAX_ENTRIES),
+      changedPaths: changedPaths.slice(0, MAX_ENTRIES),
+      preexistingPaths: preexistingPaths.slice(0, MAX_ENTRIES),
+    };
+  }
+
+  function emit(type, data) {
+    const safe = safePayload(data);
+    if (current) {
+      current.events.push({ type, data: safe });
+      if (current.events.length > 256) current.events.splice(0, current.events.length - 256);
+    }
+    for (const listener of [...listeners]) {
+      try { listener(type, safe); } catch { /* subscriber failures are isolated */ }
+    }
+  }
+
+  function appendEvent(type, data) {
+    if (!current || current.closed) return Promise.resolve(null);
+    const task = current;
+    eventQueue = eventQueue.then(async () => {
+      const event = await blackboxStore.appendEvent({
+        projectId: task.projectId,
+        taskId: task.taskId,
+        type,
+        data: safePayload(data),
+      });
+      return event;
+    });
+    return eventQueue;
+  }
+
+  async function finishTask(type, data = {}) {
+    if (!current || current.closed || current.finishing) return;
+    const task = current;
+    task.finishing = true;
+    await appendEvent("pi_finished", {
+      state: data.state ?? type,
+      exitCode: data.exitCode ?? null,
+      truncated: Boolean(data.truncated),
+      durationMs: Number.isFinite(data.durationMs) ? data.durationMs : null,
+    });
+    let after;
+    try {
+      after = await captureSnapshot();
+    } catch (error) {
+      after = {
+        projectId: task.projectId,
+        repoRoot: task.repoRoot,
+        snapshot: { certainty: "unknown", reason: "after_snapshot_failed", code: error.code ?? "internal_error" },
+      };
+    }
+    const classification = after.snapshot?.certainty === "unknown"
+      ? { certainty: "unknown", reason: after.snapshot.reason, causality: "not_proven", newPaths: [], changedPaths: [], preexistingPaths: [] }
+      : classifySnapshots(task.before, after);
+    await appendEvent("after_snapshot", { ...after, classification });
+    eventQueue = eventQueue.then(() => blackboxStore.closeTask({
+      projectId: task.projectId,
+      taskId: task.taskId,
+      type,
+      data: {
+        state: data.state ?? type,
+        exitCode: data.exitCode ?? null,
+        truncated: Boolean(data.truncated),
+        durationMs: Number.isFinite(data.durationMs) ? data.durationMs : null,
+      },
+    }));
+    await eventQueue;
+    task.closed = true;
+    task.finishing = false;
+    task.state = type;
+    task.exitCode = data.exitCode ?? null;
+    task.durationMs = Number.isFinite(data.durationMs) ? data.durationMs : null;
+    if (unsubscribePi) {
+      try { unsubscribePi(); } catch { /* already unsubscribed */ }
+      unsubscribePi = null;
+    }
+    emit("done", {
+      state: type,
+      exitCode: task.exitCode,
+      truncated: Boolean(data.truncated),
+      durationMs: task.durationMs,
+    });
+  }
+
+  function handlePiEvent(type, data) {
+    if (!current || current.closed) return;
+    if (type === "start") return; // start is recorded once after executor.start resolves
+    if (type === "chunk") {
+      const text = safeText(data?.text);
+      appendEvent("output_chunk", { text }).then(() => emit("chunk", { text })).catch(() => {});
+      return;
+    }
+    if (type === "status") {
+      const payload = { state: typeof data?.state === "string" ? data.state : "unknown" };
+      appendEvent("state_changed", payload).then(() => emit("status", payload)).catch(() => {});
+      return;
+    }
+    if (type === "done") {
+      if (current.completionPromise) return;
+      current.completionPromise = finishTask(terminalForDone(data), data).catch(() => {
+        // Keep the task open only when storage itself has failed; status exposes a safe error.
+        if (current) current.lastError = { code: "evidence_write_failed", retryable: true };
+      });
+    }
+  }
+
+  async function start(rawTask) {
+    if (!piExecutor) throw new TaskEvidenceError("internal_error", { retryable: true });
+    if (current && !current.closed && ["creating", "running", "stopping"].includes(current.state)) {
+      throw new TaskEvidenceError("busy");
+    }
+    if (typeof rawTask !== "string" || !rawTask.trim() || rawTask.length > 4000 || rawTask.includes("\u0000")) {
+      throw new TaskEvidenceError("invalid_task");
+    }
+    const before = await captureSnapshot();
+    const taskId = createTaskId();
+    const task = {
+      taskId,
+      runId: null,
+      projectId: before.projectId,
+      repoRoot: before.repoRoot,
+      before,
+      state: "creating",
+      startedAt: new Date(now()).toISOString(),
+      exitCode: null,
+      durationMs: null,
+      closed: false,
+      events: [],
+      lastError: null,
+      finishing: false,
+    };
+    current = task;
+    try {
+      await blackboxStore.beginTask({
+        projectId: task.projectId,
+        taskId: task.taskId,
+        data: {
+          runId: null,
+          task: safeText(rawTask),
+          projectId: task.projectId,
+          repoRoot: task.repoRoot,
+          before: task.before,
+        },
+      });
+      await appendEvent("before_snapshot", task.before);
+    } catch (error) {
+      current = null;
+      throw error;
+    }
+    try {
+      const runId = await piExecutor.start(rawTask);
+      task.runId = typeof runId === "string" ? runId : null;
+      task.state = "running";
+      await appendEvent("pi_started", { runId: task.runId, startedAt: task.startedAt });
+      emit("start", { runId: task.runId, startedAt: task.startedAt });
+      unsubscribePi = piExecutor.subscribe(handlePiEvent);
+      // A very short Pi process may have completed before subscribe; replay is intentional.
+      const status = await piExecutor.getStatus();
+      if (status?.state === "exited" || status?.state === "stopped" || status?.state === "error") {
+        task.state = status.state === "error" ? "failed" : status.state;
+        if (task.completionPromise) await task.completionPromise;
+      }
+      return task.runId;
+    } catch (error) {
+      task.state = "failed";
+      task.lastError = { code: error?.code ?? "spawn_failed", retryable: error?.retryable === true };
+      await appendEvent("state_changed", { state: "failed", code: task.lastError.code });
+      await eventQueue;
+      await blackboxStore.closeTask({
+        projectId: task.projectId,
+        taskId: task.taskId,
+        type: "failed",
+        data: task.lastError,
+      });
+      task.closed = true;
+      throw error;
+    }
+  }
+
+  async function stop() {
+    if (!piExecutor) throw new TaskEvidenceError("internal_error", { retryable: true });
+    const status = await piExecutor.stop();
+    if (current && !current.closed && !current.finishing && status?.state === "stopped") {
+      current.completionPromise = finishTask("stopped", status);
+      await current.completionPromise;
+    } else if (current?.completionPromise) {
+      await current.completionPromise;
+    }
+    return getStatus();
+  }
+
+  async function getStatus() {
+    const base = piExecutor ? await piExecutor.getStatus() : null;
+    if (!current) return base ? { ...safePayload(base), taskId: null, projectId: null } : { state: "idle", taskId: null, projectId: null };
+    if (current.completionPromise) await current.completionPromise;
+    await eventQueue;
+    const clean = base ? safePayload(base) : {};
+    return {
+      ...clean,
+      state: current.closed ? current.state : (clean.state ?? current.state),
+      runId: current.runId ?? clean.runId ?? null,
+      taskId: current.taskId,
+      projectId: current.projectId,
+      startedAt: current.startedAt,
+      exitCode: current.closed ? current.exitCode : (clean.exitCode ?? null),
+      durationMs: current.closed ? current.durationMs : (clean.durationMs ?? null),
+      task: safeText(clean.task ?? null),
+      output: safeText(clean.output ?? ""),
+      lastError: current.lastError ?? (clean.lastError ? { code: clean.lastError.code, retryable: Boolean(clean.lastError.retryable) } : null),
+    };
+  }
+
+  function subscribe(listener) {
+    if (typeof listener !== "function") return () => {};
+    if (current) for (const event of current.events) {
+      try { listener(event.type, event.data); } catch { /* isolated */ }
+    }
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }
+
+  async function recoverIncomplete() {
+    const recovered = await blackboxStore.recoverIncomplete();
+    if (current && !current.closed) current = null;
+    return recovered;
+  }
+
+  return {
+    captureSnapshot,
+    classifySnapshots,
+    start,
+    stop,
+    getStatus,
+    subscribe,
+    recoverIncomplete,
+  };
+}
