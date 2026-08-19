@@ -62,17 +62,17 @@ function createService(overrides = {}) {
   };
 }
 
-function setup(service = createService()) {
+function setup(service = createService(), aiHandoff = null) {
   const app = new FakeApp();
-  projectRoutes(app, { projectBoundary: service });
+  projectRoutes(app, { projectBoundary: service, aiHandoff });
   return { app, service };
 }
 
-async function invoke(app, key, { body } = {}) {
+async function invoke(app, key, { body, query } = {}) {
   const handler = app.routes.get(key);
   assert.ok(handler, `route ${key} must be registered`);
   const res = new FakeResponse();
-  await handler({ body }, res);
+  await handler({ body, query }, res);
   return res;
 }
 
@@ -86,9 +86,44 @@ test("registers the five project endpoints", () => {
     "POST /api/project/activate",
     "POST /api/project/refresh",
     "POST /api/project/clear",
+    "POST /api/project/handoff/enable",
+    "GET /api/project/handoff/status",
   ]) {
     assert.ok(app.routes.has(key), `${key} missing`);
   }
+});
+
+test("handoff enable route requires explicit writer and persists only safe fields", async () => {
+  const calls = { enable: [], boundary: [] };
+  const service = createService({
+    async enableHandoff(id, metadata) {
+      calls.boundary.push({ id, metadata });
+      return { ...SAFE_PROJECT, handoff: { enabled: true, enabledAt: "2026-08-20T00:00:00.000Z", currentPath: "docs/ai-ops/NOW.md", recordsPath: "docs/ai-ops/records", agentsPointer: true, secret: "no" } };
+    },
+  });
+  const writer = {
+    async enableProject(input) { calls.enable.push(input); return { status: "enabled", agentsPointer: true, paths: { current: "docs/ai-ops/NOW.md", records: "docs/ai-ops/records" } }; },
+  };
+  const { app } = setup(service, writer);
+  const res = await invoke(app, "POST /api/project/handoff/enable", { body: { id: SAFE_PROJECT.id } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.ok, true);
+  assert.equal(res.body.handoff.enabled, true);
+  assert.ok(!JSON.stringify(res.body).includes("secret"));
+  assert.deepEqual(calls.enable, [{ repoRoot: SAFE_PROJECT.repoRoot, allowAgentsPointer: true }]);
+  assert.deepEqual(calls.boundary, [{ id: SAFE_PROJECT.id, metadata: { agentsPointer: true } }]);
+});
+
+test("handoff status is safe and supports active-project fallback", async () => {
+  const service = createService({
+    async getHandoff(id) {
+      assert.equal(id, undefined);
+      return { enabled: true, enabledAt: "2026-08-20T00:00:00.000Z", currentPath: "docs/ai-ops/NOW.md", recordsPath: "docs/ai-ops/records", secret: "drop" };
+    },
+  });
+  const { app } = setup(service);
+  const res = await invoke(app, "GET /api/project/handoff/status", { query: {} });
+  assert.deepEqual(res.body.handoff, { enabled: true, enabledAt: "2026-08-20T00:00:00.000Z", currentPath: "docs/ai-ops/NOW.md", recordsPath: "docs/ai-ops/records" });
 });
 
 test("GET status returns the project list and activeProjectId", async () => {

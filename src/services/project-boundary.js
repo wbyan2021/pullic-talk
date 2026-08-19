@@ -129,7 +129,7 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
   }
 
   function buildPayload(record, stale) {
-    return {
+    const payload = {
       id: record.id,
       inputPath: record.inputPath,
       resolvedPath: record.resolvedPath,
@@ -139,6 +139,8 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
       inspection: record.lastInspection,
       selectionSnapshotAt: record.selectedAt,
     };
+    if (record.handoff) payload.handoff = { ...record.handoff };
+    return payload;
   }
 
   async function getStatus() {
@@ -245,5 +247,30 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
     return { removed: true, id: record.id };
   }
 
-  return { getStatus, select, setActive, refresh, clear };
+  async function enableHandoff(id, metadata = {}) {
+    await ensureLoaded();
+    const record = resolveId(id);
+    const enabledAt = new Date(now()).toISOString();
+    record.handoff = {
+      enabled: true,
+      enabledAt,
+      currentPath: "docs/ai-ops/NOW.md",
+      recordsPath: "docs/ai-ops/records",
+      ...metadata,
+    };
+    try {
+      await persist();
+    } catch {
+      throw new ProjectBoundaryError("internal_error", { retryable: true });
+    }
+    return buildPayload(record, false);
+  }
+
+  async function getHandoff(id) {
+    await ensureLoaded();
+    const record = resolveId(id);
+    return record.handoff ? { ...record.handoff } : null;
+  }
+
+  return { getStatus, select, setActive, refresh, clear, enableHandoff, getHandoff };
 }

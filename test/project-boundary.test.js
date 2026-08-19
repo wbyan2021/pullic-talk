@@ -225,6 +225,24 @@ test("setActive with unknown id rejects project_not_found", async (t) => {
   assert.equal(await rejectCode(service.setActive("000000000000")), "project_not_found");
 });
 
+test("handoff enablement is explicit, persisted, and absent after selection alone", async (t) => {
+  const { service, statePath, dir } = makeBoundary(t);
+  const repo = makeRepo(t);
+  const selected = await service.select(repo);
+  assert.ok(!("handoff" in (await service.getStatus()).projects[0]));
+  await service.setActive(selected.id);
+  const enabled = await service.enableHandoff();
+  assert.equal(enabled.handoff.enabled, true);
+  assert.equal(enabled.handoff.currentPath, "docs/ai-ops/NOW.md");
+  assert.equal((await service.getHandoff()).enabled, true);
+
+  const restarted = createProjectBoundary({ inspector: createGitInspector(), statePath });
+  const status = await restarted.getStatus();
+  assert.equal(status.active.handoff.enabled, true);
+  assert.equal(status.active.handoff.recordsPath, "docs/ai-ops/records");
+  assert.ok(dir);
+});
+
 // ── refresh ──
 
 test("refresh without active project and without id rejects no_project_selected", async (t) => {

@@ -11,6 +11,7 @@
 // - 响应字段白名单，服务层多余字段一律丢弃。
 // ─────────────────────────────────────────────────────────────
 import { ProjectBoundaryError } from "../services/project-boundary.js";
+import { AiHandoffError } from "../services/ai-handoff.js";
 
 // code → [message, action, retryable]
 const ERROR_INFO = {
@@ -26,6 +27,12 @@ const ERROR_INFO = {
   git_unavailable: ["找不到本机 git 命令。", "安装 Xcode Command Line Tools 后重试", false],
   git_timeout: ["git 识别超时，仓库可能过大或磁盘繁忙。", "稍后重试", true],
   git_failed: ["git 返回了驾驶舱无法识别的结果。", "稍后重试，持续失败请检查仓库完整性", true],
+  handoff_conflict: ["项目已有未受控的交接文件，未覆盖原内容。", "先人工处理冲突文件后重试", false],
+  agents_pointer_confirmation_required: ["项目入口文件未授权写入交接指针。", "确认后再次启用 AI 交接记录", false],
+  record_exists: ["该任务的历史交接记录已存在，系统不会覆盖。", "使用新的任务标识或读取现有记录", false],
+  invalid_project: ["项目边界无效。", "重新选择活动项目", false],
+  invalid_task_id: ["任务标识无效。", "刷新页面后重试", false],
+  io_error: ["交接文件写入失败。", "检查项目权限后重试", true],
   internal_error: ["项目服务暂时不可用，请重新加载后重试。", "重新加载页面", true],
 };
 
@@ -42,6 +49,12 @@ const SAFE_HTTP_STATUS = {
   git_unavailable: 424,
   git_timeout: 504,
   git_failed: 502,
+  handoff_conflict: 409,
+  agents_pointer_confirmation_required: 409,
+  record_exists: 409,
+  invalid_project: 400,
+  invalid_task_id: 400,
+  io_error: 502,
 };
 
 const UNKNOWN_ERROR = {
@@ -85,17 +98,24 @@ function safeInspection(inspection) {
 
 const PROJECT_FIELDS = [
   "id", "inputPath", "resolvedPath", "repoRoot",
-  "selectedAt", "stale", "inspection", "selectionSnapshotAt",
+  "selectedAt", "stale", "inspection", "selectionSnapshotAt", "handoff",
 ];
+
+function safeHandoff(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  return pick(payload, ["enabled", "enabledAt", "currentPath", "recordsPath", "agentsPointer"]);
+}
 
 function safeProject(payload) {
   const clean = pick(payload, PROJECT_FIELDS);
   clean.inspection = safeInspection(payload?.inspection);
+  if (payload && payload.handoff) clean.handoff = safeHandoff(payload.handoff);
+  else delete clean.handoff;
   return clean;
 }
 
 function sendError(res, error) {
-  if (!(error instanceof ProjectBoundaryError) || !SAFE_HTTP_STATUS[error.code]) {
+  if (!(error instanceof ProjectBoundaryError || error instanceof AiHandoffError) || !SAFE_HTTP_STATUS[error.code]) {
     return res.status(500).json(UNKNOWN_ERROR);
   }
   const [message, action, retryable] = ERROR_INFO[error.code] ?? ERROR_INFO.internal_error;
@@ -120,7 +140,7 @@ function optionalId(body) {
   return body.id;
 }
 
-export default function projectRoutes(app, { projectBoundary }) {
+export default function projectRoutes(app, { projectBoundary, aiHandoff = null }) {
   if (!projectBoundary) throw new TypeError("projectBoundary is required");
 
   app.get("/api/project/status", async (_req, res) => {
@@ -176,6 +196,36 @@ export default function projectRoutes(app, { projectBoundary }) {
       res.json({ ok: true });
     } catch (error) {
       sendError(res, error);
+    }
+  });
+
+  // 写入交接入口必须由用户显式点击触发；选择项目本身不会启用它。
+  app.post("/api/project/handoff/enable", async (req, res) => {
+    if (!aiHandoff) return sendError(res, new AiHandoffError("internal_error", { retryable: true }));
+    const id = optionalId(req.body);
+    if (id === "invalid") return sendInvalidId(res);
+    try {
+      const status = await projectBoundary.getStatus();
+      const target = id === undefined
+        ? status?.active
+        : (Array.isArray(status?.projects) ? status.projects.find((project) => project.id === id) : null);
+      if (!target) throw new ProjectBoundaryError(id === undefined ? "no_project_selected" : "project_not_found");
+      const enabled = await aiHandoff.enableProject({ repoRoot: target.repoRoot, allowAgentsPointer: true });
+      const payload = await projectBoundary.enableHandoff(id, { agentsPointer: enabled.agentsPointer === true });
+      return res.json({ ok: true, project: safeProject(payload), handoff: safeHandoff(payload.handoff) });
+    } catch (error) {
+      return sendError(res, error);
+    }
+  });
+
+  app.get("/api/project/handoff/status", async (req, res) => {
+    const id = typeof req.query?.id === "string" && req.query.id.trim() ? req.query.id : undefined;
+    try {
+      if (typeof projectBoundary.getHandoff !== "function") return res.json({ ok: true, handoff: null });
+      const handoff = await projectBoundary.getHandoff(id);
+      return res.json({ ok: true, handoff: safeHandoff(handoff) });
+    } catch (error) {
+      return sendError(res, error);
     }
   });
 }
