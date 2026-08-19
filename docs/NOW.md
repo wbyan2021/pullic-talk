@@ -4,19 +4,19 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: design
-current_slice: S03-pi-controlled-run
-slice_status: done
-work_branch: none
-base_commit: 8a72e99
+stage: plan
+current_slice: S04-evidence-and-blackbox
+slice_status: ready
+work_branch: codex/v0.1-s04-ai-handoff-blackbox
+base_commit: 71f9bf9
 risk_level: high
 last_verified_commit: 13966b5
-updated: 2026-08-18
+updated: 2026-08-20
 ---
 
 # 当前版本：v0.1 · 第一次可控任务
 
-> S01、S02、S02b、S03 均已通过用户验收并合并入 `main`。最新的项目列表专注折叠 UI 也已由用户确认正常；当前没有 active 切片，下一步进入 S04「证据与黑匣子」设计。
+> S01、S02、S02b、S03 均已通过用户验收并合并入 `main`。S04「证据与黑匣子」设计与实现计划已获用户确认；唯一工作分支已准备，产品代码从下一步开始。
 
 ## 产品基线
 
@@ -59,7 +59,7 @@ updated: 2026-08-18
 
 ## 风险等级与验证策略
 
-**当前没有 active 切片。** S02b 与 S03 的风险与验收记录保留在下方历史段落；S04 尚未完成设计和风险分级，不能直接开工。
+**当前 S04 已达到 Ready，尚未开始产品代码。** S01–S03 的风险与验收记录保留在下方历史段落；S04 进入 high 风险实现前，必须按计划完成安全、失败路径和真实验收证据。
 
 | 依赖 | 风险 | 当前证据 | 后续最小验证 |
 |---|---|---|---|
@@ -69,6 +69,7 @@ updated: 2026-08-18
 | 本机 Shell 与子进程 | 继承当前用户权限，不是真正沙箱 | 当前已有 node-pty 和命令启动能力 | 明确工作目录、子进程归属、暂停与终止语义 |
 | Git 工作区 | 用户可能已有分支、未提交改动和未跟踪文件 | 当前仓库本身已有未知改动 | S02 先验证只读识别和保护策略 |
 | 自动化验证 | 暂无 CI 和 lint，外部服务不能由 Mock 代替 | 当前 HEAD `13966b5` 上 163 项默认测试、12/12 macOS 无写入探针、语法、差异、严格状态校验通过；隔离端口健康与禁改路径审计仍是切片验证要求 | S04 设计时重新定义证据与回归范围；后续版本再评估 CI |
+| S04 项目交接写入与验收命令 | high | 设计稿与实现计划已获用户确认；目标项目写入和命令执行尚未实现 | 仅在用户启用交接并确认 argv-only 命令后执行；完成脱敏、恢复、负面路径和真实项目验收 |
 | 默认端口 3210 | 曾被 7 月 31 日的旧实例占用 | 2026-08-06 经用户授权结束旧实例（PID 25068），S01 合并后的服务已在 3210 正常运行 | 无需进一步处理 |
 
 验证深度：
@@ -96,7 +97,7 @@ updated: 2026-08-18
 | S02 | Git 项目安全边界 | 选择项目后识别并保护现有工作区状态            | done |
 | S02b | 多项目并行管理 | 可同时录入多个 Git 项目，列表查看、刷新、移除，并指定活动项目 | done   |
 | S03 | Pi 受控运行    | Pi 只在活动项目内启动，并可暂停、继续、终止        | done   |
-| S04 | 证据与黑匣子     | 可查看状态时间线、文件变化和验收证据           | pending   |
+| S04 | 证据与黑匣子     | 可查看状态时间线、文件变化和验收证据           | ready   |
 | S05 | 恢复与总览闭环    | 可恢复到检查点，并从总仪表完成整条任务          | pending   |
 
 ## 代码工作区
@@ -104,14 +105,58 @@ updated: 2026-08-18
 - 代码地图：[CODEMAP.md](CODEMAP.md)
 - 稳定分支：`main`
 - 稳定基线：`8a72e99`（S01 + S02 + S02b + S03 均已 fast-forward 合并入 main）
-- 产品工作分支：无；S04 达到 Ready 后从新基线创建
+- 产品工作分支：`codex/v0.1-s04-ai-handoff-blackbox`（自 `main` 当前文档基线 `71f9bf9` 创建）
 - 依赖检查：`npm ls --depth=0`
 - 语法检查：`git ls-files '*.js' | xargs -n1 node --check`
 - 自动化测试：`npm test`
 - 健康检查：`PORT=43211 npm start` 后访问 `/api/health`
-- 当前状态：S03 已合并入 main（基线 `8a72e99`）并删除工作分支；后续维护与 UI 插播已合并到当前 HEAD `13966b5`；`npm test` 163/163、语法检查、差异检查与严格状态校验均通过；本地 main 领先 `origin/main`，是否推送由用户决定。
+- 当前状态：S03 已合并入 main（产品代码验证基线 `13966b5`）；S04 设计稿与实现计划已提交，当前 Ready 分支从文档基线 `71f9bf9` 创建；产品代码尚未修改；上一轮 `npm test` 163/163、语法检查、差异检查与严格状态校验均通过；本地 main 领先 `origin/main`，是否推送由用户决定。
 
 ## 当前切片
+
+### S04 · 证据与黑匣子（ready，2026-08-20）
+
+### 目标
+
+让下一次接手项目的 Codex/Pi 能读取严格的 AI 交接记录；产品本地黑匣子保存脱敏的任务事件，项目内保存当前交接和不可覆盖的历史记录。
+
+### 验收标准
+
+- [ ] 任务开始/结束有 Git 前后快照，既有改动与运行窗口内变化分开记录。
+- [ ] Pi 的开始、输出、状态、结束、停止、失败和中断事件可追溯。
+- [ ] 用户确认的 argv-only 验收命令记录真实退出码；未运行明确标为 `not_run`。
+- [ ] `verified`、`user_confirmed`、`agent_reported`、`recorded_not_reverified`、`unknown` 严格分层。
+- [ ] `docs/ai-ops/NOW.md` 与 `docs/ai-ops/records/` 脱敏、原子写入、历史不可覆盖。
+- [ ] Key、Token、密码、私钥、环境变量和未脱敏 stderr 不进入项目文件、黑匣子或日志。
+- [ ] 失败、停止、中断和证据不足的任务仍有唯一下一步，不能伪装为完成。
+- [ ] 用户在临时真实 Git 项目中完成一次端到端验收；S03、护航、群聊、终端和安装回归通过。
+
+### 明确不做
+
+- 不做 Pi 会话续传、多任务并发、自动 Git 提交/合并/推送/回滚。
+- 不保存完整原始终端日志，不从 Agent 自述推断测试通过，不自动猜测项目进度。
+- 不改写护航、群聊、终端、安装主链路和现有 Node/Express/WebSocket/SSE/node-pty 技术栈。
+
+### 允许修改范围
+
+- 新增本地黑匣子、脱敏、任务证据、验收命令和 AI 交接服务及测试。
+- 扩展 `src/server.js`、`src/routes/execution.js`、项目路由/边界、项目执行 UI 和对应测试。
+- 更新 `.gitignore`、`docs/NOW.md`、`docs/PRODUCT.md`、`docs/CODEMAP.md`。
+- 不碰 `.token`、真实 `.env`、`tools.json`、`projects.local.json.bak`、`public/vendor/`、群聊和护航主链路。
+
+### Definition of Ready
+
+- [x] 产品基线已接受，目标、范围、非目标和 high 风险已确认。
+- [x] 设计稿已获用户审阅（`docs/superpowers/specs/2026-08-19-s04-ai-handoff-blackbox-design.md`）。
+- [x] 实现计划已产出并提交（`docs/plans/2026-08-20-s04-ai-handoff-blackbox-implementation.md`）。
+- [x] 目标项目写入需显式启用，验收命令需用户确认，产品不自动提交 Git。
+- [x] 现有未跟踪备份已识别并保护：`projects.local.json.bak` 不读取、不暂存、不删除。
+- [x] 唯一工作分支名称已确定：`codex/v0.1-s04-ai-handoff-blackbox`。
+- [x] 测试、脱敏、恢复、失败路径、安全审查和真实验收策略已列入计划。
+
+### 唯一下一步
+
+从 S04 工作分支开始 Task 2：先写 `safe-redactor` 失败测试，确认敏感内容不会落盘。
 
 ### S02b · 多项目并行管理（done，2026-08-12 用户验收通过）
 
