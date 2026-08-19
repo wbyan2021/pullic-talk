@@ -4,19 +4,19 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: plan
+stage: review
 current_slice: S04-evidence-and-blackbox
-slice_status: ready
+slice_status: active
 work_branch: codex/v0.1-s04-ai-handoff-blackbox
 base_commit: 71f9bf9
 risk_level: high
-last_verified_commit: 13966b5
+last_verified_commit: 4fbdbea
 updated: 2026-08-20
 ---
 
 # 当前版本：v0.1 · 第一次可控任务
 
-> S01、S02、S02b、S03 均已通过用户验收并合并入 `main`。S04「证据与黑匣子」设计与实现计划已获用户确认；唯一工作分支已准备，产品代码从下一步开始。
+> S01、S02、S02b、S03 均已通过用户验收并合并入 `main`。S04 已完成实现与自动化验证，当前处于 review，等待用户在本地页面完成一次真实验收后再收口。
 
 ## 产品基线
 
@@ -59,7 +59,7 @@ updated: 2026-08-20
 
 ## 风险等级与验证策略
 
-**当前 S04 已达到 Ready，尚未开始产品代码。** S01–S03 的风险与验收记录保留在下方历史段落；S04 进入 high 风险实现前，必须按计划完成安全、失败路径和真实验收证据。
+**当前 S04 已完成候选实现，处于 review。** S01–S03 的风险与验收记录保留在下方历史段落；S04 的自动化、脱敏、恢复和临时真实 Git 项目闭环已验证，仍需用户在 `43211` 隔离端口完成页面验收。
 
 | 依赖 | 风险 | 当前证据 | 后续最小验证 |
 |---|---|---|---|
@@ -68,8 +68,8 @@ updated: 2026-08-20
 | Pi CLI | 登录、模型配置、输出格式和停止行为可能变化 | 当前代码能发现 CLI，但未形成受控任务契约 | S03 前固定版本并做最小真实调用 |
 | 本机 Shell 与子进程 | 继承当前用户权限，不是真正沙箱 | 当前已有 node-pty 和命令启动能力 | 明确工作目录、子进程归属、暂停与终止语义 |
 | Git 工作区 | 用户可能已有分支、未提交改动和未跟踪文件 | 当前仓库本身已有未知改动 | S02 先验证只读识别和保护策略 |
-| 自动化验证 | 暂无 CI 和 lint，外部服务不能由 Mock 代替 | 当前 HEAD `13966b5` 上 163 项默认测试、12/12 macOS 无写入探针、语法、差异、严格状态校验通过；隔离端口健康与禁改路径审计仍是切片验证要求 | S04 设计时重新定义证据与回归范围；后续版本再评估 CI |
-| S04 项目交接写入与验收命令 | high | 设计稿与实现计划已获用户确认；目标项目写入和命令执行尚未实现 | 仅在用户启用交接并确认 argv-only 命令后执行；完成脱敏、恢复、负面路径和真实项目验收 |
+| 自动化验证 | 暂无 CI 和 lint，外部服务不能由 Mock 代替 | 当前候选实现 206/206 默认测试、语法与差异检查通过；含临时真实 Git 项目端到端、恢复、argv-only 命令和跨平台 realpath 校验 | 运行隔离端口健康检查，并由用户完成真实页面验收；后续版本再评估 CI |
+| S04 项目交接写入与验收命令 | high | 已实现显式启用、脱敏原子写入、追加黑匣子、Git 前后快照、Pi 生命周期、argv-only 验收命令、失败/恢复和安全路由 | 用户在本地页面确认一次成功或 needs_review 闭环；确认后才将切片标为 done |
 | 默认端口 3210 | 曾被 7 月 31 日的旧实例占用 | 2026-08-06 经用户授权结束旧实例（PID 25068），S01 合并后的服务已在 3210 正常运行 | 无需进一步处理 |
 
 验证深度：
@@ -97,7 +97,7 @@ updated: 2026-08-20
 | S02 | Git 项目安全边界 | 选择项目后识别并保护现有工作区状态            | done |
 | S02b | 多项目并行管理 | 可同时录入多个 Git 项目，列表查看、刷新、移除，并指定活动项目 | done   |
 | S03 | Pi 受控运行    | Pi 只在活动项目内启动，并可暂停、继续、终止        | done   |
-| S04 | 证据与黑匣子     | 可查看状态时间线、文件变化和验收证据           | ready   |
+| S04 | 证据与黑匣子     | 可查看状态时间线、文件变化和验收证据           | active   |
 | S05 | 恢复与总览闭环    | 可恢复到检查点，并从总仪表完成整条任务          | pending   |
 
 ## 代码工作区
@@ -110,11 +110,11 @@ updated: 2026-08-20
 - 语法检查：`git ls-files '*.js' | xargs -n1 node --check`
 - 自动化测试：`npm test`
 - 健康检查：`PORT=43211 npm start` 后访问 `/api/health`
-- 当前状态：S03 已合并入 main（产品代码验证基线 `13966b5`）；S04 设计稿与实现计划已提交，当前 Ready 分支从文档基线 `71f9bf9` 创建；产品代码尚未修改；上一轮 `npm test` 163/163、语法检查、差异检查与严格状态校验均通过；本地 main 领先 `origin/main`，是否推送由用户决定。
+- 当前状态：S03 已合并入 main；S04 候选实现位于 `codex/v0.1-s04-ai-handoff-blackbox`，当前 HEAD `4fbdbea`；`npm test` 206/206、S04 临时 Git 端到端 2/2、语法检查和差异检查已通过；严格状态校验待文档收口后重跑；本地 main 领先 `origin/main`，是否推送由用户决定。
 
 ## 当前切片
 
-### S04 · 证据与黑匣子（ready，2026-08-20）
+### S04 · 证据与黑匣子（review，2026-08-20）
 
 ### 目标
 
@@ -129,7 +129,8 @@ updated: 2026-08-20
 - [ ] `docs/ai-ops/NOW.md` 与 `docs/ai-ops/records/` 脱敏、原子写入、历史不可覆盖。
 - [ ] Key、Token、密码、私钥、环境变量和未脱敏 stderr 不进入项目文件、黑匣子或日志。
 - [ ] 失败、停止、中断和证据不足的任务仍有唯一下一步，不能伪装为完成。
-- [ ] 用户在临时真实 Git 项目中完成一次端到端验收；S03、护航、群聊、终端和安装回归通过。
+- [x] 临时真实 Git 项目端到端验证已完成；S03、护航、群聊、终端和安装回归纳入 `npm test` 并通过。
+- [ ] 用户在本地页面完成一次端到端验收（建议 `PORT=43211 npm start`，确认时间线、Git 证据、验证命令、AI 交接和 needs_review 失败路径）。
 
 ### 明确不做
 
@@ -154,9 +155,24 @@ updated: 2026-08-20
 - [x] 唯一工作分支名称已确定：`codex/v0.1-s04-ai-handoff-blackbox`。
 - [x] 测试、脱敏、恢复、失败路径、安全审查和真实验收策略已列入计划。
 
+### 需求—证据映射
+
+| 需求 | 实现与证据 | 当前结论 |
+|---|---|---|
+| 任务时间线与 Pi 生命周期 | `src/services/task-evidence.js`、`src/services/blackbox-store.js`；`test/task-evidence.test.js`、`test/s04-integration.test.js` | 自动化 verified |
+| Git 前后快照与文件分类 | `src/services/task-evidence.js`、`src/services/git-inspector.js`；S04 临时 Git 项目含 pre-existing/new 变化 | 自动化 verified |
+| argv-only 验收命令 | `src/services/validation-runner.js`、`src/routes/evidence.js`；shell=false、活动项目 cwd、审批、超时、输出上限 | 自动化 verified，待页面验收 |
+| 脱敏、原子当前交接、追加历史 | `src/services/safe-redactor.js`、`src/services/ai-handoff.js`；`docs/ai-ops/NOW.md` 与 `records/` | 自动化 verified |
+| 失败、停止、中断和证据不足 | 统一 error code、`needs_review`、黑匣子恢复；未运行验证不可 accepted | 自动化 verified |
+
+### 最近交接
+
+- 最近一次候选实现：S04 evidence/blackbox/handoff 全链路已写入分支；当前未宣称用户验收完成。
+- 交接读取顺序：先读本文件，再读 `docs/PRODUCT.md`、`docs/CODEMAP.md`，最后读项目内 `docs/ai-ops/NOW.md` 与其 `latest_record`。
+
 ### 唯一下一步
 
-从 S04 工作分支开始 Task 2：先写 `safe-redactor` 失败测试，确认敏感内容不会落盘。
+用户在隔离端口 `43211` 打开项目页面，完成一次真实 S04 验收：启用 AI 交接 → 启动 Pi 任务 → 查看时间线/Git 变化 → 预览并批准 argv-only 验收命令 → 关闭为 accepted 或 needs_review。确认结果后再更新本文件并提交最终 docs 记录。
 
 ### S02b · 多项目并行管理（done，2026-08-12 用户验收通过）
 

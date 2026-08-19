@@ -1,6 +1,7 @@
 "use strict";
 
 import { spawn } from "node:child_process";
+import { realpath } from "node:fs/promises";
 import path from "node:path";
 
 import { REDACTION_MARKER, redactText } from "./safe-redactor.js";
@@ -74,14 +75,28 @@ export function createValidationRunner({
     return active;
   }
 
-  function resolveCwd(cwd, repoRoot) {
+  async function resolveCwd(cwd, repoRoot) {
     if (cwd === undefined || cwd === null || cwd === ".") return repoRoot;
     if (typeof cwd !== "string" || cwd.trim().length === 0 || cwd.includes("\u0000")) {
       throw new ValidationRunnerError("cwd_not_active_project");
     }
-    const resolved = path.resolve(cwd);
-    if (resolved !== path.resolve(repoRoot)) throw new ValidationRunnerError("cwd_not_active_project");
-    return resolved;
+    try {
+      const requestedPath = path.resolve(cwd);
+      const activePath = path.resolve(repoRoot);
+      const resolveExisting = async (value) => {
+        try { return await realpath(value); } catch { return null; }
+      };
+      const [resolved, activeRoot] = await Promise.all([resolveExisting(requestedPath), resolveExisting(activePath)]);
+      if (resolved && activeRoot) {
+        if (resolved !== activeRoot) throw new ValidationRunnerError("cwd_not_active_project");
+        return resolved;
+      }
+      if (requestedPath !== activePath) throw new ValidationRunnerError("cwd_not_active_project");
+      return requestedPath;
+    } catch (error) {
+      if (error instanceof ValidationRunnerError) throw error;
+      throw new ValidationRunnerError("cwd_not_active_project");
+    }
   }
 
   async function run(input = {}) {
@@ -89,7 +104,7 @@ export function createValidationRunner({
     if (input.approvedByUser !== true) throw new ValidationRunnerError("approval_required");
     validateCommand(input);
     const active = await activeProject();
-    const cwd = resolveCwd(input.cwd, active.repoRoot);
+    const cwd = await resolveCwd(input.cwd, active.repoRoot);
     const startedAtMs = now();
     const task = { proc: null, stopping: false, timedOut: false, settled: false };
     current = task;
@@ -179,4 +194,3 @@ export function createValidationRunner({
 
   return { run, stop };
 }
-
