@@ -3,7 +3,7 @@ type: codemap
 project: AI·OPS COCKPIT
 status: active
 workflow_version: 4
-updated: 2026-08-20
+updated: 2026-08-21
 ---
 
 # AI·OPS COCKPIT · 代码地图
@@ -23,7 +23,7 @@ updated: 2026-08-20
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
 - 稳定基线：`8a72e99`
-- 当前验证基线：依赖完整；208 项默认测试（含 S04 临时真实 Git 端到端、恢复与停止后 SSE 收口）通过；语法和差异检查通过；隔离端口健康检查待用户本轮验收；没有 lint、CI 或 build 脚本。
+- 当前验证基线：依赖完整；210 项默认测试（含 S04 临时真实 Git 端到端、恢复与停止后 SSE 收口、活动项目 Pi 面板挂载与切换回归）通过；语法和差异检查通过；隔离端口健康检查待用户本轮验收；没有 lint、CI 或 build 脚本。
 
 ## 关键路径
 
@@ -48,7 +48,8 @@ updated: 2026-08-20
 | `src/services/project-boundary.js` | 项目选择状态机、`projects.local.json` 持久化与失效检测 | 项目领域层 |
 | `src/services/pi-executor.js` | Pi 受控执行：auth 检查、spawn（cwd=活动项目）、NDJSON 流式解析、停止、超时与进程清理 | 执行适配层 |
 | `src/routes/execution.js` | Pi 运行状态、SSE 启动流与停止的认证 HTTP 契约 | 执行应用层 |
-| `public/js/execution.js`、`public/css/execution.css` | 项目 view 内 Pi 运行面板：风险确认、流式输出、停止与状态灯 | 执行表现层 |
+| `public/js/project.js`、`public/css/project.css` | 多项目列表、活动项目切换，以及单一 Pi 面板的项目卡片挂载 | 项目表现层 |
+| `public/js/execution.js`、`public/css/execution.css` | 项目 view 内 Pi 运行面板：风险确认、流式输出、停止、状态灯，并随活动项目变化刷新边界 | 执行表现层 |
 | `src/services/safe-redactor.js` | Key、Token、密码、私钥、Bearer 和环境变量形态的统一脱敏 | 安全边界 |
 | `src/services/blackbox-store.js` | 项目外追加式 JSONL 事件、终态、恢复和截断行容错 | 黑匣子领域层 |
 | `src/services/task-evidence.js` | Pi 生命周期、Git 前后快照、文件变化分类、验证和验收状态协调 | 黑匣子领域层 |
@@ -79,7 +80,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 | 扫描工具 | `npm run scan` | 本轮未执行；会更新本地 `tools.json` |
 | 完整安装引导 | `npm run setup` | 本轮未执行；包含环境检查、安装和扫描 |
 | JavaScript 语法检查 | `git ls-files '*.js' | xargs -n1 node --check` | 初始化 28 个文件通过；S01 新增/装配文件再次通过 |
-| 自动化测试 | `npm test` | 206 项通过；S04 临时真实 Git 端到端 2/2 通过；`RUN_MACOS_KEYCHAIN_PROMPT_PROBE=1 node --test test/credential-store.test.js` 为可选 12/12 无写入 macOS 探针 |
+| 自动化测试 | `npm test` | 210 项通过；S04 临时真实 Git 端到端 2/2 通过；`RUN_MACOS_KEYCHAIN_PROMPT_PROBE=1 node --test test/credential-store.test.js` 为可选 12/12 无写入 macOS 探针 |
 | lint | 未配置 | 不可用 |
 | build | 无需前端构建，且未配置 build 脚本 | 不适用 |
 
@@ -158,7 +159,7 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 
 ## 已知工程缺口
 
-- 已有 208 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
+- 已有 210 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
 - `public/js/chat.js` 体量较大，修改容易产生跨功能回归。
 - Agent 默认工作目录是用户主目录，不具备项目级 Workspace 边界。
 - 默认端口 `3210` 曾被早于 S01 的旧实例占用；2026-08-06 已查明并经用户授权结束，现运行 S01 合并后的代码。
