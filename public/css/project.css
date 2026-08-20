@@ -170,6 +170,12 @@
   margin-top: 14px;
 }
 
+.project-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .project-card-head {
   display: flex;
   align-items: center;

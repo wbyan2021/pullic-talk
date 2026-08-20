@@ -16,6 +16,12 @@
   padding: 18px 20px 40px;
 }
 
+.project-stack > #execution-panel {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
 .exec-root {
   display: flex;
   flex-direction: column;

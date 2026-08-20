@@ -80,6 +80,7 @@ test("project.js mounts one execution panel below the active project only", () =
   assert.ok(PROJECT_JS.includes("project-stack"), "active project needs a card + execution stack");
   assert.ok(PROJECT_JS.includes("project.id === state.activeProjectId"), "panel mount must follow the active project id");
   assert.ok(PROJECT_JS.includes('ops:active-project-changed'), "project changes must notify the execution view");
+  assert.match(PROJECT_CSS, /\.project-stack\s*\{/, "project stack layout missing");
 });
 
 test("project.js requires explicit AI handoff enablement before project writes", () => {

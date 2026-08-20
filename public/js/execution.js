@@ -536,5 +536,9 @@
     }
   }
 
+  window.addEventListener("ops:active-project-changed", () => {
+    loadAll();
+  });
+
   loadAll();
 })();

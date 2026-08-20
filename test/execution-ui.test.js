@@ -55,6 +55,7 @@ test("execution.js leaves the running view when a terminal SSE event arrives", (
 test("execution.js refreshes its boundary when the active project changes", () => {
   assert.ok(EXECUTION_JS.includes('ops:active-project-changed'), "active project event listener missing");
   assert.ok(EXECUTION_JS.includes("loadAll()"), "active project changes must reload server state");
+  assert.match(EXECUTION_CSS, /\.project-stack\s*>\s*#execution-panel/, "embedded panel spacing missing");
 });
 
 test("execution.js consumes SSE via fetch reader + TextDecoder (no EventSource token leakage)", () => {
