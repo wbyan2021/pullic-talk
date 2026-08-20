@@ -52,6 +52,11 @@ test("execution.js leaves the running view when a terminal SSE event arrives", (
   assert.ok(EXECUTION_JS.includes('eventType === "done"'), "terminal SSE event must be handled explicitly");
 });
 
+test("execution.js refreshes its boundary when the active project changes", () => {
+  assert.ok(EXECUTION_JS.includes('ops:active-project-changed'), "active project event listener missing");
+  assert.ok(EXECUTION_JS.includes("loadAll()"), "active project changes must reload server state");
+});
+
 test("execution.js consumes SSE via fetch reader + TextDecoder (no EventSource token leakage)", () => {
   assert.ok(EXECUTION_JS.includes("getReader"), "SSE must be consumed via response.body.getReader()");
   assert.ok(EXECUTION_JS.includes("TextDecoder"), "SSE bytes must be decoded with TextDecoder");
