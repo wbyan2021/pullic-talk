@@ -9,6 +9,7 @@
 (() => {
   const wrap = document.getElementById("project-wrap");
   if (!wrap) return;
+  const executionPanel = document.getElementById("execution-panel");
 
   const state = {
     loading: false,
@@ -41,6 +42,7 @@
   }
 
   async function loadStatus() {
+    const previousActiveProjectId = state.activeProjectId;
     state.loading = true;
     state.error = null;
     render();
@@ -58,6 +60,11 @@
     } finally {
       state.loading = false;
       render();
+      if (state.activeProjectId !== previousActiveProjectId) {
+        window.dispatchEvent(new CustomEvent("ops:active-project-changed", {
+          detail: { activeProjectId: state.activeProjectId },
+        }));
+      }
     }
   }
 
@@ -130,10 +137,19 @@
     } else {
       const list = el("div", "project-list");
       for (const project of state.projects) {
-        list.appendChild(renderProjectCard(project));
+        const stack = el("div", "project-stack");
+        stack.appendChild(renderProjectCard(project));
+        const isActiveProject = project.id === state.activeProjectId;
+        if (isActiveProject && executionPanel) {
+          executionPanel.hidden = false;
+          stack.appendChild(executionPanel);
+        }
+        list.appendChild(stack);
       }
       root.appendChild(list);
     }
+
+    if (!state.activeProjectId && executionPanel) executionPanel.hidden = true;
 
     wrap.appendChild(root);
   }
