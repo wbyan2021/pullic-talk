@@ -11,7 +11,7 @@ work_branch: codex/v0.1-s04-ai-handoff-blackbox
 base_commit: 71f9bf9
 risk_level: high
 last_verified_commit: 5f49eb3
-updated: 2026-08-21
+updated: 2026-08-24
 ---
 
 # 当前版本：v0.1 · 第一次可控任务
@@ -110,7 +110,7 @@ updated: 2026-08-21
 - 语法检查：`git ls-files '*.js' | xargs -n1 node --check`
 - 自动化测试：`npm test`
 - 健康检查：`PORT=43211 npm start` 后访问 `/api/health`
-- 当前状态：S03 已合并入 main；S04 候选实现位于 `codex/v0.1-s04-ai-handoff-blackbox`；活动项目 Pi 面板已完成单节点挂载与切换同步；`npm test` 210/210、S04 临时 Git 端到端 2/2、停止后 SSE 收口回归、语法检查和差异检查已通过；严格状态校验待本轮收尾执行；本地 main 领先 `origin/main`，是否推送由用户决定。
+- 当前状态：S03 已合并入 main；S04 候选实现位于 `codex/v0.1-s04-ai-handoff-blackbox`；活动项目 Pi 面板已完成单节点挂载与切换同步；`npm test` 210/210、S04 临时 Git 端到端 2/2、停止后 SSE 收口回归、语法检查和差异检查已通过；2026-08-24 只读页面检查确认项目页可加载、活动项目有 ACTIVE 标记且 Pi 面板单节点挂载正确；用户高风险验收仍待执行；本地 main 领先 `origin/main`，是否推送由用户决定。
 
 ## 当前切片
 
@@ -170,6 +170,7 @@ updated: 2026-08-21
 
 - 最近一次候选实现：S04 evidence/blackbox/handoff 全链路已写入分支；当前未宣称用户验收完成。
 - 2026-08-21：Pi 执行面板改为复用单一 DOM 节点，仅挂载在活动项目卡片下；切换活动项目后自动刷新执行边界；自动化测试增至 210/210。
+- 2026-08-24：在隔离端口 `43211` 做只读页面检查：项目视图正常加载，活动项目数量 1，`#execution-panel` 数量 1，活动项目下的面板挂载数量 1；未点击启动、停止、AI 交接写入或验收命令。
 - 交接读取顺序：先读本文件，再读 `docs/PRODUCT.md`、`docs/CODEMAP.md`，最后读项目内 `docs/ai-ops/NOW.md` 与其 `latest_record`。
 
 ### 唯一下一步
