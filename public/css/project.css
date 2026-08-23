@@ -8,7 +8,9 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  width: 100%;
   max-width: 860px;
+  box-sizing: border-box;
   margin: 0 auto;
   padding: 22px 20px 40px;
 }

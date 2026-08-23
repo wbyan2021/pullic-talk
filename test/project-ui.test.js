@@ -95,6 +95,8 @@ test("project.js requires explicit AI handoff enablement before project writes",
 test("project.css exists and styles the project view", () => {
   assert.ok(PROJECT_CSS.trim().length > 100, "project.css must not be empty");
   assert.ok(PROJECT_CSS.includes("#project-wrap"), "project.css must style #project-wrap");
+  assert.match(PROJECT_CSS, /#project-wrap[\s\S]*width:\s*100%/, "project view must shrink to narrow viewports");
+  assert.match(PROJECT_CSS, /#project-wrap[\s\S]*box-sizing:\s*border-box/, "project view padding must stay inside its width");
   assert.ok(PROJECT_CSS.includes(".project-list"), "project.css must style the project list");
   assert.ok(PROJECT_CSS.includes(".project-badge.active"), "project.css must style the ACTIVE badge");
   assert.ok(PROJECT_CSS.includes(".project-card.collapsed"), "project.css must style the collapsed card");
