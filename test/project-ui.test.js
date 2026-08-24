@@ -86,6 +86,10 @@ test("project.js mounts one execution panel below the active project only", () =
 test("project.js requires explicit AI handoff enablement before project writes", () => {
   assert.ok(PROJECT_JS.includes("/api/project/handoff/enable"), "handoff enable endpoint missing");
   assert.ok(PROJECT_JS.includes("启用 AI 交接"), "explicit handoff action missing");
+  assert.ok(PROJECT_JS.includes("repair_required"), "stale handoff state handling missing");
+  assert.ok(PROJECT_JS.includes("修复 AI 交接"), "handoff repair action missing");
+  assert.ok(PROJECT_JS.includes("已启用且文件已就绪"), "ready handoff state wording missing");
+  assert.ok(PROJECT_JS.includes("conflict"), "handoff conflict state handling missing");
   assert.ok(PROJECT_JS.includes("交接记录"), "handoff explanation missing");
   assert.ok(!PROJECT_JS.includes("localStorage"));
 });

@@ -341,7 +341,21 @@
     const handoff = project.handoff;
     card.appendChild(el("h4", "project-handoff-title", "AI 交接记录"));
     if (handoff && handoff.enabled) {
-      card.appendChild(el("p", "project-note", "已启用：每次任务完成后，AI 可读取当前状态、历史记录和唯一下一步。"));
+      const handoffState = handoff.state || "repair_required";
+      if (handoffState === "conflict") {
+        card.appendChild(el("p", "project-note warn", "交接文件存在冲突，系统不会覆盖；请先人工处理后再重试。"));
+        card.appendChild(kv("当前交接", handoff.currentPath || "docs/ai-ops/NOW.md"));
+        card.appendChild(kv("历史记录", handoff.recordsPath || "docs/ai-ops/records"));
+        return card;
+      }
+      if (handoffState === "repair_required") {
+        card.appendChild(el("p", "project-note warn", "交接已授权，但文件未就绪；修复只会补齐缺失的受控文件，不覆盖已有内容。"));
+        card.appendChild(button("project-btn primary", state.busy ? "修复中…" : "修复 AI 交接", () => {
+          act("/api/project/handoff/enable", { id: project.id });
+        }, { disabled: state.busy }));
+        return card;
+      }
+      card.appendChild(el("p", "project-note", "已启用且文件已就绪：每次任务完成后，AI 可读取当前状态、历史记录和唯一下一步。"));
       card.appendChild(kv("当前交接", handoff.currentPath || "docs/ai-ops/NOW.md"));
       card.appendChild(kv("历史记录", handoff.recordsPath || "docs/ai-ops/records"));
       return card;
