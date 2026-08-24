@@ -80,6 +80,7 @@ test("preserves non-managed files and requires explicit AGENTS pointer permissio
   assert.equal(readFileSync(nowPath, "utf8"), "user-owned now\n");
 
   writeFileSync(agentsPath, "# Existing instructions\n");
+  rmSync(nowPath);
   assert.equal(await rejectCode(writer.enableProject({ repoRoot })), "agents_pointer_confirmation_required");
   const enabled = await writer.enableProject({ repoRoot, allowAgentsPointer: true });
   assert.equal(enabled.status, "enabled");
@@ -98,3 +99,63 @@ test("creates a bounded managed pointer only after explicit enablement", async (
   assert.ok(readFileSync(join(repoRoot, "AGENTS.md"), "utf8").length < 1000);
 });
 
+test("inspects the actual handoff file state without returning file contents", async (t) => {
+  const repoRoot = makeRoot(t);
+  const writer = createAiHandoff();
+
+  assert.deepEqual(await writer.inspectProject({ repoRoot }), {
+    agentsPointer: "missing",
+    current: "missing",
+    records: "missing",
+    state: "not_enabled",
+  });
+});
+
+test("explicit enablement initializes a safe current handoff and records directory", async (t) => {
+  const repoRoot = makeRoot(t);
+  const writer = createAiHandoff({ now: () => 1_750_000_000_000 });
+
+  await writer.enableProject({ repoRoot, allowAgentsPointer: true });
+
+  const currentPath = join(repoRoot, "docs/ai-ops/NOW.md");
+  assert.ok(existsSync(currentPath));
+  assert.ok(existsSync(join(repoRoot, "docs/ai-ops/records")));
+  const raw = readFileSync(currentPath, "utf8");
+  assert.ok(raw.includes("type: ai-handoff-current"));
+  assert.ok(raw.includes("task_status: needs_review"));
+  assert.ok(raw.includes("unknown:"));
+  assert.ok(raw.includes("next_action: 读取当前项目规划来源并确认唯一下一步"));
+  assert.deepEqual(await writer.inspectProject({ repoRoot }), {
+    agentsPointer: "managed",
+    current: "managed",
+    records: "present",
+    state: "ready",
+  });
+});
+
+test("repair preserves an existing managed current handoff", async (t) => {
+  const repoRoot = makeRoot(t);
+  const writer = createAiHandoff({ now: () => 1_750_000_000_000 });
+  await writer.writeCurrent(baseInput(repoRoot));
+  const before = readFileSync(join(repoRoot, "docs/ai-ops/NOW.md"), "utf8");
+
+  await writer.enableProject({ repoRoot, allowAgentsPointer: true });
+
+  assert.equal(readFileSync(join(repoRoot, "docs/ai-ops/NOW.md"), "utf8"), before);
+  assert.equal((await writer.inspectProject({ repoRoot })).state, "ready");
+});
+
+test("repair refuses to overwrite an existing non-managed current handoff", async (t) => {
+  const repoRoot = makeRoot(t);
+  const writer = createAiHandoff();
+  const { mkdirSync } = await import("node:fs");
+  const currentPath = join(repoRoot, "docs/ai-ops/NOW.md");
+  mkdirSync(join(repoRoot, "docs/ai-ops"), { recursive: true });
+  writeFileSync(currentPath, "user-owned now\n");
+
+  assert.equal(
+    await rejectCode(writer.enableProject({ repoRoot, allowAgentsPointer: true })),
+    "handoff_conflict"
+  );
+  assert.equal(readFileSync(currentPath, "utf8"), "user-owned now\n");
+});

@@ -111,6 +111,26 @@ function renderDocument(input, redactText, { record = false } = {}) {
   return `${lines.join("\n")}\n`;
 }
 
+function initialHandoffInput() {
+  return {
+    taskId: null,
+    taskStatus: "needs_review",
+    plan: { source: "unknown", revision: "unknown", completed: 0, total: 0, percent: 0 },
+    before: {},
+    after: {},
+    evidence: { execution: "not_run", git: "unknown", validation: "not_run" },
+    facts: {
+      verified: [],
+      user_confirmed: [],
+      agent_reported: [],
+      recorded_not_reverified: [],
+      unknown: ["交接文件刚初始化，尚未验证目标项目当前事实"],
+    },
+    issuesAndRisks: ["需要先读取目标项目规划来源并确认验收边界"],
+    nextAction: "读取当前项目规划来源并确认唯一下一步",
+  };
+}
+
 export function createAiHandoff({ now = () => Date.now(), fsImpl = {}, redactText = defaultRedactText } = {}) {
   const fs = {
     access: fsImpl.access ?? access,
@@ -178,6 +198,27 @@ export function createAiHandoff({ now = () => Date.now(), fsImpl = {}, redactTex
     return { status: "written", path: `docs/ai-ops/records/${input.taskId}.md` };
   }
 
+  async function classifyFile(filePath, marker, { conflict = false } = {}) {
+    if (!(await exists(filePath))) return "missing";
+    let content;
+    try { content = await fs.readFile(filePath, "utf8"); }
+    catch { throw new AiHandoffError("io_error", { retryable: true }); }
+    if (content.includes(marker)) return "managed";
+    return conflict ? "conflict" : "missing";
+  }
+
+  async function inspectProject({ repoRoot } = {}) {
+    const paths = pathsFor(repoRoot);
+    const agentsPointer = await classifyFile(paths.agents, POINTER_BEGIN);
+    const current = await classifyFile(paths.current, MANAGED_MARKER, { conflict: true });
+    const records = (await exists(paths.records)) ? "present" : "missing";
+    let state = "not_enabled";
+    if (current === "conflict") state = "conflict";
+    else if (agentsPointer === "managed" && current === "managed" && records === "present") state = "ready";
+    else if (agentsPointer !== "missing" || current !== "missing" || records !== "missing") state = "repair_required";
+    return { agentsPointer, current, records, state };
+  }
+
   async function enableProject({ repoRoot, allowAgentsPointer = false } = {}) {
     const paths = pathsFor(repoRoot);
     const pointer = [
@@ -187,6 +228,8 @@ export function createAiHandoff({ now = () => Date.now(), fsImpl = {}, redactTex
       POINTER_END,
       "",
     ].join("\n");
+    const currentState = await classifyFile(paths.current, MANAGED_MARKER, { conflict: true });
+    if (currentState === "conflict") throw new AiHandoffError("handoff_conflict");
     const hasAgents = await exists(paths.agents);
     let currentAgents = "";
     if (hasAgents) {
@@ -195,16 +238,21 @@ export function createAiHandoff({ now = () => Date.now(), fsImpl = {}, redactTex
     }
     const managed = currentAgents.includes(POINTER_BEGIN) && currentAgents.includes(POINTER_END);
     if (!managed && !allowAgentsPointer) throw new AiHandoffError("agents_pointer_confirmation_required");
+
+    if (currentState === "missing") await writeCurrent({ ...initialHandoffInput(), repoRoot });
+    await fs.mkdir(paths.records, { recursive: true });
     if (!managed) {
       const separator = currentAgents.length > 0 && !currentAgents.endsWith("\n") ? "\n" : "";
       await atomicWrite(paths.agents, `${currentAgents}${separator}${pointer}`);
     }
+    const fileState = await inspectProject({ repoRoot });
     return {
       status: "enabled",
       paths: { current: "docs/ai-ops/NOW.md", records: "docs/ai-ops/records" },
       agentsPointer: true,
+      state: fileState.state,
     };
   }
 
-  return { writeCurrent, writeRecord, enableProject, pathsFor };
+  return { writeCurrent, writeRecord, enableProject, inspectProject, pathsFor };
 }
