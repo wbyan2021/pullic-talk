@@ -181,11 +181,12 @@ updated: 2026-08-24
 - 2026-08-24：定位并修复“交接状态已启用但文件不存在、页面因此没有启用按钮”的状态错位；交接服务现在检查 `AGENTS.md` 指针、`docs/ai-ops/NOW.md` 和 `records/` 的真实状态，页面在 `repair_required` 时显示“修复 AI 交接”，修复只补齐缺失受控文件并保留已有内容；实现提交 `1a29df7`、`4815688`、`de97f0a`、`12d5c6b`，设计与计划提交 `d5e355f`、`cabc883`。
 - 2026-08-24：本次修复相关聚焦测试 60/60 通过；全量测试的 11 项失败来自既有未提交 members 改动（`AGENTS is not defined` 与临时服务监听权限），未发现本次交接修复回归。
 - 2026-08-24 用户截图确认：当前 `pullic-talk` 页面显示 AI 交接“已启用且文件已就绪”，并展示 `docs/ai-ops/NOW.md` 与 `docs/ai-ops/records`；该项用户页面证据通过。截图中的最近提交仍为缓存值 `4671743`，需点击“重新识别”刷新后再作为当前 Git 事实使用。
+- 2026-08-24 用户截图记录一次真实启动失败：任务在 Pi auth 检查阶段返回“Pi 认证未就绪”，时间线为 `failed`，Git after 为 `unknown`，验收为 `pending`；未进入 Pi 项目执行，也未产生可接受的产品证据。原因是服务当时未设置 `PI_AUTH_PROVIDER`，按默认 provider `google` 检查；随后已在隔离端口 43211 以 `PI_AUTH_PROVIDER=aliyun-token-plan` 重启服务，未读取或输出凭据。
 - 交接读取顺序：先读本文件，再读 `docs/PRODUCT.md`、`docs/CODEMAP.md`，最后读项目内 `docs/ai-ops/NOW.md` 与其 `latest_record`。
 
 ### 唯一下一步
 
-用户在隔离端口 `43211` 点击“重新识别”刷新当前 `pullic-talk` 的 Git 事实，然后完成一次真实 S04 验收：使用无敏感信息的明确任务启动 Pi → 查看时间线/Git 变化 → 预览并批准 argv-only 验收命令 → 关闭为 accepted 或 needs_review。确认结果后再更新本文件并提交最终 docs 记录。
+用户在隔离端口 `43211` 点击“刷新状态”确认 Pi auth 已就绪；若仍未就绪，在终端完成 Pi 自身的 `aliyun-token-plan` 认证后再刷新。认证通过后，点击“重新识别”刷新当前 Git 事实，再用无敏感信息的明确任务启动 Pi → 查看时间线/Git 变化 → 预览并批准 argv-only 验收命令 → 关闭为 accepted 或 needs_review。确认结果后再更新本文件并提交最终 docs 记录。
 
 ### S04 页面验收清单（给下一位 AI 执行）
 
