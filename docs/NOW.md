@@ -178,7 +178,7 @@ updated: 2026-08-24
 - 2026-08-24 用户截图复核：独立项目“AI+ 知识学习项目”界面显示 ACTIVE、main 和 AI 交接已启用；只读核对其路径发现不是 Git 仓库，且 `docs/ai-ops/NOW.md` 与 `docs/ai-ops/records/` 均不存在。该项目状态属于缓存或路径不一致，不能启动 Pi。
 - 2026-08-24 用户切换后的截图复核：另一个独立项目“个人资产管理”是有效 Git 仓库，`docs/ai-ops/NOW.md` 与 `docs/ai-ops/records/` 已存在；截图中的最近提交 `ed6c348` 仍是缓存值，实际只读核对的当前 HEAD 为 `6c0b7ae`。
 - 2026-08-24 用户澄清：以上两个项目均不是当前 `pullic-talk` 项目；相关截图、目录检查和交接状态不构成 `pullic-talk` S04 验收证据，当前切片仍回到 `pullic-talk` 本身的交接文件与页面验收。
-- 2026-08-24：定位并修复“交接状态已启用但文件不存在、页面因此没有启用按钮”的状态错位；交接服务现在检查 `AGENTS.md` 指针、`docs/ai-ops/NOW.md` 和 `records/` 的真实状态，页面在 `repair_required` 时显示“修复 AI 交接”，修复只补齐缺失受控文件并保留已有内容；实现提交 `1a29df7`、`4815688`、`de97f0a`，设计与计划提交 `d5e355f`、`cabc883`。
+- 2026-08-24：定位并修复“交接状态已启用但文件不存在、页面因此没有启用按钮”的状态错位；交接服务现在检查 `AGENTS.md` 指针、`docs/ai-ops/NOW.md` 和 `records/` 的真实状态，页面在 `repair_required` 时显示“修复 AI 交接”，修复只补齐缺失受控文件并保留已有内容；实现提交 `1a29df7`、`4815688`、`de97f0a`、`12d5c6b`，设计与计划提交 `d5e355f`、`cabc883`。
 - 2026-08-24：本次修复相关聚焦测试 60/60 通过；全量测试的 11 项失败来自既有未提交 members 改动（`AGENTS is not defined` 与临时服务监听权限），未发现本次交接修复回归。
 - 交接读取顺序：先读本文件，再读 `docs/PRODUCT.md`、`docs/CODEMAP.md`，最后读项目内 `docs/ai-ops/NOW.md` 与其 `latest_record`。
 
