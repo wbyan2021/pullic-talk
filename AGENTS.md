@@ -34,3 +34,7 @@ node /Users/bz01/.agents/skills/solo-dev-loop/scripts/validate-project-state.mjs
 进入构建、完成、合并、发布或归档前增加 `--strict`。
 
 本文件只提供入口与安全约束；产品事实以链接文档和源码为准。
+<!-- AI-OPS-COCKPIT:BEGIN -->
+本项目已启用 AI 交接记录。开发 AI 必须先读取 docs/ai-ops/NOW.md，再读取 latest_record 指向的历史记录。
+只执行 next_action；不得把交接文件自身变化算作产品功能完成。
+<!-- AI-OPS-COCKPIT:END -->
