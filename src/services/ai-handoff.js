@@ -207,9 +207,17 @@ export function createAiHandoff({ now = () => Date.now(), fsImpl = {}, redactTex
     return conflict ? "conflict" : "missing";
   }
 
+  async function classifyAgentsPointer(filePath) {
+    if (!(await exists(filePath))) return "missing";
+    let content;
+    try { content = await fs.readFile(filePath, "utf8"); }
+    catch { throw new AiHandoffError("io_error", { retryable: true }); }
+    return content.includes(POINTER_BEGIN) && content.includes(POINTER_END) ? "managed" : "missing";
+  }
+
   async function inspectProject({ repoRoot } = {}) {
     const paths = pathsFor(repoRoot);
-    const agentsPointer = await classifyFile(paths.agents, POINTER_BEGIN);
+    const agentsPointer = await classifyAgentsPointer(paths.agents);
     const current = await classifyFile(paths.current, MANAGED_MARKER, { conflict: true });
     const records = (await exists(paths.records)) ? "present" : "missing";
     let state = "not_enabled";
