@@ -176,6 +176,7 @@ updated: 2026-08-24
 - 2026-08-24：为 `#project-wrap` 增加 `width: 100%` 与 `box-sizing: border-box`，窄视口验证确认项目卡片、Pi 标题和执行卡片共享同一左边界；聚焦 UI 测试 23/23、全量测试 210/210。
 - 2026-08-24：新的项目入口要求先读取 `docs/ai-ops/NOW.md`，但当前仓库未发现该文件；不能把项目状态中的“已启用”当作交接记录存在。用户需在项目页重新启用 AI 交接后，才能继续 S04 高风险验收。
 - 2026-08-24 用户截图复核：目标项目“AI+ 知识学习项目”界面显示 ACTIVE、main 和 AI 交接已启用；只读核对其路径发现不是 Git 仓库，且 `docs/ai-ops/NOW.md` 与 `docs/ai-ops/records/` 均不存在。该项目状态属于缓存或路径不一致，禁止启动 Pi；需先确认真实 Git 根目录，或由用户明确授权初始化 Git。
+- 2026-08-24 用户切换后的截图复核：目标项目“个人资产管理”是有效 Git 仓库，`docs/ai-ops/NOW.md` 与 `docs/ai-ops/records/` 已存在；截图中的最近提交 `ed6c348` 仍是缓存值，实际只读核对的当前 HEAD 为 `6c0b7ae`，需先点击“重新识别”再开始 Pi 只读验收。
 - 交接读取顺序：先读本文件，再读 `docs/PRODUCT.md`、`docs/CODEMAP.md`，最后读项目内 `docs/ai-ops/NOW.md` 与其 `latest_record`。
 
 ### 唯一下一步
