@@ -300,8 +300,72 @@
     return node;
   }
 
+  // 机器状态保留在英文辅助标签中，中文是用户首先看到的解释。
+  const STATUS_LABELS = Object.freeze({
+    idle: ["空闲", "Idle"],
+    running: ["执行中", "Running"],
+    stopping: ["停止中", "Stopping"],
+    stopped: ["已停止", "Stopped"],
+    failed: ["失败", "Failed"],
+    error: ["失败", "Failed"],
+    exited: ["已结束", "Completed"],
+    done: ["已结束", "Completed"],
+    interrupted: ["已中断", "Interrupted"],
+    unknown: ["未知", "Unknown"],
+    pending: ["待处理", "Pending"],
+    not_run: ["未运行", "Not Run"],
+    passed: ["通过", "Passed"],
+    needs_review: ["需要复核", "Needs Review"],
+    accepted: ["验收通过", "Accepted"],
+    rejected: ["已拒绝", "Rejected"],
+    verified: ["已验证", "Verified"],
+  });
+
+  function bilingual(zh, en) {
+    const node = el("span", "bilingual");
+    node.appendChild(el("span", "bilingual-zh", zh));
+    node.appendChild(el("span", "bilingual-en", en));
+    return node;
+  }
+
+  function bilingualElement(tag, className, zh, en) {
+    const node = el(tag, className);
+    node.appendChild(bilingual(zh, en));
+    return node;
+  }
+
+  function statusPair(value, fallback = "unknown") {
+    const raw = String(value || fallback);
+    return STATUS_LABELS[raw.toLowerCase()] || [STATUS_LABELS.unknown[0], raw || "Unknown"];
+  }
+
+  function statusNode(value, fallback = "unknown") {
+    const [zh, en] = statusPair(value, fallback);
+    return bilingual(zh, en);
+  }
+
+  function appendContent(node, content) {
+    if (content && typeof content === "object" && content.nodeType) node.appendChild(content);
+    else node.textContent = content == null ? "" : String(content);
+  }
+
+  function appendInlinePair(parent, zh, en, value) {
+    parent.appendChild(bilingual(zh, en));
+    parent.appendChild(document.createTextNode(": "));
+    appendContent(parent, value);
+  }
+
+  function appendGitSnapshot(parent, zh, en, snapshot) {
+    appendInlinePair(parent, zh, en, snapshot?.branch && snapshot.branch !== "unknown"
+      ? snapshot.branch
+      : statusNode("unknown"));
+    parent.appendChild(document.createTextNode(" · "));
+    appendContent(parent, snapshot?.head || "—");
+  }
+
   function button(className, text, onClick, { disabled = false } = {}) {
-    const node = el("button", className, text);
+    const node = el("button", className);
+    appendContent(node, text);
     node.type = "button";
     node.disabled = disabled;
     node.addEventListener("click", onClick);
@@ -331,7 +395,7 @@
     root.appendChild(renderHead());
 
     if (state.loading) {
-      root.appendChild(el("p", "exec-note", "正在读取运行状态…"));
+      root.appendChild(bilingualElement("p", "exec-note", "正在读取运行状态…", "Loading execution status…"));
       panel.appendChild(root);
       return;
     }
@@ -368,69 +432,90 @@
 
   function renderHead() {
     const head = el("div", "exec-head");
-    head.appendChild(el("h3", "exec-title", "Pi 受控运行"));
+    head.appendChild(bilingualElement("h3", "exec-title", "Pi 受控运行", "Pi Controlled Run"));
     head.appendChild(el("span", `exec-status-light ${state.execution.state || "idle"}`));
     return head;
   }
 
   function renderNoActive() {
     const box = el("section", "exec-card");
-    box.appendChild(el("p", "exec-note", "尚未设置活动项目。请先在上方项目列表中录入并「设为活动」一个 Git 项目，Pi 将只在该目录内运行。"));
+    box.appendChild(bilingualElement("p", "exec-note", "尚未设置活动项目。请先在上方项目列表中录入并「设为活动」一个 Git 项目，Pi 将只在该目录内运行。", "No active project. Add and set a Git project active above; Pi runs only in that directory."));
     return box;
   }
 
   function renderBoundary() {
     const box = el("section", "exec-card");
-    box.appendChild(el("p", "exec-boundary", `工作边界：${state.active.repoRoot}`));
-    box.appendChild(el("p", "exec-risk", "风险提示：Pi 在该目录内拥有你的完整用户权限，无沙箱隔离；不会向目录外主动写入，但执行破坏性命令（如删除文件）前请务必确认任务内容。"));
+    const boundary = el("p", "exec-boundary");
+    appendInlinePair(boundary, "工作边界", "Work Boundary", state.active.repoRoot);
+    box.appendChild(boundary);
+    box.appendChild(bilingualElement("p", "exec-risk", "风险提示：Pi 在该目录内拥有你的完整用户权限，无沙箱隔离；不会向目录外主动写入，但执行破坏性命令（如删除文件）前请务必确认任务内容。", "Risk: Pi has your full user permissions in this directory without a sandbox. Confirm destructive tasks before running them."));
     return box;
   }
 
   function renderEvidence() {
     const box = el("section", "exec-card exec-evidence");
-    box.appendChild(el("h4", "exec-evidence-title", "任务时间线与验收"));
+    box.appendChild(bilingualElement("h4", "exec-evidence-title", "任务时间线与验收", "Task Timeline & Acceptance"));
     const evidence = state.evidence || {};
-    box.appendChild(el("p", "exec-note", `执行：${evidence.executionStatus || evidence.state || "idle"} · Git 证据：${evidence.evidence?.git || "unknown"} · 验收：${evidence.acceptanceStatus || "pending"}`));
+    const summary = el("p", "exec-note");
+    appendInlinePair(summary, "执行", "Execution", statusNode(evidence.executionStatus || evidence.state || "idle"));
+    summary.appendChild(document.createTextNode(" · "));
+    appendInlinePair(summary, "Git 证据", "Git Evidence", statusNode(evidence.evidence?.git || "unknown"));
+    summary.appendChild(document.createTextNode(" · "));
+    appendInlinePair(summary, "验收", "Acceptance", statusNode(evidence.acceptanceStatus || "pending"));
+    box.appendChild(summary);
     if (evidence.before || evidence.after) {
       const timeline = el("div", "exec-timeline");
-      timeline.appendChild(el("div", "exec-timeline-item", `before · ${evidence.before?.branch || "unknown"} · ${evidence.before?.head || "—"}`));
-      timeline.appendChild(el("div", "exec-timeline-item", `after · ${evidence.after?.branch || "unknown"} · ${evidence.after?.head || "—"}`));
-      timeline.appendChild(el("div", "exec-timeline-item", `validation · ${evidence.validation?.result || "not_run"}`));
+      const before = el("div", "exec-timeline-item");
+      appendGitSnapshot(before, "开始前", "Before", evidence.before);
+      timeline.appendChild(before);
+      const after = el("div", "exec-timeline-item");
+      appendGitSnapshot(after, "结束后", "After", evidence.after);
+      timeline.appendChild(after);
+      const validation = el("div", "exec-timeline-item");
+      appendInlinePair(validation, "验证", "Validation", statusNode(evidence.validation?.result || "not_run"));
+      timeline.appendChild(validation);
       box.appendChild(timeline);
     }
     const terminal = ["exited", "stopped", "failed", "interrupted"].includes(evidence.executionStatus || evidence.state);
     if (terminal && evidence.acceptanceStatus === "pending") {
       const validation = el("div", "exec-validation");
-      validation.appendChild(el("p", "exec-note", "验收命令使用程序 + 参数模型运行，不接受 shell 命令字符串。"));
+      validation.appendChild(bilingualElement("p", "exec-note", "验收命令使用程序 + 参数模型运行，不接受 shell 命令字符串。", "Validation uses an executable + argument model; shell command strings are not accepted."));
       const executable = document.createElement("input");
       executable.className = "exec-validation-executable";
-      executable.placeholder = "程序，例如 npm";
+      executable.placeholder = "程序 Executable，例如 npm";
       const args = document.createElement("input");
       args.className = "exec-validation-args";
-      args.placeholder = "参数，例如 test";
+      args.placeholder = "参数 Arguments，例如 test";
       validation.appendChild(executable);
       validation.appendChild(args);
-      validation.appendChild(button("exec-btn primary", state.validationConfirm ? "确认执行验收" : "预览验收命令", () => {
+      validation.appendChild(button("exec-btn primary", state.validationConfirm
+        ? bilingual("确认执行验收", "Confirm Validation")
+        : bilingual("预览验收命令", "Preview Validation Command"), () => {
         if (state.validationConfirm) runValidation();
         else previewValidation();
       }, { disabled: state.validationBusy }));
       box.appendChild(validation);
       const actions = el("div", "exec-actions");
-      actions.appendChild(button("exec-btn", state.acceptanceConfirm ? "确认 accepted" : "标记 accepted", () => closeEvidence("accepted"), { disabled: state.busy || evidence.validation?.result !== "passed" }));
-      actions.appendChild(button("exec-btn", "标记 needs_review", () => closeEvidence("needs_review"), { disabled: state.busy }));
-      actions.appendChild(button("exec-btn danger-outline", "标记 rejected", () => closeEvidence("rejected"), { disabled: state.busy }));
+      actions.appendChild(button("exec-btn", state.acceptanceConfirm
+        ? bilingual("确认验收通过", "Confirm Accepted")
+        : bilingual("标记验收通过", "Mark Accepted"), () => closeEvidence("accepted"), { disabled: state.busy || evidence.validation?.result !== "passed" }));
+      actions.appendChild(button("exec-btn", bilingual("标记需要复核", "Mark Needs Review"), () => closeEvidence("needs_review"), { disabled: state.busy }));
+      actions.appendChild(button("exec-btn danger-outline", bilingual("标记已拒绝", "Mark Rejected"), () => closeEvidence("rejected"), { disabled: state.busy }));
       box.appendChild(actions);
     } else if (evidence.acceptanceStatus && evidence.acceptanceStatus !== "pending") {
-      box.appendChild(el("p", "exec-note", `验收结果：${evidence.acceptanceStatus}`));
+      const result = el("p", "exec-note");
+      appendInlinePair(result, "验收结果", "Acceptance Result", statusNode(evidence.acceptanceStatus));
+      box.appendChild(result);
     }
     return box;
   }
 
   function renderErrorCard() {
     const card = el("section", "exec-card error");
+    card.appendChild(bilingualElement("h4", "exec-evidence-title", "错误", "Error"));
     card.appendChild(el("p", "exec-error-message", state.error.message));
     card.appendChild(el("p", "exec-error-action", `建议：${state.error.action}`));
-    card.appendChild(button("exec-btn", "知道了", () => {
+    card.appendChild(button("exec-btn", bilingual("知道了", "Got it"), () => {
       state.error = null;
       render();
     }));
@@ -440,11 +525,15 @@
   function renderRunning() {
     const box = el("section", "exec-card");
     const stopping = state.execution.state === "stopping";
-    box.appendChild(el("p", "exec-note", stopping ? "正在停止…" : "Pi 正在执行，可随时停止。"));
-    if (state.execution.task) box.appendChild(el("p", "exec-task-line", `任务：${state.execution.task}`));
+    box.appendChild(bilingualElement("p", "exec-note", stopping ? "正在停止…" : "Pi 正在执行，可随时停止。", stopping ? "Stopping…" : "Pi is running; you can stop it anytime."));
+    if (state.execution.task) {
+      const taskLine = el("p", "exec-task-line");
+      appendInlinePair(taskLine, "任务", "Task", state.execution.task);
+      box.appendChild(taskLine);
+    }
 
     // 已运行时长：让用户明确看到任务在跑、停止是有效操作
-    const elapsed = el("p", "exec-elapsed", "已运行 0 秒");
+    const elapsed = bilingualElement("p", "exec-elapsed", "已运行 0 秒", "Elapsed: 0s");
     box.appendChild(elapsed);
     startElapsedTicker(elapsed);
 
@@ -452,7 +541,9 @@
     box.appendChild(out);
 
     const actions = el("div", "exec-actions");
-    actions.appendChild(button("exec-btn danger", state.busy ? "停止中…" : "停止", () => stopRun(), { disabled: state.busy || stopping }));
+    actions.appendChild(button("exec-btn danger", state.busy
+      ? bilingual("停止中…", "Stopping…")
+      : bilingual("停止", "Stop"), () => stopRun(), { disabled: state.busy || stopping }));
     box.appendChild(actions);
     return box;
   }
@@ -464,7 +555,9 @@
     const startMs = new Date(startedAt).getTime();
     const tick = () => {
       const secs = Math.max(0, Math.round((Date.now() - startMs) / 1000));
-      if (target.isConnected) target.textContent = `已运行 ${secs} 秒`;
+      if (target.isConnected) {
+        target.replaceChildren(bilingual(`已运行 ${secs} 秒`, `Elapsed: ${secs}s`));
+      }
       if (state.execution.state === "running" || state.execution.state === "stopping") {
         elapsedTimer = setTimeout(tick, 1000);
       }
@@ -477,9 +570,13 @@
 
     if (exState === "exited" || exState === "stopped" || exState === "error") {
       const summary = el("p", "exec-note");
-      if (exState === "exited") summary.textContent = `上一次运行已结束（退出码 ${state.execution.exitCode ?? "—"}）。`;
-      else if (exState === "stopped") summary.textContent = "上一次运行已被手动停止。";
-      else summary.textContent = "上一次运行异常结束。";
+      if (exState === "exited") {
+        summary.appendChild(bilingual(`上一次运行已结束（退出码 ${state.execution.exitCode ?? "—"}）。`, `Last run completed (exit code ${state.execution.exitCode ?? "—"}).`));
+      } else if (exState === "stopped") {
+        summary.appendChild(bilingual("上一次运行已被手动停止。", "Last run was stopped manually."));
+      } else {
+        summary.appendChild(bilingual("上一次运行异常结束。", "Last run ended with an error."));
+      }
       box.appendChild(summary);
       if (state.execution.output) {
         const out = el("pre", "exec-output", state.execution.output);
@@ -498,7 +595,7 @@
 
     const actions = el("div", "exec-actions");
     if (state.riskConfirmed) {
-      actions.appendChild(button("exec-btn danger", "确认启动？再点一次", () => {
+      actions.appendChild(button("exec-btn danger", bilingual("确认启动？再点一次", "Confirm Start"), () => {
         clearTimeout(confirmTimer);
         state.riskConfirmed = false;
         const task = textarea.value.trim();
@@ -510,7 +607,9 @@
         startRun(task);
       }));
     } else {
-      actions.appendChild(button("exec-btn primary", state.busy ? "启动中…" : "启动 Pi", () => {
+      actions.appendChild(button("exec-btn primary", state.busy
+        ? bilingual("启动中…", "Starting…")
+        : bilingual("启动 Pi", "Start Pi"), () => {
         draftTask = textarea.value;
         state.riskConfirmed = true;
         render();
@@ -521,7 +620,7 @@
         }, 5000);
       }, { disabled: state.busy }));
     }
-    actions.appendChild(button("exec-btn", "刷新状态", () => refreshExecution(), { disabled: state.busy }));
+    actions.appendChild(button("exec-btn", bilingual("刷新状态", "Refresh Status"), () => refreshExecution(), { disabled: state.busy }));
     box.appendChild(actions);
     return box;
   }

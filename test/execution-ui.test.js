@@ -95,6 +95,37 @@ test("execution.js exposes timeline, Git evidence, validation, and acceptance st
   }
 });
 
+test("execution.js renders bilingual statuses, timeline labels, and actions", () => {
+  for (const marker of [
+    "bilingual",
+    "bilingual-zh",
+    "bilingual-en",
+    "Idle",
+    "Running",
+    "Stopping",
+    "Stopped",
+    "Failed",
+    "Completed",
+    "Unknown",
+    "Pending",
+    "Not Run",
+    "Passed",
+    "Needs Review",
+    "Accepted",
+    "Rejected",
+    "Git Evidence",
+    "Before",
+    "After",
+    "Validation",
+    "Preview Validation Command",
+    "Start Pi",
+    "Refresh Status",
+  ]) {
+    assert.ok(EXECUTION_JS.includes(marker), `missing bilingual execution marker: ${marker}`);
+  }
+  assert.ok(EXECUTION_CSS.includes(".bilingual-en"), "execution CSS must style English helper text");
+});
+
 // ── 样式 ──
 
 test("execution.css exists and styles the panel", () => {

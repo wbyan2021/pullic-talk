@@ -101,6 +101,27 @@
   color: var(--dim);
 }
 
+/* 中文是主标签；英文为较小、较浅的机器状态辅助值。 */
+.bilingual {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .42em;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.bilingual-zh { color: inherit; }
+
+.bilingual-en {
+  color: var(--dim);
+  font-size: .78em;
+  font-weight: 500;
+  letter-spacing: .02em;
+  line-height: 1.35;
+  white-space: normal;
+}
+
 .exec-boundary {
   margin: 0;
   font-size: 12px;
@@ -250,4 +271,8 @@
 
 @media (max-width: 640px) {
   .exec-actions { flex-wrap: wrap; }
+  .exec-note .bilingual,
+  .exec-boundary .bilingual,
+  .exec-risk .bilingual,
+  .exec-timeline-item .bilingual { max-width: 100%; }
 }

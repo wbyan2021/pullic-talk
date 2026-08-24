@@ -61,6 +61,27 @@
   color: var(--dim);
 }
 
+/* 中文是主标签；英文仅作较小、较浅的理解辅助，不改变机器值。 */
+.bilingual {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .42em;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.bilingual-zh { color: inherit; }
+
+.bilingual-en {
+  color: var(--dim);
+  font-size: .78em;
+  font-weight: 500;
+  letter-spacing: .02em;
+  line-height: 1.35;
+  white-space: normal;
+}
+
 .project-select-form {
   display: flex;
   gap: 8px;
@@ -133,6 +154,7 @@
 .project-kv-label {
   flex: 0 0 118px;
   color: var(--dim);
+  min-width: 0;
 }
 
 .project-kv-value {
@@ -150,6 +172,11 @@
   border-radius: 999px;
   font-size: 11px;
   color: var(--text);
+}
+
+.project-badge.bilingual {
+  display: inline-flex;
+  align-items: baseline;
 }
 
 .project-badge.warn {
@@ -345,4 +372,5 @@
   .project-select-form { flex-direction: column; }
   .project-kv { flex-direction: column; gap: 2px; }
   .project-kv-label { flex: none; }
+  .project-kv-label .bilingual { max-width: 100%; }
 }

@@ -94,6 +94,26 @@ test("project.js requires explicit AI handoff enablement before project writes",
   assert.ok(!PROJECT_JS.includes("localStorage"));
 });
 
+test("project.js renders Chinese-primary bilingual labels and Git status mappings", () => {
+  for (const marker of [
+    "bilingual",
+    "bilingual-zh",
+    "bilingual-en",
+    "Project & Task System",
+    "Active",
+    "Staged",
+    "Unstaged",
+    "Untracked",
+    "Conflicts",
+    "detached HEAD",
+    "AI Handoff",
+    "Refresh Status",
+  ]) {
+    assert.ok(PROJECT_JS.includes(marker), `missing bilingual project marker: ${marker}`);
+  }
+  assert.ok(PROJECT_CSS.includes(".bilingual-en"), "project CSS must style English helper text");
+});
+
 // ── 样式存在且非空 ──
 
 test("project.css exists and styles the project view", () => {
