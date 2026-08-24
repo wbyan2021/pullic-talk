@@ -103,7 +103,11 @@ const PROJECT_FIELDS = [
 
 function safeHandoff(payload) {
   if (!payload || typeof payload !== "object") return null;
-  return pick(payload, ["enabled", "enabledAt", "currentPath", "recordsPath", "agentsPointer"]);
+  const clean = pick(payload, ["enabled", "enabledAt", "currentPath", "recordsPath", "agentsPointer", "state"]);
+  if (payload.fileState && typeof payload.fileState === "object") {
+    clean.fileState = pick(payload.fileState, ["agentsPointer", "current", "records", "state"]);
+  }
+  return clean;
 }
 
 function safeProject(payload) {
@@ -111,6 +115,21 @@ function safeProject(payload) {
   clean.inspection = safeInspection(payload?.inspection);
   if (payload && payload.handoff) clean.handoff = safeHandoff(payload.handoff);
   else delete clean.handoff;
+  return clean;
+}
+
+async function projectWithHandoffState(payload, aiHandoff) {
+  const clean = safeProject(payload);
+  if (!clean.handoff || !aiHandoff || typeof aiHandoff.inspectProject !== "function") return clean;
+  const inspected = await aiHandoff.inspectProject({ repoRoot: payload.repoRoot });
+  const fileState = pick(inspected, ["agentsPointer", "current", "records", "state"]);
+  let state = "not_enabled";
+  if (clean.handoff.enabled) {
+    state = inspected?.state === "ready"
+      ? "ready"
+      : inspected?.state === "conflict" ? "conflict" : "repair_required";
+  }
+  clean.handoff = safeHandoff({ ...clean.handoff, state, fileState });
   return clean;
 }
 
@@ -146,7 +165,9 @@ export default function projectRoutes(app, { projectBoundary, aiHandoff = null }
   app.get("/api/project/status", async (_req, res) => {
     try {
       const payload = await projectBoundary.getStatus();
-      const projects = Array.isArray(payload.projects) ? payload.projects.map(safeProject) : [];
+      const projects = Array.isArray(payload.projects)
+        ? await Promise.all(payload.projects.map((project) => projectWithHandoffState(project, aiHandoff)))
+        : [];
       res.json({ ok: true, projects, activeProjectId: payload.activeProjectId ?? null });
     } catch (error) {
       sendError(res, error);
@@ -212,7 +233,8 @@ export default function projectRoutes(app, { projectBoundary, aiHandoff = null }
       if (!target) throw new ProjectBoundaryError(id === undefined ? "no_project_selected" : "project_not_found");
       const enabled = await aiHandoff.enableProject({ repoRoot: target.repoRoot, allowAgentsPointer: true });
       const payload = await projectBoundary.enableHandoff(id, { agentsPointer: enabled.agentsPointer === true });
-      return res.json({ ok: true, project: safeProject(payload), handoff: safeHandoff(payload.handoff) });
+      const project = await projectWithHandoffState(payload, aiHandoff);
+      return res.json({ ok: true, project, handoff: project.handoff ?? safeHandoff(payload.handoff) });
     } catch (error) {
       return sendError(res, error);
     }
@@ -223,6 +245,19 @@ export default function projectRoutes(app, { projectBoundary, aiHandoff = null }
     try {
       if (typeof projectBoundary.getHandoff !== "function") return res.json({ ok: true, handoff: null });
       const handoff = await projectBoundary.getHandoff(id);
+      if (handoff && aiHandoff?.inspectProject) {
+        const status = await projectBoundary.getStatus();
+        const target = id === undefined
+          ? status?.active
+          : (Array.isArray(status?.projects) ? status.projects.find((project) => project.id === id) : null);
+        if (target) {
+          const inspected = await aiHandoff.inspectProject({ repoRoot: target.repoRoot });
+          const state = inspected?.state === "ready"
+            ? "ready"
+            : inspected?.state === "conflict" ? "conflict" : "repair_required";
+          return res.json({ ok: true, handoff: safeHandoff({ ...handoff, state, fileState: inspected }) });
+        }
+      }
       return res.json({ ok: true, handoff: safeHandoff(handoff) });
     } catch (error) {
       return sendError(res, error);

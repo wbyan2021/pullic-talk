@@ -150,6 +150,81 @@ test("GET status with no projects returns an empty list", async () => {
   assert.deepEqual(res.body, { ok: true, projects: [], activeProjectId: null });
 });
 
+test("GET status reports actual handoff readiness without leaking service fields", async () => {
+  const service = createService({
+    async getStatus() {
+      return {
+        projects: [{
+          ...SAFE_PROJECT,
+          handoff: {
+            enabled: true,
+            enabledAt: "2026-08-20T00:00:00.000Z",
+            currentPath: "docs/ai-ops/NOW.md",
+            recordsPath: "docs/ai-ops/records",
+            secret: "drop",
+          },
+        }],
+        activeProjectId: SAFE_PROJECT.id,
+        active: null,
+      };
+    },
+  });
+  const writer = {
+    async inspectProject({ repoRoot }) {
+      assert.equal(repoRoot, SAFE_PROJECT.repoRoot);
+      return {
+        agentsPointer: "managed",
+        current: "missing",
+        records: "missing",
+        state: "repair_required",
+        rawContent: "drop",
+      };
+    },
+  };
+  const { app } = setup(service, writer);
+  const res = await invoke(app, "GET /api/project/status");
+
+  assert.deepEqual(res.body.projects[0].handoff, {
+    enabled: true,
+    enabledAt: "2026-08-20T00:00:00.000Z",
+    currentPath: "docs/ai-ops/NOW.md",
+    recordsPath: "docs/ai-ops/records",
+    state: "repair_required",
+    fileState: {
+      agentsPointer: "managed",
+      current: "missing",
+      records: "missing",
+      state: "repair_required",
+    },
+  });
+  assert.ok(!JSON.stringify(res.body).includes("drop"));
+});
+
+test("GET status reports ready handoff only when all managed files exist", async () => {
+  const service = createService({
+    async getStatus() {
+      return {
+        projects: [{
+          ...SAFE_PROJECT,
+          handoff: { enabled: true, currentPath: "docs/ai-ops/NOW.md", recordsPath: "docs/ai-ops/records" },
+        }],
+        activeProjectId: SAFE_PROJECT.id,
+        active: null,
+      };
+    },
+  });
+  const writer = {
+    async inspectProject() {
+      return { agentsPointer: "managed", current: "managed", records: "present", state: "ready" };
+    },
+  };
+  const { app } = setup(service, writer);
+  const res = await invoke(app, "GET /api/project/status");
+
+  assert.equal(res.body.projects[0].handoff.state, "ready");
+  assert.equal(res.body.projects[0].handoff.fileState.current, "managed");
+});
+
 test("POST select forwards path to service and returns the single project", async () => {
   const { app, service } = setup();
   const res = await invoke(app, "POST /api/project/select", { body: { path: "/tmp/repo" } });
