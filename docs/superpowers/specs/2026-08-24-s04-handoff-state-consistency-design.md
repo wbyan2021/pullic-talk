@@ -65,7 +65,7 @@ date: 2026-08-24
 
 ### 4. 事实与证据
 
-初始交接文档的事实等级只能是 `unknown` 或 `recorded_not_reverified`，任务状态为 `needs_review`，`next_action` 指向当前 S04 的真实验收。交接文件自身的创建不生成 Pi 任务证据，也不改变 S04 的验收状态。
+初始交接文档的事实等级只能是 `unknown` 或 `recorded_not_reverified`，任务状态为 `needs_review`，`next_action` 指向读取目标项目规划来源并确认唯一下一步。交接文件自身的创建不生成 Pi 任务证据，也不改变 S04 的验收状态。
 
 ## 允许修改范围
 
