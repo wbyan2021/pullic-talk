@@ -643,10 +643,15 @@
     if (!raw || isStreaming) return;
     closeMention();
 
-    const ok = await dispatchMessage(raw);
-    if (!ok) return; // 校验未通过：保留输入内容，便于修改后重发
+    // 发送即清空输入框；若目标校验未通过，再恢复原输入便于修改重发
     input.value = "";
     autoResize(input);
+
+    const ok = await dispatchMessage(raw);
+    if (!ok) {
+      input.value = raw;
+      autoResize(input);
+    }
   }
 
   // 统一发送入口（sendMessage / 重新生成 共用）

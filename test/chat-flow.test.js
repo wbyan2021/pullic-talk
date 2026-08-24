@@ -196,6 +196,7 @@ test("sending a message excludes the current message from the history payload", 
   await flush();
 
   assert.equal(requests.length, 1, "exactly one /api/chat request");
+  assert.equal(elements["input"].value, "", "input must be cleared immediately after sending");
   const payload = requests[0].json;
   assert.equal(payload.message, "hello world", "@mention is stripped from the message");
   assert.deepEqual([...payload.targets], ["echoai"]);
