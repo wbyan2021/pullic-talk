@@ -7,7 +7,8 @@
   <!--OPS:TOKEN-->
   <link id="hljs-theme" rel="stylesheet" href="/vendor/hljs-github-dark.min.css">
   <link rel="stylesheet" href="/css/chat.css">
-    <link rel="stylesheet" href="/css/members.css">
+  <link rel="stylesheet" href="/css/members.css">
+  <link rel="stylesheet" href="/css/secrets.css">
   <link rel="stylesheet" href="/css/installer.css">
   <script src="/vendor/marked.min.js"></script>
   <script src="/vendor/highlight.min.js"></script>
@@ -37,6 +38,7 @@
     </div>
     <div class="controls">
       <button id="members-btn" onclick="Members.open()" title="维护群成员与模型">👥 成员</button>
+      <button id="secrets-btn" onclick="Secrets.open()" title="管理本地 API Key">🔑 Key</button>
       <div class="selector">
         <label>🔀</label>
         <select id="mode-select" onchange="changeMode(this.value)">
@@ -110,12 +112,28 @@
   </div>
 </div>
 
+<div id="secrets-overlay" class="hidden">
+  <div id="secrets-panel">
+    <div class="secrets-head">
+      <span>🔑 本地 API Key 管理</span>
+      <button onclick="Secrets.close()">✕</button>
+    </div>
+    <div class="secrets-path" id="secrets-path"></div>
+    <div id="secrets-list"></div>
+    <div class="secrets-actions">
+      <button class="btn-primary" onclick="Secrets.save()">保存</button>
+      <button class="toggle" onclick="Secrets.addRow()">+ 添加一行</button>
+      <span class="secrets-hint">保存后写入 <b>~/.secrets.env</b>；对之后新启动的终端/服务生效</span>
+    </div>
+  </div>
+</div>
 <div id="mention-popup"></div>
 
 <script src="/js/ops.js"></script>
 <script src="/js/installer.js"></script>
 <script src="/js/chat.js"></script>
   <script src="/js/members.js"></script>
+  <script src="/js/secrets.js"></script>
 
 </body>
 </html>

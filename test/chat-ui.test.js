@@ -11,6 +11,7 @@ const CHAT_HTML = read("public/chat.html");
 const CHAT_JS = read("public/js/chat.js");
 const CHAT_CSS = read("public/css/chat.css");
 const API_JS = read("src/routes/api.js");
+const SECRETS_JS = read("public/js/secrets.js");
 
 // ── 装配：重新生成按钮 ──
 
@@ -101,4 +102,20 @@ test("agent-caller dedups a trailing history entry equal to the current message"
     src.includes('lastMsg.sender === "你" && lastMsg.text === message'),
     "server must skip the trailing duplicate of the current message",
   );
+});
+
+// ── 本地 API Key 管理面板装配 ──
+
+test("chat.html mounts the secrets manager and loads its assets", () => {
+  assert.ok(CHAT_HTML.includes('id="secrets-btn"'), "secrets button missing");
+  assert.ok(CHAT_HTML.includes('id="secrets-overlay"'), "secrets overlay missing");
+  assert.ok(CHAT_HTML.includes('href="/css/secrets.css"'), "secrets.css link missing");
+  assert.ok(CHAT_HTML.includes('src="/js/secrets.js"'), "secrets.js script missing");
+});
+
+test("secrets.js uses the authenticated OPS api and warns about restart semantics", () => {
+  assert.ok(SECRETS_JS.includes("window.OPS.api"), "must use window.OPS.api for token-carrying requests");
+  assert.ok(SECRETS_JS.includes('type="password"'), "secret values must default to password inputs");
+  assert.ok(SECRETS_JS.includes("window.Secrets ="), "must expose window.Secrets");
+  assert.ok(SECRETS_JS.includes("return { open, close, addRow, save };"), "save/addRow must be exposed");
 });
