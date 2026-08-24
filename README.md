@@ -124,20 +124,23 @@ chmod 600 ~/.ssh/config
 ```
 pullic-talk/
 ├── src/
-│   ├── server.js          # Express + WebSocket 主入口（token 注入 / 认证闸门）
-│   ├── terminal.js        # 内嵌终端（node-pty）
-│   ├── agent-caller.js    # AI agent 调用层
-│   ├── agent-catalog.js   # 内置 agent 适配器目录（装了哪个 CLI 亮哪个）
-│   ├── install-catalog.js # 快捷安装目录（热门 AI 应用 / CLI）
-│   ├── config.js          # 配置合并 + CLI 可用性探测
-│   ├── utils/auth.js      # 随机 token 生成与校验
-│   └── routes/            # api / tools / launch / install
+│   ├── server.js            # Express + WebSocket 主入口（token 注入 / 认证闸门）
+│   ├── terminal.js          # 内嵌终端（node-pty）
+│   ├── agent-caller.js      # AI agent 调用层
+│   ├── agent-catalog.js     # 内置 agent 适配器目录（装了哪个 CLI 亮哪个）
+│   ├── install-catalog.js   # 快捷安装目录（热门 AI 应用 / CLI）
+│   ├── config.js            # 配置合并（含 enabled 停用/部分覆盖）+ CLI 可用性探测
+│   ├── utils/
+│   │   ├── auth.js          # 随机 token 生成与校验
+│   │   └── secrets-env.js   # ~/.secrets.env 安全读写（Key 管理面板）
+│   ├── services/            # 护航/项目边界/执行/证据/黑匣子等后端服务
+│   └── routes/              # api / tools / launch / install / members / secrets
 ├── public/
 │   ├── index.html         # 控制台主页（含「快捷安装」页签）
-│   ├── chat.html          # 群聊页
+│   ├── chat.html          # 群聊页（👥 成员维护 / 🔑 Key 管理）
 │   ├── terminal.html      # 全屏终端页
 │   ├── vendor/            # 本地化第三方库（marked/hljs/purify/xterm）
-│   └── css/  js/
+│   └── css/  js/          # chat/members/secrets/execution/project …
 ├── scripts/
 │   ├── setup.sh           # 一键安装
 │   ├── scan-tools.js      # 扫描本机工具
