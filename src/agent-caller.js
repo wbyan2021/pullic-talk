@@ -50,6 +50,12 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
     activeProcs.add(proc);
     proc.on("close", () => activeProcs.delete(proc));
 
+    // prompt 始终通过 args 传入：对 stdin 为 pipe 的 agent 立刻给 EOF，
+    // 避免 CLI 等待一个永远不会有数据的 stdin 而挂起直至超时
+    if (stdioMode[0] === "pipe") {
+      try { proc.stdin.end(); } catch {}
+    }
+
     let buffer = "";
     let fullText = "";
     let stderrText = "";
@@ -216,10 +222,16 @@ export function buildPrompt(agentKey, { message, history, mode, rounds }, priorR
   }
 
   if (history.length > 0) {
+    // 防御性去重：部分客户端会把「刚发出的这条消息」一并带进 history，
+    // 末尾若恰好是同一条用户消息则跳过，避免它在 prompt 中出现两次
+    const hist = [...history];
+    const lastMsg = hist[hist.length - 1];
+    if (lastMsg && lastMsg.sender === "你" && lastMsg.text === message) hist.pop();
+
     const lines = [];
     let total = 0;
-    for (let i = history.length - 1; i >= 0; i--) {
-      const line = `[${history[i].sender}]: ${history[i].text}`;
+    for (let i = hist.length - 1; i >= 0; i--) {
+      const line = `[${hist[i].sender}]: ${hist[i].text}`;
       if (total + line.length > LIMITS.historyTotalMaxLen) break;
       lines.unshift(line);
       total += line.length;

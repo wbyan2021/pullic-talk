@@ -216,7 +216,7 @@
       box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
     }
     #input::placeholder { color: var(--text-muted); }
-    #send, #stop {
+    #send, #stop, #regen {
       border: none; border-radius: 12px; padding: 10px 16px; font-size: 13px; font-weight: 600;
       cursor: pointer; white-space: nowrap;
     }
@@ -237,6 +237,15 @@
     }
     #stop.visible { opacity: 1; visibility: visible; pointer-events: auto; }
     #stop:hover { background: #dc2626; }
+    /* 重新生成：非流式且存在历史时可见 */
+    #regen {
+      background: var(--bg-card); color: var(--text-dim); border: 1px solid var(--border);
+      padding: 10px 12px;
+      opacity: 0; visibility: hidden; pointer-events: none;
+      transition: opacity 0.2s, visibility 0.2s, background 0.15s, color 0.15s;
+    }
+    #regen.visible { opacity: 1; visibility: visible; pointer-events: auto; }
+    #regen:hover { background: var(--bg-hover); color: var(--text); }
 
     .status-bar { max-width: 780px; margin: 0 auto 5px; display: flex; gap: 10px; min-height: 15px; }
     .status-item { display: none; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); }

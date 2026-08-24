@@ -76,7 +76,8 @@
       "parseMode": "json-envelope",
       "jsonTextField": "result.payloads.0.text",
       "stdio": "ignore"
-    }
+    },
+    "enabled": false
   },
   "opencode": {
     "name": "OpenCode",

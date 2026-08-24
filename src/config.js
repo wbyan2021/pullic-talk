@@ -1,4 +1,4 @@
-import { readFileSync, watch } from "fs";
+import { readFileSync, writeFileSync, renameSync, watch } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { spawnSync } from "child_process";
@@ -9,7 +9,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT = join(__dirname, "..");
 
-const CONFIG_PATH = join(ROOT, "agents.config.json");
+// 默认仍为项目根 agents.config.json；测试或隔离实例可用 AGENTS_CONFIG_PATH 覆盖
+const CONFIG_PATH = process.env.AGENTS_CONFIG_PATH || join(ROOT, "agents.config.json");
 
 // ===== 用户配置加载（agents.config.json = 自定义/覆盖层）=====
 function loadUserConfig() {
@@ -25,17 +26,49 @@ function loadUserConfig() {
 }
 
 // ===== 合并：内置目录 + 用户覆盖（同名整体覆盖）=====
+// 用户配置读写（给成员维护 API 用）
+export function getUserConfigRaw() {
+  try {
+    return JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+export function writeUserConfig(cfg) {
+  const tmp = CONFIG_PATH + ".tmp";
+  writeFileSync(tmp, JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
+  renameSync(tmp, CONFIG_PATH);
+}
+
 function buildAgents() {
   const merged = {};
   for (const [key, def] of Object.entries(AGENT_CATALOG)) {
     merged[key] = { ...def, source: "builtin" };
   }
   for (const [key, def] of Object.entries(loadUserConfig())) {
-    if (!def || typeof def !== "object" || !def.cli?.command) {
+    if (!def || typeof def !== "object") {
+      log(`⚠️ 跳过非法 agent 配置: ${key}（不是对象）`);
+      continue;
+    }
+    // 自定义成员必须给 cli.command；内置成员允许只覆盖部分字段（如 model / enabled）
+    const isBuiltin = !!merged[key];
+    if (!isBuiltin && !def.cli?.command) {
       log(`⚠️ 跳过非法 agent 配置: ${key}（缺少 cli.command）`);
       continue;
     }
-    merged[key] = { ...def, source: merged[key] ? "override" : "user" };
+    const base = merged[key] || {};
+    merged[key] = {
+      ...base,
+      ...def,
+      // cli 深浅合并：覆盖项优先，未提供的字段继承内置默认
+      cli: { ...(base.cli || {}), ...(def.cli || {}) },
+      source: isBuiltin ? "override" : "user",
+    };
+  }
+  // enabled:false 表示成员被停用，不进入 AGENTS（群聊目标）
+  for (const [key, def] of Object.entries(merged)) {
+    if (def.enabled === false) delete merged[key];
   }
   return merged;
 }
@@ -75,23 +108,32 @@ export function getAvailability() {
 }
 
 // ===== 配置热加载（debounce，失败保留旧配置）=====
+// 显式热加载：成员维护 API 写盘后调用；失败保留旧配置并返回 false
+export function reloadConfig() {
+  if (_reloadTimer) { clearTimeout(_reloadTimer); _reloadTimer = null; }
+  const next = buildAgents();
+  if (Object.keys(next).length > 0) {
+    AGENTS = next;
+    refreshAvailability();
+    return true;
+  }
+  log("⚠️ 配置有误，保留旧配置继续运行");
+  return false;
+}
+
 let _reloadTimer = null;
 try {
   const watcher = watch(CONFIG_PATH, () => {
     if (_reloadTimer) clearTimeout(_reloadTimer);
     _reloadTimer = setTimeout(() => {
-      const next = buildAgents();
-      if (Object.keys(next).length > 0) {
-        AGENTS = next;
-        refreshAvailability();
-        log("✓ config hot-reloaded");
-      } else {
-        log("⚠️ 配置有误，保留旧配置继续运行");
-      }
-      _reloadTimer = null;
-    }, 300);
+    reloadConfig();
+    _reloadTimer = null;
+  }, 300);
   });
   watcher.on("error", (e) => log(`⚠️ config watcher 错误: ${e.message}`));
+  // unref：不让 watcher 独自撑住事件循环（服务器由 HTTP 监听保活，热加载不受影响；
+  // 测试进程 import 本模块后也能正常退出）
+  watcher.unref();
 } catch (e) {
   log(`⚠️ 无法监听 agents.config.json: ${e.message}`);
 }

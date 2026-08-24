@@ -195,6 +195,7 @@
     history = []; currentSessionId = null;
     document.getElementById("messages").innerHTML = "";
     showWelcome();
+    updateRegenButton();
     renderHistoryList();
     document.getElementById("input").focus();
   }
@@ -215,13 +216,8 @@
     renderHistoryList();
   }
 
-  // 修复：历史会话加载时正确渲染 markdown（之前 escape 后显示源码，格式全丢）
-  function loadSession(id) {
-    const s = sessions.find(s => s.id === id);
-    if (!s) return;
-    if (isStreaming) stopGeneration();
-    if (history.length > 0) saveCurrentSession();
-    history = [...s.history]; currentSessionId = id;
+  // 按当前 history 重绘整个消息区（加载会话 / 重新生成共用；markdown 正常渲染）
+  function renderHistoryMessages() {
     document.getElementById("messages").innerHTML = "";
     for (const msg of history) {
       if (!msg.agent || msg.agent === "user") {
@@ -232,6 +228,16 @@
         highlightBlocks(bodyEl);
       }
     }
+  }
+
+  function loadSession(id) {
+    const s = sessions.find(s => s.id === id);
+    if (!s) return;
+    if (isStreaming) stopGeneration();
+    if (history.length > 0) saveCurrentSession();
+    history = [...s.history]; currentSessionId = id;
+    renderHistoryMessages();
+    updateRegenButton();
     renderHistoryList();
     // 移动端加载会话后收起侧边栏
     if (window.innerWidth <= 768 && !document.getElementById("sidebar").classList.contains("collapsed")) {
@@ -246,6 +252,7 @@
       history = [];
       document.getElementById("messages").innerHTML = "";
       showWelcome();
+      updateRegenButton();
     }
     saveSessions();
     renderHistoryList();
@@ -522,9 +529,9 @@
     if (nearBottom) m.scrollTop = m.scrollHeight;
   }
 
-  function getOrCreateStreamBody(agent) {
+  function getOrCreateStreamBody(agent, model) {
     if (streamBuffers[agent]?.bodyEl) return streamBuffers[agent].bodyEl;
-    const bodyEl = addMessage(agent, "", null, false);
+    const bodyEl = addMessage(agent, "", model, false);
     streamBuffers[agent] = { bodyEl, text: "", thinking: true, dirty: false, rafId: null, startTime: Date.now() };
     bodyEl.innerHTML = '<div class="thinking-dots"><span></span><span></span><span></span></div>';
     return bodyEl;
@@ -590,11 +597,44 @@
     isStreaming = false;
     document.getElementById("send").disabled = false;
     document.getElementById("stop").classList.remove("visible");
+    updateRegenButton();
   }
 
   function stopGeneration() {
     stoppedByUser = true;
     if (abortController) abortController.abort();
+  }
+
+  // 重新生成最后一轮：截断到该轮用户消息之前，用原始输入（含 @mention）重发
+  function regenerateLast() {
+    if (isStreaming) return;
+    let idx = -1;
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (!history[i].agent || history[i].agent === "user") { idx = i; break; }
+    }
+    if (idx === -1) { addSystemMessage("暂无可重新生成的消息"); return; }
+
+    const raw = history[idx].raw || history[idx].text;
+    // 先校验还有可用的接收者，避免截断后发不出去
+    const { targets } = parseMentions(raw);
+    if (targets.length === 0) {
+      addSystemMessage("⚠️ 没有可接收消息的 AI，请先在顶栏启用至少一个");
+      return;
+    }
+
+    history.length = idx; // 丢掉该轮用户消息及其后的所有回复
+    renderHistoryMessages();
+    if (history.length === 0) showWelcome();
+    saveCurrentSession();
+    void dispatchMessage(raw);
+  }
+
+  // 「重新生成」按钮可见性：非流式且存在至少一条用户消息
+  function updateRegenButton() {
+    const btn = document.getElementById("regen");
+    if (!btn) return;
+    const hasUser = history.some(h => !h.agent || h.agent === "user");
+    btn.classList.toggle("visible", !isStreaming && hasUser);
   }
 
   async function sendMessage() {
@@ -603,21 +643,36 @@
     if (!raw || isStreaming) return;
     closeMention();
 
+    const ok = await dispatchMessage(raw);
+    if (!ok) return; // 校验未通过：保留输入内容，便于修改后重发
+    input.value = "";
+    autoResize(input);
+  }
+
+  // 统一发送入口（sendMessage / 重新生成 共用）
+  // 返回 false 表示未发出（校验失败，输入框内容应保留）
+  async function dispatchMessage(raw) {
     // 解析 @mention
     const { cleaned: text, targets } = parseMentions(raw);
     if (targets.length === 0) {
       addSystemMessage("⚠️ 没有可接收消息的 AI，请先在顶栏启用至少一个");
-      return;
+      return false;
     }
+
+    // 先快照历史（不含本条消息）再渲染用户气泡：
+    // 避免当前消息既进 history 又作为 message 发送，在 prompt 中重复出现
+    const historySnapshot = history.slice(-12);
 
     isStreaming = true;
     stoppedByUser = false;
     document.getElementById("send").disabled = true;
     document.getElementById("stop").classList.add("visible");
-    input.value = "";
-    autoResize(input);
+    updateRegenButton();
 
     addMessage("user", escapeHtml(text));
+    // 记录原始输入（含 @mention），供「重新生成」按原样重发
+    const lastEntry = history[history.length - 1];
+    if (lastEntry && (!lastEntry.agent || lastEntry.agent === "user")) lastEntry.raw = raw;
 
     abortController = new AbortController();
     try {
@@ -626,7 +681,7 @@
         signal: abortController.signal,
         json: {
           message: text, targets,
-          history: history.slice(-12), // 与服务端上限（20 条）对齐，保留更多上下文
+          history: historySnapshot, // 与服务端上限（20 条）对齐；不含当前消息
           thinking: thinkingMode,
           mode: chatMode,
           rounds,
@@ -637,7 +692,7 @@
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         addSystemMessage(`⚠️ 请求被拒绝: ${errData.error || response.status}`);
-        return;
+        return true;
       }
 
       const reader = response.body.getReader();
@@ -670,12 +725,13 @@
       for (const agent of Object.keys(streamBuffers)) finalizeStream(agent, "");
       saveCurrentSession();
     }
+    return true;
   }
 
   function handleSSEEvent(event, data) {
     switch (event) {
       case "thinking":
-        getOrCreateStreamBody(data.agent);
+        getOrCreateStreamBody(data.agent, data.model);
         setStatus(data.agent, true);
         break;
       case "chunk":
@@ -716,4 +772,5 @@
 
   loadAgents();
   renderHistoryList();
+  updateRegenButton();
   inputEl.focus();

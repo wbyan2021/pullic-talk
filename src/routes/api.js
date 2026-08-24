@@ -76,6 +76,9 @@ export default function apiRoutes(app) {
     const chatCtx = { message, history, mode, rounds };
     flush("start", { message });
 
+    // 每个 agent 实际使用的模型（用户选择 > agent 默认），随 thinking 事件下发给前端展示
+    const resolveModel = (target) => models[target] || AGENTS[target]?.model || "";
+
     const allResponses = []; // 跨轮累积所有 agent 发言，供下一轮参考
     for (let r = 0; r < rounds; r++) {
       if (r > 0) flush("round", { round: r + 1, total: rounds });
@@ -86,7 +89,7 @@ export default function apiRoutes(app) {
         const priorResponses = [...allResponses];
         for (const target of targets) {
           if (clientClosed) break; // 断开后不再白跑后续 agent
-          flush("thinking", { agent: target });
+          flush("thinking", { agent: target, model: resolveModel(target) });
           try {
             const fullText = await callAgent(target, buildPrompt(target, chatCtx, priorResponses), (chunk) => {
               flush("chunk", { agent: target, chunk });
@@ -102,7 +105,7 @@ export default function apiRoutes(app) {
         // 并行模式：所有 agent 同时回答，下一轮能看到之前所有轮的发言
         const roundPrior = [...allResponses];
         const promises = targets.map(async (target) => {
-          flush("thinking", { agent: target });
+          flush("thinking", { agent: target, model: resolveModel(target) });
           try {
             const fullText = await callAgent(target, buildPrompt(target, chatCtx, roundPrior), (chunk) => {
               flush("chunk", { agent: target, chunk });

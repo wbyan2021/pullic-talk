@@ -7,6 +7,7 @@
   <!--OPS:TOKEN-->
   <link id="hljs-theme" rel="stylesheet" href="/vendor/hljs-github-dark.min.css">
   <link rel="stylesheet" href="/css/chat.css">
+    <link rel="stylesheet" href="/css/members.css">
   <link rel="stylesheet" href="/css/installer.css">
   <script src="/vendor/marked.min.js"></script>
   <script src="/vendor/highlight.min.js"></script>
@@ -35,6 +36,7 @@
       <span id="logo-text">🤖 AI 群聊</span>
     </div>
     <div class="controls">
+      <button id="members-btn" onclick="Members.open()" title="维护群成员与模型">👥 成员</button>
       <div class="selector">
         <label>🔀</label>
         <select id="mode-select" onchange="changeMode(this.value)">
@@ -75,6 +77,35 @@
       <textarea id="input" rows="1" placeholder="输入消息… @ 可定向发言，Shift+Enter 换行"></textarea>
       <button id="send" onclick="sendMessage()">发送</button>
       <button id="stop" onclick="stopGeneration()">⏹ 停止</button>
+      <button id="regen" onclick="regenerateLast()" title="按原始输入重新生成最后一轮回复">🔄</button>
+    </div>
+  </div>
+</div>
+
+<div id="members-overlay" class="hidden">
+  <div id="members-panel">
+    <div class="members-head">
+      <span>👥 群成员与模型维护</span>
+      <button onclick="Members.close()">✕</button>
+    </div>
+    <div id="members-list"></div>
+    <div class="members-add">
+      <h3>添加自定义成员</h3>
+      <div class="members-add-grid">
+        <input id="m-add-key" placeholder="key（如 my-ai）">
+        <input id="m-add-name" placeholder="成员名（如 My AI）">
+        <input id="m-add-command" placeholder="CLI 命令（如 myai）">
+        <input id="m-add-args" placeholder="args 逗号分隔（如 -p,{prompt}）">
+        <input id="m-add-role" placeholder="角色说明">
+        <input id="m-add-model" placeholder="默认模型">
+        <input id="m-add-models" placeholder="可选模型，逗号分隔">
+        <select id="m-add-parse">
+          <option value="text">text</option>
+          <option value="ndjson">ndjson</option>
+          <option value="json-envelope">json-envelope</option>
+        </select>
+      </div>
+      <button class="btn-primary" onclick="Members.add()">添加成员</button>
     </div>
   </div>
 </div>
@@ -84,6 +115,7 @@
 <script src="/js/ops.js"></script>
 <script src="/js/installer.js"></script>
 <script src="/js/chat.js"></script>
+  <script src="/js/members.js"></script>
 
 </body>
 </html>
