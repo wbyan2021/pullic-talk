@@ -36,7 +36,7 @@
 - **🔄 重新生成**：对最后一轮回复不满意时点输入栏右侧 🔄，按原始输入（含 @定向）截断重发
 - **上下文**：发给 agent 的历史不包含当前消息（避免 prompt 重复拼接），服务端另有去重兜底
 - **👥 成员维护**：群聊页右上角「👥」打开成员面板，可启用/停用成员、修改每个成员的默认模型与可选模型列表、添加自定义 CLI 成员、删除自定义成员；改动会写入 `agents.config.json` 并热生效
-- **🔑 Key 管理**：群聊页右上角「🔑 Key」打开本地 API Key 管理面板，可增删改 `~/.secrets.env` 里的 Key；保存后对当前服务立即生效，以后新开的终端也会自动加载
+- **🔑 Key 管理（实验性）**：群聊页右上角「🔑 Key」打开本地 API Key 管理面板，可增删改 `~/.secrets.env` 里的 Key；保存后同步当前服务进程。应用重启不会自动解析该文件，真实凭据请优先使用护航 AI 的 macOS Keychain 路径
 
 ---
 
@@ -132,7 +132,7 @@ pullic-talk/
 │   ├── config.js            # 配置合并（含 enabled 停用/部分覆盖）+ CLI 可用性探测
 │   ├── utils/
 │   │   ├── auth.js          # 随机 token 生成与校验
-│   │   └── secrets-env.js   # ~/.secrets.env 安全读写（Key 管理面板）
+│   │   └── secrets-env.js   # ~/.secrets.env 本地读写（实验性 Key 管理，需独立安全验收）
 │   ├── services/            # 护航/项目边界/执行/证据/黑匣子等后端服务
 │   └── routes/              # api / tools / launch / install / members / secrets
 ├── public/
@@ -160,10 +160,11 @@ pullic-talk/
 - 终端 WebSocket：origin 检查 + token 双重校验，单帧上限 1MB
 - `/terminal?run=` 命令注入**必须用户在弹框确认后**才执行（防恶意链接借刀杀人）
 - 快捷安装只接受**白名单条目**，命令全部来自目录常量，不接受任意用户输入
-- 前端第三方库全部本地化（`public/vendor/`），无 CDN 供应链风险；DOMPurify 缺失时降级为纯文本渲染
+- 前端第三方库全部本地化（`public/vendor/`），无 CDN 供应链风险；Markdown 在 DOMPurify 可用时消毒，缺失时的降级路径不能宣称为纯文本安全边界
 - CSP 头限制资源来源（script 仅 'self'）
 - 命令启动接口有危险模式黑名单（`rm -rf` / `mkfs` / `dd` / `shutdown` 等）——注意这只是误操作防护、不是安全边界，终端本身就是完整 shell
 - 每 IP 每分钟 200 次请求速率限制
+- 「🔑 Key」面板位于认证 API 之后，但当前会把 Key 值返回给已认证浏览器并允许临时显示；它不等同于 macOS Keychain，尚未完成同等级安全验收
 
 命令行工具（如 `run-debate.js`）从 `.token` 文件读取 token 自动携带。
 

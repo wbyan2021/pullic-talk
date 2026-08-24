@@ -3,7 +3,7 @@ type: codemap
 project: AI·OPS COCKPIT
 status: active
 workflow_version: 4
-updated: 2026-08-24
+updated: 2026-08-25
 ---
 
 # AI·OPS COCKPIT · 代码地图
@@ -23,7 +23,7 @@ updated: 2026-08-24
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
 - 稳定基线：`8a72e99`
-- 当前验证基线：依赖完整；210 项默认测试（含 S04 临时真实 Git 端到端、恢复与停止后 SSE 收口、活动项目 Pi 面板挂载与切换回归）通过；语法和差异检查通过；2026-08-24 只读页面检查确认隔离端口页面可加载、活动项目下只有一个 Pi 面板，窄视口下容器对齐已验证；用户高风险验收仍待执行；没有 lint、CI 或 build 脚本。
+- 当前验证基线：依赖完整；当前测试定义数为 263。沙箱内 `npm test` 为 253/263，10 项路由测试因沙箱禁止监听 `127.0.0.1` 返回 EPERM；同一 `members-routes` 与 `secrets-routes` 子集在受限环境外复跑为 10/10；语法、差异和 strict 结构检查通过。S04 用户高风险验收仍待执行；没有 lint、CI 或 build 脚本。
 
 ## 关键路径
 
@@ -32,10 +32,12 @@ updated: 2026-08-24
 | `src/server.js` | Express、WebSocket、安全头、路由装配、启动与关闭 | 程序入口 / 组合层 |
 | `src/agent-caller.js` | 输入清洗、Prompt 构建、CLI 调用和输出解析 | 核心领域 |
 | `src/limits.js` | 消息、轮次、输出和请求边界 | 核心规则 |
-| `src/config.js` | 内置目录与用户配置合并、CLI 可用性探测 | 配置适配层 |
+| `src/config.js` | 内置目录与用户配置合并、成员配置原子写回/热加载、CLI 可用性探测 | 配置适配层 |
 | `src/agent-catalog.js` | 内置 Agent 适配器目录 | CLI 适配层 |
 | `src/install-catalog.js` | 白名单安装条目与安装方式 | 安装适配层 |
-| `src/routes/api.js` | 多 Agent 并行、协作、多轮与 SSE API | 应用层 |
+| `src/routes/api.js` | 多 Agent 并行、协作、多轮、实际模型元数据与 SSE API | 应用层 |
+| `src/routes/members.js` | Agent 成员列表、模型配置、启用/停用、自定义成员增删的认证 HTTP 契约 | 群聊配置应用层 |
+| `src/routes/secrets.js` | 实验性 `~/.secrets.env` Key 快照与写入的认证 HTTP 契约 | 高风险凭据适配层 |
 | `src/routes/tools.js` | 工具清单、服务探活和扫描入口 | 本机适配层 |
 | `src/routes/launch.js` | 应用、命令和后台进程启动 | 高权限适配层 |
 | `src/routes/install.js` | 安装任务、日志、超时和状态查询 | 高权限适配层 |
@@ -59,10 +61,13 @@ updated: 2026-08-24
 | `docs/ai-ops/NOW.md`、`docs/ai-ops/records/` | 写入目标项目的 AI 当前交接和历史记录；必须由用户显式启用 | 目标项目数据 |
 | `src/terminal.js` | 完整本机 PTY Shell | 高权限适配层 |
 | `src/utils/auth.js` | 随机 Token、认证中间件与写盘 | 安全边界 |
+| `src/utils/secrets-env.js` | 本地 `export KEY=value` 文件解析、原子写回、shell 单引号转义和 `0600` 尝试 | 高风险凭据适配层 |
 | `public/` | 控制台、群聊、安装器和终端页面 | 表现层 |
+| `public/js/members.js`、`public/css/members.css` | 群聊成员与模型维护面板 | 群聊表现层 |
+| `public/js/secrets.js`、`public/css/secrets.css` | 实验性本地 Key 管理面板；密码输入、显示/隐藏和增删改 | 高风险凭据表现层 |
 | `public/js/escort.js`、`public/css/escort.css` | 常驻/移动覆盖式护航面板及安全纯文本交互 | 护航表现层 |
 | `public/vendor/` | 本地化第三方前端依赖 | 第三方生成资产 |
-| `test/` | Credential Store、Provider、Escort Service、路由和护航 UI 的 Node 原生测试 | 自动化验证层 |
+| `test/` | Credential Store、Provider、Escort、成员/Key 路由、项目执行、聊天与 UI 的 Node 原生测试 | 自动化验证层 |
 | `scripts/` | 环境安装、工具扫描和 node-pty 权限修复 | 运维脚本 |
 | `run-debate.js`、`debate.json` | 配置驱动的命令行辩论流程 | 实验性工作流 |
 | `docs/` | 产品、当前版本、代码地图与想法事实源 | 项目管理层 |
@@ -80,7 +85,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 | 扫描工具 | `npm run scan` | 本轮未执行；会更新本地 `tools.json` |
 | 完整安装引导 | `npm run setup` | 本轮未执行；包含环境检查、安装和扫描 |
 | JavaScript 语法检查 | `git ls-files '*.js' | xargs -n1 node --check` | 初始化 28 个文件通过；S01 新增/装配文件再次通过 |
-| 自动化测试 | `npm test` | 210 项通过；S04 临时真实 Git 端到端 2/2 通过；`RUN_MACOS_KEYCHAIN_PROMPT_PROBE=1 node --test test/credential-store.test.js` 为可选 12/12 无写入 macOS 探针 |
+| 自动化测试 | `npm test` | 263 项定义；沙箱内 253/263（10 项 loopback 路由测试受 EPERM 限制）；members/secrets 路由子集在受限环境外 10/10；S04 临时真实 Git 端到端通过 |
 | lint | 未配置 | 不可用 |
 | build | 无需前端构建，且未配置 build 脚本 | 不适用 |
 
@@ -122,6 +127,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 - `projects.local.json`：S02 项目选择状态，由项目边界服务写入仓库根；不含秘密，已加入 `.gitignore`。
 - `blackbox.local/`：S04 本地黑匣子事件目录，由黑匣子服务追加写入；已加入 `.gitignore`，不提交。
 - `docs/ai-ops/`：用户显式启用后才写入目标项目；当前文件原子更新，历史记录不可覆盖；内容必须经过统一脱敏。
+- `~/.secrets.env`：实验性网页 Key 管理目标文件；不提交、不读取真实内容、不把它当作 Keychain 等价物；当前实现只在保存后同步服务进程，重启加载不由本应用保证。
 - `node_modules/`：依赖目录，只由 npm 管理。
 - `package-lock.json`：只随依赖安装或升级变化，不手工编辑。
 - `public/vendor/`：第三方本地化资产，普通功能切片不修改。
@@ -135,6 +141,8 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 | `npm start` | 生成/覆盖 `.token`，监听本地端口 | 使用隔离端口；禁止读取或展示 `.token` |
 | 安装/启动/终端接口 | 安装软件、启动进程或执行当前用户权限命令 | 必须遵守白名单、用户授权和进程归属边界 |
 | S01 凭据操作 | 增改或删除 macOS Keychain 中固定服务条目 | 只通过明确 UI 动作；Key 不进 argv、文件或日志；删除必须幂等 |
+| 群聊成员维护 | 写回 `agents.config.json` 并触发配置热加载 | 只允许白名单字段；损坏配置保留旧配置；不要覆盖用户未分类改动 |
+| 实验性 Key 管理 | 通过认证 API 写回 `~/.secrets.env` 并同步当前 `process.env` | 高风险；不读取/输出真实值；浏览器会收到当前值，必须单独安全审查 |
 
 S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deepseek`、account `default`。保存通过既有 `node-pty` 等待 C-locale 固定提示并写入，写入后不保留 PTY 输出；查询、读取和删除仍使用无 shell 的普通子进程。自动化测试使用假 Key；macOS 提示探针在输入前终止并确认不生成条目。真实副作用必须由用户在网页验收时主动触发。
 
@@ -148,6 +156,8 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 | `src/agent-caller.js` | CLI 在用户主目录运行并继承环境变量 | 工作目录、参数注入、输出上限、超时和停止 |
 | `src/utils/auth.js`、`src/server.js` | 本地控制面的认证与暴露边界 | Token、Origin、监听地址、CSP、速率限制 |
 | `src/services/credential-store.js` | 接触真实 Provider Key 与系统钥匙串 | 绝对命令路径、shell 禁用、受控 PTY 固定提示、输出边界、超时回收、无明文回退 |
+| `src/routes/secrets.js`、`src/utils/secrets-env.js`、`public/js/secrets.js` | 网页读取和写入本地 Key 文件，并可能把值展示到浏览器 | 认证闸门、变量名/长度白名单、原子写入、0600、浏览器暴露风险；未完成 S01 等级验收前不作为默认凭据路径 |
+| `src/routes/members.js`、`src/config.js`、`public/js/members.js` | 修改 Agent 成员和模型配置并热加载 | 字段白名单、原子写入、禁用/自定义语义、配置损坏回退和并发写入审查 |
 | `src/providers/deepseek.js`、`src/routes/escort.js` | 付费外部请求与错误/秘密泄露 | 超时、单并发、频率、状态字段白名单、原始错误不透传 |
 | `src/services/git-inspector.js`、`src/routes/project.js` | 任意路径输入与 Git 子进程 | 只读命令白名单、无 shell、超时、输出截断、realpath 校验、禁止根 |
 | `src/services/pi-executor.js`、`src/routes/execution.js` | Pi 在活动项目内以完整用户权限执行 | 无 shell、argv 永不含密钥、cwd 限定活动项目 repoRoot、SIGTERM+超时回收、单实例 busy、UI 风险确认后才启动 |
@@ -159,11 +169,13 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 
 ## 已知工程缺口
 
-- 已有 210 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；旧控制台、安装、群聊和终端主要仍依赖语法与人工回归。
+- 已有 263 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；沙箱不能监听 loopback 时，成员/Key 路由测试需在受限环境外复跑。
 - `public/js/chat.js` 体量较大，修改容易产生跨功能回归。
 - Agent 默认工作目录是用户主目录，不具备项目级 Workspace 边界。
 - 默认端口 `3210` 曾被早于 S01 的旧实例占用；2026-08-06 已查明并经用户授权结束，现运行 S01 合并后的代码。
 - DeepSeek 与 macOS Keychain 的真实验收尚未完成；Mock 证据不能替代用户自己的 Key 和本机授权策略。
+- 网页 Key 管理是新增的实验性高风险路径：当前 API 返回 Key 值给已认证浏览器，且服务启动不会自动解析 `~/.secrets.env`；需要先完成安全边界决策和真实验收，不能与 S01 Keychain 证据混用。
+- 成员/模型维护已能写回配置并热加载，但尚未完成用户页面验收；`agents.config.json` 中的本机启用/停用状态不是产品基线。
 
 ## 维护规则
 

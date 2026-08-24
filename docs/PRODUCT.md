@@ -13,7 +13,7 @@ updated: 2026-08-18
 > 文档性质：长期产品事实源 + 当前实现说明
 > 当前代码版本：`2.0.0`（界面与包名仍保留 AI·OPS DECK，后续切片迁移）
 > 当前目标版本：`v0.1-first-controlled-mission`
-> 更新时间：2026-08-18
+> 更新时间：2026-08-25
 > 事实来源：当前仓库代码、已确认的[产品流程与架构总览](plans/2026-08-05-ai-ops-deck-overall-design-review-draft.md)及文末竞品资料
 
 快速阅读：[产品定位](#1-一句话定义) · [产品全景](#3-产品目标与范围) · [模块边界](#4-目标信息架构与模块边界) · [当前功能](#5-当前功能清单) · [当前版本](NOW.md) · [完整流程图](diagrams/2026-08-05-ai-ops-cockpit-complete-product-flow-draft.md)
@@ -182,7 +182,7 @@ AI 护航是贯穿能力，不是第九个业务模块。统一状态与事件�
 | 状态 | 功能 | 当前行为 |
 |---|---|---|
 | ✅ | DeepSeek 护航控制面 | 独立于 CLI Agent 调用链；可在 Pi 不可用时读取状态、检测连接并完成对话；已完成一次用户真实验收。 |
-| ✅ | macOS Keychain 凭据管理 | Key 可保存、替换、删除；不进入命令参数、普通配置、浏览器持久化或应用日志；已完成用户真实验收与固定条目核对。 |
+| ✅ | macOS Keychain 凭据管理（S01 路径） | 护航 AI 的 Key 可保存、替换、删除；该路径不进入命令参数、普通配置、浏览器持久化或应用日志；已完成用户真实验收与固定条目核对。 |
 | ✅ | 可重复自动验证 | 62 项 Node 原生测试覆盖凭据、Provider、状态机、路由与护航 UI；另有 12/12 无写入 macOS PTY 探针。 |
 
 本功能的当前验收状态与唯一下一步以 [NOW.md](NOW.md) 为准；实现决策见 [ADR-002](decisions/ADR-002-provider-control-plane-and-keychain.md)。
@@ -234,12 +234,18 @@ AI 护航是贯穿能力，不是第九个业务模块。统一状态与事件�
 | ✅   | 多轮讨论        | 支持 1–5 轮；后续轮次参考之前所有发言                                    |
 | ✅   | `@` 定向      | 支持 `@agent`、`@all` 和键盘自动补全                               |
 | ✅   | 模型选择        | 仅允许选择 Agent 配置白名单内的模型                                    |
+| ✅   | 成员与模型维护  | 群聊页可启用/停用成员、编辑默认模型与可选模型、添加或删除自定义 CLI 成员；配置写回 `agents.config.json` 并热加载。 |
+| ✅   | 实际模型显示    | 每个 Agent 的 thinking 事件带上本次实际使用的模型，消息头显示该模型。 |
 | ✅   | 思考深度        | 将统一的 off / low / medium / high / max 映射到不同 CLI 参数        |
 | ✅   | 流式输出        | 后端通过 SSE 返回 start、thinking、chunk、done、round、error、end 事件 |
 | ✅   | 手动停止        | 中止 HTTP 请求并终止该请求创建的子进程                                   |
 | ✅   | 本地历史        | 浏览器 `localStorage` 保存最多 50 个会话，可导出 Markdown              |
 | 🟡  | 协作结果        | Agent 能看到前序回答，但没有固定的主持、投票、验收或最终综合步骤（我觉得要增加）              |
 | 🟡  | 会话延续        | 保存的是页面消息，不是各 CLI 的原生会话；每次调用通常是新进程                        |
+
+#### 实验性本地 Key 管理（当前代码已存在，未纳入 S01 验收）
+
+群聊页新增「🔑 Key」面板和 `/api/secrets` 路由，可读取、增删改 `~/.secrets.env` 中的 `export KEY=value` 条目；写入使用临时文件 + rename，并尝试设置 `0600`，保存后同步当前服务进程的 `process.env`。这是一条**不同于 S01 macOS Keychain 的高风险路径**：接口会把 Key 值返回给已认证浏览器用于编辑，尚未完成独立的安全审查和真实验收，不能把它描述成 Keychain 的等价替代。
 
 相关代码：[聊天路由](../src/routes/api.js)、[统一 Agent 调用器](../src/agent-caller.js)、[Agent 目录](../src/agent-catalog.js)、[群聊前端](../public/js/chat.js)。
 
@@ -348,8 +354,8 @@ AI 护航是贯穿能力，不是第九个业务模块。统一状态与事件�
 ### 7.2 配置规则
 
 - 内置 Agent 来自 `src/agent-catalog.js`。
-- `agents.config.json` 是覆盖层；同名配置会**整体覆盖**内置项，而不是深度合并。
-- 自定义 Agent 至少需要 `cli.command`。
+- `agents.config.json` 是覆盖层；同名内置 Agent 的用户字段会与内置定义合并，`cli` 字段也做浅层合并；自定义 Agent 至少需要 `cli.command`。
+- 成员维护 API 以原子 rename 写回 `agents.config.json`；`enabled: false` 会将内置成员从群聊目标中停用；写入成功后热加载，损坏配置保留旧配置。
 - 可用性目前只通过 `which <command>` 判断，结果缓存 30 秒。
 - 支持三类输出解析：纯文本、NDJSON、JSON Envelope。
 - Agent 配置保存后会热加载；失败时尽量保留旧配置。
@@ -361,6 +367,8 @@ AI 护航是贯穿能力，不是第九个业务模块。统一状态与事件�
 | 会话历史 | 浏览器 `localStorage` | 单浏览器本地，最多 50 个会话 |
 | UI 偏好 | 浏览器 `localStorage` | 主题、模式、轮数、模型选择 |
 | Agent 配置 | `agents.config.json` | 项目文件，支持热加载 |
+| 群成员维护 | `agents.config.json` | 群聊页显式写入；内置成员可停用，自定义成员可删除；当前配置属于本机用户状态 |
+| 本地 API Key（实验性） | `~/.secrets.env` | `/api/secrets` 读写；写入后当前服务进程立即同步，服务重启不会由本应用自动解析该文件；值会返回已认证浏览器，未通过 S01 Keychain 的安全验收 |
 | 工具扫描结果 | `tools.json` | 本机生成，不进入 Git |
 | 认证 Token | `.token` | 服务启动时生成，不进入 Git |
 | 辩论记录 | `debates/*.md` | 命令行脚本增量生成，不进入 Git |
@@ -417,6 +425,10 @@ flowchart TB
 | GET | `/api/health` | 健康检查、可用 Agent、活动进程；唯一免 Token API |
 | GET | `/api/models` | Agent、模型、安装状态与适配信息 |
 | POST | `/api/chat` | 发起多 Agent SSE 会话 |
+| GET | `/api/members` | 获取内置与用户 Agent 成员状态、模型和 CLI 可用性 |
+| POST | `/api/members` | 添加自定义 Agent 成员 |
+| PUT/DELETE | `/api/members/:key` | 更新或停用/删除 Agent 成员 |
+| GET/POST | `/api/secrets` | 读取或写入实验性 `~/.secrets.env` Key 管理文件（需认证） |
 | GET | `/api/tools` | 获取工具清单和服务在线状态 |
 | POST | `/api/tools/scan` | 重新扫描本机工具 |
 | POST | `/api/launch` | 启动应用或后台命令 |
@@ -467,6 +479,7 @@ flowchart TB
 - 安装 API 只接受目录白名单 ID，不接受用户直接提交安装命令。
 - `/terminal?run=` 不会自动执行，必须二次确认。
 - Markdown 正常情况下经过 DOMPurify 消毒。
+- `/api/members` 与 `/api/secrets` 也位于认证闸门之后；成员配置和本地 Key 文件写入使用原子替换，Key 文件尝试设置为 `0600`。
 
 ### 9.2 仍需明确的风险
 
@@ -476,6 +489,8 @@ flowchart TB
 4. **安装会执行包管理器命令和官方脚本。** 白名单减少了输入注入，但无法消除上游供应链风险。
 5. **DOMPurify 缺失时目前会直接返回 marked 生成的 HTML。** README 写的是“降级为纯文本”，代码与说明不一致，应修复。
 6. **CSP 仍允许 `unsafe-inline`。** 原因是页面仍使用内联事件处理器；外部字体 CSS 也意味着并非完全离线。
+7. **网页 Key 管理会把变量值返回给已认证浏览器并允许显示明文。** 这与 S01 Keychain 的“不进入浏览器/普通配置”保证不同；在完成脱敏展示、权限确认和真实验收前，不应把 `~/.secrets.env` 用于需要 S01 级别保护的真实凭据。
+8. **本应用不会在服务启动时自动解析 `~/.secrets.env`。** 当前实现只在网页保存后同步正在运行的服务进程；重启后的加载行为取决于启动环境，README 和产品承诺不能写成“应用自动加载”。
 
 安全定位应写成：**默认本机、减少误操作和跨站调用风险，但不提供恶意代码隔离。**
 
@@ -512,6 +527,7 @@ flowchart TB
 | P0  | Agent 默认在用户主目录运行，没有“项目 / Workspace”概念 | 编码 Agent 缺少明确工作范围，容易读错项目或对宿主目录产生非预期修改    |
 | P0  | 群聊结果只有讨论，没有可靠的“综合结论—任务—执行—验收”闭环       | 看起来热闹，但复杂任务未必真正完成                        |
 | P0  | 没有权限分级、命令审批策略或隔离执行                    | 产品能力越强，误操作和恶意 Prompt 的影响越大               |
+| P0  | 实验性网页 Key 管理会向已认证浏览器返回 Key 值，且重启加载依赖外部启动环境 | 与 S01 Keychain 的保护保证不一致；未完成安全审查前不能作为默认凭据入口 |
 | P1  | 会话仅保存在浏览器 localStorage                | 无法可靠搜索、迁移、跨设备、恢复 CLI 原生上下文或关联产物          |
 | P1  | 产品入口较分散：工具箱、安装器、群聊、终端各自成立             | 用户可能看不出“最重要的主任务是什么”                      |
 | P1  | 多轮成本不可见                               | 一次请求最多可触发 8 Agent × 5 轮，时间和订阅额度消耗缺少预估与守护 |
@@ -528,7 +544,7 @@ flowchart TB
 | P1 | `public/js/chat.js` 单文件约 700 行，状态与 DOM 操作耦合 | 按 store、session、render、transport、mentions 拆模块 |
 | P1 | CSP 仍需要 `unsafe-inline` | 移除 HTML 内联事件，统一用事件监听器 |
 | P1 | 文档与实现已经出现漂移 | 将关键产品限制和安全断言纳入测试或自动生成文档 |
-| P2 | 配置采用整体覆盖 | 改成显式深度合并，或提供配置校验和完整示例，避免漏字段 |
+| P2 | 成员配置虽已支持合并和热加载，但缺少 schema/并发写入与 UI 验收闭环 | 增加配置校验、并发写入保护和真实页面验收记录 |
 | P2 | 安装任务与会话没有持久化 | 引入 SQLite，保留轻部署体验同时获得恢复能力 |
 
 ### 11.3 综合评价
@@ -662,6 +678,8 @@ flowchart TB
 | 并行 / 协作 / 多轮流程 | [`src/routes/api.js`](../src/routes/api.js) |
 | 消息与资源限制 | [`src/limits.js`](../src/limits.js) |
 | 群聊 UI 与会话保存 | [`public/js/chat.js`](../public/js/chat.js) |
+| 成员与模型维护 | [`src/routes/members.js`](../src/routes/members.js)、[`public/js/members.js`](../public/js/members.js) |
+| 实验性本地 Key 管理 | [`src/routes/secrets.js`](../src/routes/secrets.js)、[`src/utils/secrets-env.js`](../src/utils/secrets-env.js)、[`public/js/secrets.js`](../public/js/secrets.js) |
 | 工具扫描目录 | [`scripts/scan-tools.js`](../scripts/scan-tools.js) |
 | 安装条目 | [`src/install-catalog.js`](../src/install-catalog.js) |
 | 安装任务 | [`src/routes/install.js`](../src/routes/install.js) |
