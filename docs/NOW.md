@@ -10,8 +10,8 @@ slice_status: active
 work_branch: codex/v0.1-s04-ai-handoff-blackbox
 base_commit: 71f9bf9
 risk_level: high
-last_verified_commit: a9ba9c9
-updated: 2026-08-25
+last_verified_commit: 046bdfd22a45cc23a237d64e2b24cfce335242fe
+updated: 2026-08-26
 ---
 
 # 当前版本：v0.1 · 第一次可控任务
@@ -186,6 +186,7 @@ updated: 2026-08-25
 - 2026-08-24 用户截图记录一次真实启动失败：任务在 Pi auth 检查阶段返回“Pi 认证未就绪”，时间线为 `failed`，Git after 为 `unknown`，验收为 `pending`；未进入 Pi 项目执行，也未产生可接受的产品证据。原因是服务当时未设置 `PI_AUTH_PROVIDER`，按默认 provider `google` 检查；随后已在隔离端口 43211 以 `PI_AUTH_PROVIDER=aliyun-token-plan` 重启服务，未读取或输出凭据。
 - 2026-08-25：只读对账确认当前分支 HEAD 为 `a9ba9c9`，工作树干净；新增提交包含群聊成员/模型维护（`21b9759`）、实验性网页 Key 管理（`913384f`）、AI 交接入口（`0654777`）、项目页双语（`f066b9f`）、README 树刷新（`3c76dc5`）和发送后清空输入（`a9ba9c9`）。这些提交不是 S04 用户真实验收证据。
 - 2026-08-25：文档对齐将 `~/.secrets.env` 明确标为实验性高风险路径：当前 API 会向已认证浏览器返回 Key 值，写入后同步当前服务进程，但应用重启不会自动解析该文件；README 中“新终端自动加载”的过度承诺已修正。S01 macOS Keychain 既有验收结论保持不变。
+- 2026-08-26：全量 `node --test` 263/263 通过；工作树干净。`agents.config.json` 仅更新 pi 模型列表一项（`aliyun-token-plan/qwen3.8-max-preview` → `aliyun-token-plan/qwen3.8-max`，经网页成员面板修改后以最小 diff 提交 `046bdfd`）。本文件 `last_verified_commit` 同步为 `046bdfd`。
 - 交接读取顺序：先读本文件，再读 `docs/PRODUCT.md`、`docs/CODEMAP.md`，最后读项目内 `docs/ai-ops/NOW.md` 与其 `latest_record`。
 
 ### 唯一下一步
