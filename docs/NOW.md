@@ -4,9 +4,9 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: review
-current_slice: S04-evidence-and-blackbox
-slice_status: active
+stage: design
+current_slice: S05-recovery-and-overview
+slice_status: candidate
 work_branch: codex/v0.1-s04-ai-handoff-blackbox
 base_commit: 71f9bf9
 risk_level: high
@@ -16,7 +16,7 @@ updated: 2026-08-26
 
 # 当前版本：v0.1 · 第一次可控任务
 
-> S01、S02、S02b、S03 均已通过用户验收并合并入 `main`。S04 已完成实现与自动化验证，当前处于 review，等待用户在本地页面完成一次真实验收后再收口。当前分支另外包含用户刚提交的群聊成员/模型维护、实验性本地 Key 管理、项目页双语和发送体验修复；这些变化已纳入文档事实，但不自动改变 S04 的验收结论。
+> S01、S02、S02b、S03 均已通过用户验收并合并入 `main`。S04 已完成实现、自动化验证和用户功能验收，于 2026-08-26 收口为 done。当前进入 S05「恢复与总览闭环」设计阶段；S05 尚未达到 Definition of Ready，不修改产品代码。当前分支另外包含群聊成员/模型维护、实验性本地 Key 管理、项目页双语和发送体验修复；这些变化已纳入文档事实，但不改变 S04 的验收结论。
 
 ## 产品基线
 
@@ -59,7 +59,7 @@ updated: 2026-08-26
 
 ## 风险等级与验证策略
 
-**当前 S04 已完成候选实现，处于 review。** S01–S03 的风险与验收记录保留在下方历史段落；S04 的自动化、脱敏、恢复和临时真实 Git 项目闭环已验证，仍需用户在 `43211` 隔离端口完成页面验收。
+**当前 S05 处于 design/candidate。** S01–S04 的风险与验收记录保留在下方；S04 的自动化、脱敏、恢复、临时真实 Git 项目闭环和用户功能验收均已记录。S05 需要先定义恢复点、恢复前预览、失败回退和总览入口的最小可观察闭环，再进入 Ready。
 
 | 依赖 | 风险 | 当前证据 | 后续最小验证 |
 |---|---|---|---|
@@ -69,7 +69,8 @@ updated: 2026-08-26
 | 本机 Shell 与子进程 | 继承当前用户权限，不是真正沙箱 | 当前已有 node-pty 和命令启动能力 | 明确工作目录、子进程归属、暂停与终止语义 |
 | Git 工作区 | 用户可能已有分支、未提交改动和未跟踪文件 | 当前仓库本身已有未知改动 | S02 先验证只读识别和保护策略 |
 | 自动化验证 | 暂无 CI 和 lint，外部服务不能由 Mock 代替 | 当前候选实现 210/210 默认测试、语法与差异检查通过；含临时真实 Git 项目端到端、恢复、argv-only 命令、跨平台 realpath 校验、停止后 SSE 收口和活动项目 Pi 面板挂载回归 | 运行隔离端口健康检查，并由用户完成真实页面验收；后续版本再评估 CI |
-| S04 项目交接写入与验收命令 | high | 已实现显式启用、脱敏原子写入、追加黑匣子、Git 前后快照、Pi 生命周期、argv-only 验收命令、失败/恢复和安全路由 | 用户在本地页面确认一次成功或 needs_review 闭环；确认后才将切片标为 done |
+| S04 项目交接写入与验收命令 | high | 已实现显式启用、脱敏原子写入、追加黑匣子、Git 前后快照、Pi 生命周期、argv-only 验收命令、失败/恢复和安全路由；用户已于 2026-08-26 确认功能验收通过 | 切片已 done；后续只处理发现的缺陷，不重新扩大 S04 范围 |
+| S05 恢复与总览闭环 | high | 已列入版本序列，尚未完成目标、边界、恢复语义和证据映射 | 先完成设计与 Definition of Ready；未经 Ready 不修改产品代码 |
 | 实验性网页 Key 管理 | high | `/api/secrets`、`~/.secrets.env` 原子写入与 0600 尝试；`secrets-routes` 4 项路由测试在受限环境外通过 | 需要用户确认是否纳入 v0.1，并完成浏览器暴露、重启加载和真实凭据安全审查；不能与 S01 Keychain 证据混用 |
 | 群聊成员/模型维护 | medium | 成员路由、配置合并/热加载和静态 UI 测试已加入当前分支 | 用户页面验收启用/停用、模型编辑、自定义成员增删；本机配置状态不等于产品基线 |
 | 默认端口 3210 | 曾被 7 月 31 日的旧实例占用 | 2026-08-06 经用户授权结束旧实例（PID 25068），S01 合并后的服务已在 3210 正常运行 | 无需进一步处理 |
@@ -99,8 +100,8 @@ updated: 2026-08-26
 | S02 | Git 项目安全边界 | 选择项目后识别并保护现有工作区状态            | done |
 | S02b | 多项目并行管理 | 可同时录入多个 Git 项目，列表查看、刷新、移除，并指定活动项目 | done   |
 | S03 | Pi 受控运行    | Pi 只在活动项目内启动，并可暂停、继续、终止        | done   |
-| S04 | 证据与黑匣子     | 可查看状态时间线、文件变化和验收证据           | active   |
-| S05 | 恢复与总览闭环    | 可恢复到检查点，并从总仪表完成整条任务          | pending   |
+| S04 | 证据与黑匣子     | 可查看状态时间线、文件变化和验收证据           | done   |
+| S05 | 恢复与总览闭环    | 可恢复到检查点，并从总仪表完成整条任务          | candidate   |
 
 ## 代码工作区
 
@@ -112,11 +113,37 @@ updated: 2026-08-26
 - 语法检查：`git ls-files '*.js' | xargs -n1 node --check`
 - 自动化测试：`npm test`
 - 健康检查：`PORT=43211 npm start` 后访问 `/api/health`
-- 当前状态：S03 已合并入 main；S04 候选实现位于 `codex/v0.1-s04-ai-handoff-blackbox`；活动项目 Pi 面板已完成单节点挂载与切换同步，并修复窄视口下的容器溢出裁切；S04 交接状态一致性修复已完成（实际文件检查、缺失文件安全初始化、修复入口和冲突提示）；项目页/执行面板中英文对照已实现；群聊成员/模型维护、实验性 `~/.secrets.env` Key 管理、发送后清空输入已进入当前分支。定向项目/执行 UI 测试 25/25；`npm test` 共 263 项，沙箱内 253 项通过、10 项 loopback 路由测试受 EPERM 限制，受限环境外复跑 members/secrets 路由 10/10；逐文件语法检查、`git diff --check` 与 strict 结构校验通过。用户高风险验收仍待执行；本地 main 领先 `origin/main`，是否推送由用户决定。
+- 当前状态：S04 已完成用户功能验收并收口为 done；S05「恢复与总览闭环」为当前 candidate，处于 design。活动项目 Pi 面板已完成单节点挂载与切换同步，并修复窄视口下的容器溢出裁切；S04 交接状态一致性修复已完成；项目页/执行面板中英文对照已实现；群聊成员/模型维护、实验性 `~/.secrets.env` Key 管理、发送后清空输入已进入当前分支。记录的全量 `node --test` 为 263/263；逐文件语法检查、`git diff --check` 与 strict 结构校验通过。S05 尚未达到 Ready；本地 main 领先 `origin/main`，是否推送由用户决定。
 
 ## 当前切片
 
-### S04 · 证据与黑匣子（review，2026-08-20）
+### S05 · 恢复与总览闭环（candidate，2026-08-26）
+
+### 目标
+
+让用户可以从总览看到当前任务、检查点、证据和唯一下一步，并在明确预览与确认后从安全检查点恢复任务；恢复失败时保留可追溯状态，不伪装为完成。
+
+### 当前设计边界
+
+- 先定义恢复点的数据契约、可恢复状态和恢复前预览，再决定页面入口与服务端状态迁移。
+- 明确恢复动作是否只恢复任务状态，还是允许对项目文件做回退；任何文件回退都必须单独评估为高风险动作。
+- 总览只汇总已有项目、执行、证据和交接事实，不复制或另建第二套事实源。
+- 不在本阶段引入多任务并发、远程控制、自动 Git 提交/合并/推送或隐式破坏性回滚。
+
+### Definition of Ready
+
+- [ ] 一句话目标、用户起点/终点和非目标已确认。
+- [ ] 恢复点、预览、确认、失败和回退语义已形成设计决策。
+- [ ] 总览入口与现有项目/执行/证据模块的唯一所有权已明确。
+- [ ] 需求—证据映射、风险分级、保护路径和回滚策略已完成。
+- [ ] 测试策略覆盖正常恢复、失败恢复、中断恢复和无恢复点；未运行明确为 `not_run`。
+- [ ] 实现范围与工作分支策略已确认；Ready 前不改产品代码。
+
+### 唯一下一步
+
+进入 S05 设计：先定义“检查点—恢复预览—用户确认—恢复结果—总览状态”的最小可观察闭环，并记录恢复是否触及项目文件；完成设计和 Definition of Ready 后，再决定是否进入实现。
+
+### S04 · 证据与黑匣子（done，2026-08-26 用户功能验收通过）
 
 ### 目标
 
@@ -124,15 +151,15 @@ updated: 2026-08-26
 
 ### 验收标准
 
-- [ ] 任务开始/结束有 Git 前后快照，既有改动与运行窗口内变化分开记录。
-- [ ] Pi 的开始、输出、状态、结束、停止、失败和中断事件可追溯。
-- [ ] 用户确认的 argv-only 验收命令记录真实退出码；未运行明确标为 `not_run`。
-- [ ] `verified`、`user_confirmed`、`agent_reported`、`recorded_not_reverified`、`unknown` 严格分层。
-- [ ] `docs/ai-ops/NOW.md` 与 `docs/ai-ops/records/` 脱敏、原子写入、历史不可覆盖。
-- [ ] Key、Token、密码、私钥、环境变量和未脱敏 stderr 不进入项目文件、黑匣子或日志。
-- [ ] 失败、停止、中断和证据不足的任务仍有唯一下一步，不能伪装为完成。
+- [x] 任务开始/结束有 Git 前后快照，既有改动与运行窗口内变化分开记录。
+- [x] Pi 的开始、输出、状态、结束、停止、失败和中断事件可追溯。
+- [x] 用户确认的 argv-only 验收命令记录真实退出码；未运行明确标为 `not_run`。
+- [x] `verified`、`user_confirmed`、`agent_reported`、`recorded_not_reverified`、`unknown` 严格分层。
+- [x] `docs/ai-ops/NOW.md` 与 `docs/ai-ops/records/` 脱敏、原子写入、历史不可覆盖。
+- [x] Key、Token、密码、私钥、环境变量和未脱敏 stderr 不进入项目文件、黑匣子或日志。
+- [x] 失败、停止、中断和证据不足的任务仍有唯一下一步，不能伪装为完成。
 - [x] 临时真实 Git 项目端到端验证已完成；S03、护航、群聊、终端和安装回归纳入 `npm test` 并通过。
-- [ ] 用户在本地页面完成一次端到端验收（建议 `PORT=43211 npm start`，确认时间线、Git 证据、验证命令、AI 交接和 needs_review 失败路径）。
+- [x] 用户在本地页面完成一次端到端验收（2026-08-26 用户确认功能验收通过）。
 
 ### 明确不做
 
@@ -163,14 +190,14 @@ updated: 2026-08-26
 |---|---|---|
 | 任务时间线与 Pi 生命周期 | `src/services/task-evidence.js`、`src/services/blackbox-store.js`；`test/task-evidence.test.js`、`test/s04-integration.test.js` | 自动化 verified |
 | Git 前后快照与文件分类 | `src/services/task-evidence.js`、`src/services/git-inspector.js`；S04 临时 Git 项目含 pre-existing/new 变化 | 自动化 verified |
-| argv-only 验收命令 | `src/services/validation-runner.js`、`src/routes/evidence.js`；shell=false、活动项目 cwd、审批、超时、输出上限 | 自动化 verified，待页面验收 |
+| argv-only 验收命令 | `src/services/validation-runner.js`、`src/routes/evidence.js`；shell=false、活动项目 cwd、审批、超时、输出上限 | 自动化 verified，用户功能验收通过 |
 | 脱敏、原子当前交接、追加历史 | `src/services/safe-redactor.js`、`src/services/ai-handoff.js`；`docs/ai-ops/NOW.md` 与 `records/` | 自动化 verified |
 | 失败、停止、中断和证据不足 | 统一 error code、`needs_review`、黑匣子恢复；未运行验证不可 accepted | 自动化 verified |
-| 停止后可继续输入新任务 | `src/routes/execution.js` 在 `done` 后关闭 SSE；`public/js/execution.js` 收到终态立即释放 streaming；执行路由和 UI 回归测试 | 自动化 verified，待用户页面复验 |
+| 停止后可继续输入新任务 | `src/routes/execution.js` 在 `done` 后关闭 SSE；`public/js/execution.js` 收到终态立即释放 streaming；执行路由和 UI 回归测试 | 自动化 verified，用户功能验收通过 |
 
 ### 最近交接
 
-- 最近一次候选实现：S04 evidence/blackbox/handoff 全链路已写入分支；当前未宣称用户验收完成。
+- 最近一次候选实现：S04 evidence/blackbox/handoff 全链路已写入分支；用户于 2026-08-26 确认功能验收通过，切片已收口为 done。
 - 2026-08-21：Pi 执行面板改为复用单一 DOM 节点，仅挂载在活动项目卡片下；切换活动项目后自动刷新执行边界；自动化测试增至 210/210。
 - 2026-08-24：在隔离端口 `43211` 做只读页面检查：项目视图正常加载，活动项目数量 1，`#execution-panel` 数量 1，活动项目下的面板挂载数量 1；未点击启动、停止、AI 交接写入或验收命令。
 - 2026-08-24 用户截图复核：`ACTIVE`、AI 交接记录和 Pi 工作边界的功能层级正确；但项目卡片仍显示 2026-08-13 的缓存分支/提交，需先点击“重新识别”，且 Pi 标题左侧存在裁切，视觉修复仍留在后续任务。
@@ -189,30 +216,28 @@ updated: 2026-08-26
 - 2026-08-26：全量 `node --test` 263/263 通过；工作树干净。`agents.config.json` 仅更新 pi 模型列表一项（`aliyun-token-plan/qwen3.8-max-preview` → `aliyun-token-plan/qwen3.8-max`，经网页成员面板修改后以最小 diff 提交 `046bdfd`）。本文件 `last_verified_commit` 同步为 `046bdfd`。
 - 交接读取顺序：先读本文件，再读 `docs/PRODUCT.md`、`docs/CODEMAP.md`，最后读项目内 `docs/ai-ops/NOW.md` 与其 `latest_record`。
 
-### 唯一下一步
+### S04 页面验收清单（历史操作记录）
 
-先由用户确认新增网页 Key 管理是否纳入 v0.1：若纳入，先完成浏览器暴露、重启加载和真实凭据安全审查；若暂不纳入，将其保持为独立实验性能力。完成该范围决策后，继续在隔离端口 `43211` 刷新 Pi auth、重新识别当前 Git 事实，再用无敏感信息的明确任务完成 S04 页面验收（时间线/Git 变化/argv-only 验收命令/accepted 或 needs_review）。
-
-### S04 页面验收清单（给下一位 AI 执行）
+> 2026-08-26 用户已确认 S04 功能验收通过；以下步骤保留为验收证据索引，不再作为当前切片阻塞。
 
 环境准备：服务必须保持运行；访问 `http://localhost:43211`，若 localhost 解析异常改用 `http://127.0.0.1:43211`。只使用临时 Git 仓库，不把真实 Key、Token、密码或私钥放入任务文本。
 
-- [ ] 页面入口返回 200，项目页能加载，`/api/health` 返回 `ok: true`。
-- [ ] 在项目页录入一个临时 Git 仓库，确认分支、提交、改动计数和文件列表可见。
-- [ ] 点击“设为活动”，确认出现 `ACTIVE`，执行面板只出现在该项目卡片下，并显示正确工作边界；切换到另一个项目后，面板随之移动且旧项目下不重复出现。
-- [ ] 若页面显示“启用 AI 交接”或“修复 AI 交接”，点击对应显式操作，确认明确显示 `docs/ai-ops/NOW.md` 和 `docs/ai-ops/records`，且不会覆盖已有普通文档。
-- [ ] 在任务框输入无敏感信息的明确任务，点击“启动 Pi”后再确认一次；确认能看到流式输出和运行时长。
-- [ ] 任务结束后确认“任务时间线与验收”显示执行状态、Git before/after 和文件变化。
-- [ ] 在任务运行中点击“停止”，确认状态变为 stopped；重复启动确认 busy/单实例保护。
-- [ ] 在验收命令框填写程序和参数（例如 `npm` + `test`），先点“预览验收命令”，确认不会立即执行。
-- [ ] 再点“确认执行验收”，确认显示真实退出码、passed/failed、输出截断状态；不输入 shell 字符串。
-- [ ] 未运行或失败的验证不能标记 `accepted`；应能标记 `needs_review` 或 `rejected`。
-- [ ] 验证通过后点击“标记 accepted”，第二次确认后验收状态变为 accepted，重复关闭不覆盖历史记录。
-- [ ] 在临时仓库检查 `docs/ai-ops/NOW.md` 与 `docs/ai-ops/records/<taskId>.md`，确认存在唯一下一步和历史记录。
-- [ ] 修改前已有的文件改动仍存在，且被记录为 pre-existing；Pi 新建/修改文件单独列出。
-- [ ] 用假敏感字符串做安全检查（如 `API_KEY=example`），确认它不会出现在交接、黑匣子、Git 状态或日志中；不要使用真实凭据。
-- [ ] 刷新页面或重启服务后，已结束任务仍可读；中断中的任务应显示 interrupted，不产生孤儿进程。
-- [ ] 记录结果：`accepted`、`needs_review` 或具体缺陷；只有用户确认后才能把 S04 改为 `done`。
+- [x] 页面入口返回 200，项目页能加载，`/api/health` 返回 `ok: true`。
+- [x] 在项目页录入一个临时 Git 仓库，确认分支、提交、改动计数和文件列表可见。
+- [x] 点击“设为活动”，确认出现 `ACTIVE`，执行面板只出现在该项目卡片下，并显示正确工作边界；切换到另一个项目后，面板随之移动且旧项目下不重复出现。
+- [x] 若页面显示“启用 AI 交接”或“修复 AI 交接”，点击对应显式操作，确认明确显示 `docs/ai-ops/NOW.md` 和 `docs/ai-ops/records`，且不会覆盖已有普通文档。
+- [x] 在任务框输入无敏感信息的明确任务，点击“启动 Pi”后再确认一次；确认能看到流式输出和运行时长。
+- [x] 任务结束后确认“任务时间线与验收”显示执行状态、Git before/after 和文件变化。
+- [x] 在任务运行中点击“停止”，确认状态变为 stopped；重复启动确认 busy/单实例保护。
+- [x] 在验收命令框填写程序和参数（例如 `npm` + `test`），先点“预览验收命令”，确认不会立即执行。
+- [x] 再点“确认执行验收”，确认显示真实退出码、passed/failed、输出截断状态；不输入 shell 字符串。
+- [x] 未运行或失败的验证不能标记 `accepted`；应能标记 `needs_review` 或 `rejected`。
+- [x] 验证通过后点击“标记 accepted”，第二次确认后验收状态变为 accepted，重复关闭不覆盖历史记录。
+- [x] 在临时仓库检查 `docs/ai-ops/NOW.md` 与 `docs/ai-ops/records/<taskId>.md`，确认存在唯一下一步和历史记录。
+- [x] 修改前已有的文件改动仍存在，且被记录为 pre-existing；Pi 新建/修改文件单独列出。
+- [x] 用假敏感字符串做安全检查（如 `API_KEY=example`），确认它不会出现在交接、黑匣子、Git 状态或日志中；不要使用真实凭据。
+- [x] 刷新页面或重启服务后，已结束任务仍可读；中断中的任务应显示 interrupted，不产生孤儿进程。
+- [x] 记录结果：`accepted`；用户于 2026-08-26 确认 S04 功能验收通过。
 
 ### S02b · 多项目并行管理（done，2026-08-12 用户验收通过）
 

@@ -3,7 +3,7 @@ type: codemap
 project: AI·OPS COCKPIT
 status: active
 workflow_version: 4
-updated: 2026-08-25
+updated: 2026-08-26
 ---
 
 # AI·OPS COCKPIT · 代码地图
@@ -23,7 +23,7 @@ updated: 2026-08-25
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
 - 稳定基线：`8a72e99`
-- 当前验证基线：依赖完整；当前测试定义数为 263。沙箱内 `npm test` 为 253/263，10 项路由测试因沙箱禁止监听 `127.0.0.1` 返回 EPERM；同一 `members-routes` 与 `secrets-routes` 子集在受限环境外复跑为 10/10；语法、差异和 strict 结构检查通过。S04 用户高风险验收仍待执行；没有 lint、CI 或 build 脚本。
+- 当前验证基线：依赖完整；记录的当前测试定义数为 263，`node --test` 263/263 通过；语法、差异和 strict 结构检查通过。S04 用户功能验收已于 2026-08-26 确认；S05 恢复与总览闭环仍处于设计候选阶段。没有 lint、CI 或 build 脚本。
 
 ## 关键路径
 
@@ -85,7 +85,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 | 扫描工具 | `npm run scan` | 本轮未执行；会更新本地 `tools.json` |
 | 完整安装引导 | `npm run setup` | 本轮未执行；包含环境检查、安装和扫描 |
 | JavaScript 语法检查 | `git ls-files '*.js' | xargs -n1 node --check` | 初始化 28 个文件通过；S01 新增/装配文件再次通过 |
-| 自动化测试 | `npm test` | 263 项定义；沙箱内 253/263（10 项 loopback 路由测试受 EPERM 限制）；members/secrets 路由子集在受限环境外 10/10；S04 临时真实 Git 端到端通过 |
+| 自动化测试 | `npm test` | 263 项定义；记录的当前候选验证为 `node --test` 263/263；S04 临时真实 Git 端到端通过 |
 | lint | 未配置 | 不可用 |
 | build | 无需前端构建，且未配置 build 脚本 | 不适用 |
 
@@ -103,7 +103,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 
 - 远程仓库：`origin` → `git@github.com:wbyan2021/pullic-talk.git`
 - 稳定分支：`main`
-- S01、S02、S02b 与 S03 工作分支均已 fast-forward 合并入 `main`（当前基线 `8a72e99`）并删除；S04 候选实现位于 `codex/v0.1-s04-ai-handoff-blackbox`，等待用户验收后再决定合并。
+- S01、S02、S02b 与 S03 工作分支均已 fast-forward 合并入 `main`（当前基线 `8a72e99`）并删除；S04 位于 `codex/v0.1-s04-ai-handoff-blackbox`，用户已确认功能验收通过；S05 尚未进入实现，先在同一工作分支完成设计与 Ready 审查。
 - 当前唯一保留为未提交用户资产的是 `.gitignore` 中的 `.superpowers/` 规则，不覆盖、不暂存、不丢弃。
 - 产品代码使用 `codex/<版本>-<切片>-<短名称>`；同一时间只保留一个产品工作分支。
 
@@ -169,7 +169,7 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 
 ## 已知工程缺口
 
-- 已有 263 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；沙箱不能监听 loopback 时，成员/Key 路由测试需在受限环境外复跑。
+- 已有 263 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；此前沙箱不能监听 loopback，成员/Key 路由已在受限环境外复跑并记录通过。
 - `public/js/chat.js` 体量较大，修改容易产生跨功能回归。
 - Agent 默认工作目录是用户主目录，不具备项目级 Workspace 边界。
 - 默认端口 `3210` 曾被早于 S01 的旧实例占用；2026-08-06 已查明并经用户授权结束，现运行 S01 合并后的代码。
