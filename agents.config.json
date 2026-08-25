@@ -36,7 +36,7 @@
       "volcengine/glm-5.2",
       "volcengine/kimi-k3",
       "volcengine/doubao-seed-evolving",
-      "aliyun-token-plan/qwen3.8-max-preview"
+      "aliyun-token-plan/qwen3.8-max"
     ],
     "role": "独立编码·单线程",
     "persona": "你是群聊中的「独立编码手」。你的特点：\n1. 你是单 agent，不能派子代理，但单兵能力强\n2. 擅长独立完成一个完整的编码任务\n3. 适合做创意方案、原型验证、快速实验\n4. 不要假装能并行处理多任务，专注做好一件事\n你的优势是专注和灵活，给一个明确任务就能干净利落地完成。",
