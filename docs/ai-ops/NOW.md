@@ -36,14 +36,15 @@ facts:
   agent_reported:
     - 当前分支包含成员/模型维护、实验性网页 Key 管理、项目页双语和发送后清空输入等用户提交
   recorded_not_reverified:
-    - S05 尚未完成 Definition of Ready
+    - S05-A 设计稿与实施计划已获用户确认，当前工作分支为 codex/v0.1-s05-overview-readonly
   unknown:
     - 网页 Key 管理是否纳入 v0.1 以及其浏览器暴露风险是否可接受
     - 应用重启后是否由外部启动环境加载 ~/.secrets.env
 issues_and_risks:
   - `/api/secrets` 会将 Key 值返回给已认证浏览器，不能与 S01 Keychain 保护等同；该实验性能力不作为 S05 默认凭据路径
+  - S05-A 只读总览不得暴露任务文本、原始输出、stderr、cwd、args 或完整路径数组
   - S05 涉及恢复语义，若触及项目文件回退必须单独进行高风险设计和用户确认
-next_action: 进入 S05 设计，定义检查点、恢复预览、用户确认、失败回退与总览状态的最小可观察闭环，并完成 Definition of Ready
+next_action: 实施 S05-A 只读任务总览：先读取安全的 AI 交接摘要，再接入聚合接口和顶层中英文总览页；完成聚焦测试、全量回归和用户验收。恢复与多任务并行保持非目标
 latest_record: null
 ---
 
