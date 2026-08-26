@@ -10,7 +10,7 @@ slice_status: active
 work_branch: codex/v0.1-s05-overview-readonly
 base_commit: b71bb50
 risk_level: high
-last_verified_commit: 4fc1037
+last_verified_commit: b29b191
 updated: 2026-08-26
 ---
 
@@ -113,7 +113,7 @@ updated: 2026-08-26
 - 语法检查：`git ls-files '*.js' | xargs -n1 node --check`
 - 自动化测试：`npm test`
 - 健康检查：`PORT=43211 npm start` 后访问 `/api/health`
-- 当前状态：S04 已完成用户功能验收并收口为 done；S05-A 只读总览已实现，等待用户页面验收。活动项目 Pi 面板已完成单节点挂载与切换同步，并修复窄视口下的容器溢出裁切；S04 交接状态一致性修复已完成；项目页/执行面板中英文对照已实现；群聊成员/模型维护、实验性 `~/.secrets.env` Key 管理、发送后清空输入已进入当前分支。记录的全量 `node --test` 为 278/278；逐文件语法检查、`git diff --check` 与 strict 结构校验通过。恢复与多任务并行仍为后续设计；本地 main 领先 `origin/main`，是否推送由用户决定。
+- 当前状态：S04 已完成用户功能验收并收口为 done；S05-A 只读总览已实现，等待用户页面验收。活动项目 Pi 面板已完成单节点挂载与切换同步，并修复窄视口下的容器溢出裁切；S04 交接状态一致性修复已完成；项目页/执行面板中英文对照已实现；群聊成员/模型维护、实验性 `~/.secrets.env` Key 管理、发送后清空输入已进入当前分支。记录的全量 `node --test` 为 279/279；逐文件语法检查、`git diff --check` 与 strict 结构校验通过。恢复与多任务并行仍为后续设计；本地 main 领先 `origin/main`，是否推送由用户决定。
 
 ## 当前切片
 
@@ -148,7 +148,7 @@ updated: 2026-08-26
 | 需求 | 实现与证据 | 当前结论 |
 |---|---|---|
 | 只读 AI 交接摘要 | `src/services/ai-handoff.js` 的 `readSummary`；`test/ai-handoff.test.js` 10/10 | 自动化 verified |
-| 总览聚合接口 | `src/routes/overview.js`、`src/server.js`；`test/overview-routes.test.js` 6/6 | 自动化 verified |
+| 总览聚合接口 | `src/routes/overview.js`、`src/server.js`；`test/overview-routes.test.js` 7/7 | 自动化 verified |
 | 中英文四卡片页面 | `public/index.html`、`public/js/index.js`、`public/js/overview.js`、`public/css/overview.css`；`test/overview-ui.test.js` 6/6 | 自动化 verified |
 | 不暴露敏感任务/命令字段 | 路由字段白名单与总览敏感字段测试；不返回 task、output、stderr、args、cwd、完整路径列表 | 自动化 verified |
 | 可见时轮询、离开停止 | 总览生命周期使用 5 秒轮询、AbortController 和请求序号；用户页面验收待完成 | 自动化 verified，用户待验收 |
