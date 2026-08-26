@@ -3,15 +3,15 @@
 type: ai-handoff-current
 schema_version: 1
 project: AI·OPS COCKPIT
-updated_at: 2026-08-26T15:20:00+08:00
-current_task_id: null
-task_status: in_progress
+updated_at: 2026-08-26T16:05:00+08:00
+current_task_id: s05b-safe-recovery
+task_status: needs_review
 plan:
   source: docs/NOW.md
-  revision: 697fa21
-  completed: 0
-  total: 1
-  percent: 0
+  revision: 4053ff7
+  completed: 5
+  total: 6
+  percent: 83.3
 before:
   branch: [withheld_sensitive]
   head: [withheld_sensitive]
@@ -35,6 +35,10 @@ facts:
     - S05-A 全量 `node --test` 279/279 通过，逐文件语法与差异检查通过
     - S05-A 总览路由已按活动项目交接文件的实际状态校验 AI 交接摘要，避免仅显示旧缓存
     - 隔离端口 `43211` 健康检查 HTTP 200；浏览器只读检查确认总览四张卡片正常渲染，AI 交接显示 Ready
+    - S05-B 恢复服务、认证路由、总览投影和项目页双语预览/确认 UI 已实现
+    - S05-B 失败/中断重启、来源关联、句柄过期/重复提交、忙碌/失效项目和敏感字段安全测试通过
+    - 当前全量 `node --test` 为 299/299；逐文件语法检查、`git diff --check` 与 strict 结构校验通过
+    - 隔离端口 `43211` 已重启；`/api/health` 返回 HTTP 200，未带 Token 的 `/api/recovery/status` 返回 HTTP 401
   user_confirmed:
     - 用户于 2026-08-26 确认 S04 功能验收通过并要求开启下一阶段
     - 用户于 2026-08-26 接受 S05-B 第一版恢复边界：仅失败/中断可恢复；恢复新建 Pi 批次且不自动回退文件
@@ -43,16 +47,17 @@ facts:
   agent_reported:
     - 当前分支包含成员/模型维护、实验性网页 Key 管理、项目页双语和发送后清空输入等用户提交
   recorded_not_reverified:
-    - S05-A 用户页面验收尚未完成
+    - S05-A/S05-B 用户页面验收尚未完成
   unknown:
     - 网页 Key 管理是否纳入 v0.1 以及其浏览器暴露风险是否可接受
     - 应用重启后是否由外部启动环境加载 ~/.secrets.env
 issues_and_risks:
   - `/api/secrets` 会将 Key 值返回给已认证浏览器，不能与 S01 Keychain 保护等同；该实验性能力不作为 S05 默认凭据路径
-  - S05-A 只读总览不得暴露任务文本、原始输出、stderr、cwd、args 或完整路径数组
-  - S05 涉及恢复语义，若触及项目文件回退必须单独进行高风险设计和用户确认
-next_action: 开始 S05-B Task 1：先写恢复数据契约的失败测试，再实现最小恢复服务。S05-A 总览页面验收仍待用户确认，恢复文件回退与多任务并行保持非目标
-latest_record: null
+  - S05-A/S05-B 只读与恢复接口不得暴露任务文本、原始输出、stderr、cwd、args 或完整路径数组
+  - 恢复只允许失败/中断任务，采用新 Pi 批次重启；不续接旧进程、不执行 Git 回退、不覆盖旧记录
+  - 文件回退、Pi 会话续接和多任务并行仍是后续高风险切片，不能从本功能隐式扩展
+next_action: 在隔离端口 43211 完成 S05-A/S05-B 页面验收：从总览进入项目页，查看失败/中断任务恢复预览，确认“不会回退文件”，二次确认后核对新任务 ID 与来源关联；再检查停止、成功、已验收、过期、项目失效和忙碌场景均被阻止。用户确认前不得将 S05 标记为 done
+latest_record: docs/ai-ops/records/2026-08-26-s05b-safe-recovery.md
 ---
 
 # AI 交接当前状态

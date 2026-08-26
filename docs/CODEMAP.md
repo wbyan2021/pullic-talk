@@ -23,7 +23,7 @@ updated: 2026-08-26
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
 - 稳定基线：`8a72e99`
-- 当前验证基线：依赖完整；`node --test` 279/279 通过；语法、差异和 strict 结构检查通过。S04 用户功能验收已于 2026-08-26 确认；S05-A 只读总览已实现，等待用户页面验收；恢复与多任务并行仍未实现。没有 lint、CI 或 build 脚本。
+- 当前验证基线：依赖完整；`node --test` 299/299 通过；逐文件语法、差异和 strict 结构检查通过。S04 用户功能验收已于 2026-08-26 确认；S05-A 只读总览与 S05-B 安全恢复已实现，等待用户页面验收；文件回退与多任务并行仍未实现。没有 lint、CI 或 build 脚本。
 
 ## 关键路径
 
@@ -56,10 +56,12 @@ updated: 2026-08-26
 | `src/services/safe-redactor.js` | Key、Token、密码、私钥、Bearer 和环境变量形态的统一脱敏 | 安全边界 |
 | `src/services/blackbox-store.js` | 项目外追加式 JSONL 事件、终态、恢复和截断行容错 | 黑匣子领域层 |
 | `src/services/task-evidence.js` | Pi 生命周期、Git 前后快照、文件变化分类、验证和验收状态协调 | 黑匣子领域层 |
+| `src/services/task-recovery.js` | 失败/中断任务资格判断、短时预览指纹、二次确认、新批次重启编排与旧记录追加关联 | 高风险恢复领域层 |
 | `src/services/validation-runner.js` | 用户批准的结构化 executable + argv 验收命令；shell=false、活动项目 cwd、超时和输出上限 | 高风险适配层 |
 | `src/services/ai-handoff.js` | 目标项目 `docs/ai-ops/` 当前交接与一次性历史记录的脱敏原子写入，以及只读摘要解析 | AI 交接适配层 |
 | `src/routes/evidence.js` | 证据状态、验收命令预览/执行、accepted/needs_review 收口契约 | 黑匣子应用层 |
 | `src/routes/overview.js` | 当前项目、执行、证据和 AI 交接的认证只读聚合契约；严格字段投影 | 总览应用层 |
+| `src/routes/recovery.js` | 恢复状态、预览和确认启动的认证 HTTP 契约；稳定错误码与字段白名单 | 高风险恢复应用层 |
 | `docs/ai-ops/NOW.md`、`docs/ai-ops/records/` | 写入目标项目的 AI 当前交接和历史记录；必须由用户显式启用 | 目标项目数据 |
 | `src/terminal.js` | 完整本机 PTY Shell | 高权限适配层 |
 | `src/utils/auth.js` | 随机 Token、认证中间件与写盘 | 安全边界 |
@@ -87,7 +89,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 | 扫描工具 | `npm run scan` | 本轮未执行；会更新本地 `tools.json` |
 | 完整安装引导 | `npm run setup` | 本轮未执行；包含环境检查、安装和扫描 |
 | JavaScript 语法检查 | `git ls-files '*.js' | xargs -n1 node --check` | 初始化 28 个文件通过；S01 新增/装配文件再次通过 |
-| 自动化测试 | `npm test` | 279 项定义；本轮 `node --test` 279/279；包含 S05-A 总览路由、交接摘要和 UI 合约测试 |
+| 自动化测试 | `npm test` | 299 项定义；本轮 `node --test` 299/299；包含 S05-A 总览与 S05-B 恢复路由、资格/指纹/脱敏/集成和 UI 合约测试 |
 | lint | 未配置 | 不可用 |
 | build | 无需前端构建，且未配置 build 脚本 | 不适用 |
 
@@ -105,7 +107,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 
 - 远程仓库：`origin` → `git@github.com:wbyan2021/pullic-talk.git`
 - 稳定分支：`main`
-- S01、S02、S02b 与 S03 工作分支均已 fast-forward 合并入 `main`（当前基线 `8a72e99`）并删除；S04 用户已确认功能验收通过；S05-A 在 `codex/v0.1-s05-overview-readonly` 实现，恢复与多任务并行仍未进入实现。
+- S01、S02、S02b 与 S03 工作分支均已 fast-forward 合并入 `main`（当前基线 `8a72e99`）并删除；S04 用户已确认功能验收通过；S05-A/S05-B 在 `codex/v0.1-s05-overview-readonly` 实现，等待用户页面验收；文件回退与多任务并行不在范围内。
 - 当前唯一保留为未提交用户资产的是 `.gitignore` 中的 `.superpowers/` 规则，不覆盖、不暂存、不丢弃。
 - 产品代码使用 `codex/<版本>-<切片>-<短名称>`；同一时间只保留一个产品工作分支。
 
@@ -162,7 +164,7 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 | `src/routes/members.js`、`src/config.js`、`public/js/members.js` | 修改 Agent 成员和模型配置并热加载 | 字段白名单、原子写入、禁用/自定义语义、配置损坏回退和并发写入审查 |
 | `src/providers/deepseek.js`、`src/routes/escort.js` | 付费外部请求与错误/秘密泄露 | 超时、单并发、频率、状态字段白名单、原始错误不透传 |
 | `src/services/git-inspector.js`、`src/routes/project.js` | 任意路径输入与 Git 子进程 | 只读命令白名单、无 shell、超时、输出截断、realpath 校验、禁止根 |
-| `src/services/pi-executor.js`、`src/routes/execution.js` | Pi 在活动项目内以完整用户权限执行 | 无 shell、argv 永不含密钥、cwd 限定活动项目 repoRoot、SIGTERM+超时回收、单实例 busy、UI 风险确认后才启动 |
+| `src/services/pi-executor.js`、`src/routes/execution.js`、`src/services/task-recovery.js`、`src/routes/recovery.js` | Pi 在活动项目内以完整用户权限执行及失败/中断恢复 | 无 shell、argv 永不含密钥、cwd 限定活动项目 repoRoot、SIGTERM+超时回收、单实例 busy、恢复预览指纹和二次确认；不回退文件 |
 | `src/services/validation-runner.js`、`src/routes/evidence.js` | 用户批准的验收命令可能执行任意项目测试 | 只接受结构化 executable/argv；禁止 shell 语法和环境赋值；cwd 必须是活动项目；超时、输出上限、stderr 丢弃、结果分层 |
 | `src/services/ai-handoff.js`、`src/services/blackbox-store.js` | 任务事实写入项目文件和本机记录 | 统一脱敏、原子当前文件、历史不可覆盖、追加 JSONL、截断/恢复安全、未验证事实不得伪装 verified |
 | `public/js/chat.js` | 单文件较大，状态、DOM 与流式逻辑耦合 | XSS、会话兼容、停止流程和现有交互回归 |
@@ -171,7 +173,7 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 
 ## 已知工程缺口
 
-- 已有 279 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；此前沙箱不能监听 loopback，成员/Key 路由已在受限环境外复跑并记录通过。
+- 已有 299 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；本轮包含恢复集成/安全路径与隔离端口认证检查；此前沙箱不能监听 loopback，成员/Key 路由已在受限环境外复跑并记录通过。
 - `public/js/chat.js` 体量较大，修改容易产生跨功能回归。
 - Agent 默认工作目录是用户主目录，不具备项目级 Workspace 边界。
 - 默认端口 `3210` 曾被早于 S01 的旧实例占用；2026-08-06 已查明并经用户授权结束，现运行 S01 合并后的代码。
