@@ -75,7 +75,7 @@ function safeHandoff(source) {
   };
 }
 
-function safeProject(source, activeProjectId) {
+function safeProject(source) {
   if (!source || typeof source !== "object") return null;
   return {
     id: nullableString(source.id, 128),
@@ -203,7 +203,19 @@ export default function overviewRoutes(app, { projectBoundary, taskEvidence, aiH
   app.get("/api/overview", async (_req, res) => {
     try {
       const status = await projectBoundary.getStatus();
-      const active = status?.active && typeof status.active === "object" ? status.active : null;
+      let active = status?.active && typeof status.active === "object" ? status.active : null;
+      if (active && typeof aiHandoff?.inspectProject === "function") {
+        const inspected = await aiHandoff.inspectProject({ repoRoot: active.repoRoot });
+        const fileState = pick(inspected, ["agentsPointer", "current", "records", "state"]);
+        active = {
+          ...active,
+          handoff: {
+            ...(active.handoff && typeof active.handoff === "object" ? active.handoff : {}),
+            state: inspected?.state ?? "unknown",
+            fileState,
+          },
+        };
+      }
       const project = {
         selected: Boolean(active),
         activeProjectId: nullableString(status?.activeProjectId, 128),

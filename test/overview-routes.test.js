@@ -74,7 +74,7 @@ function idleEvidence() {
 }
 
 function createFakes(overrides = {}) {
-  const calls = { project: 0, evidence: 0, execution: 0, handoff: [] };
+  const calls = { project: 0, evidence: 0, execution: 0, handoff: [], inspect: [] };
   const projectBoundary = {
     async getStatus() {
       calls.project += 1;
@@ -88,6 +88,7 @@ function createFakes(overrides = {}) {
     ...overrides.taskEvidence,
   };
   const aiHandoff = {
+    async inspectProject(input) { calls.inspect.push(input); return { agentsPointer: "managed", current: "managed", records: "present", state: "ready" }; },
     async readSummary(input) { calls.handoff.push(input); return { state: "ready", taskStatus: "needs_review", nextAction: "先运行验收测试" }; },
     ...overrides.aiHandoff,
   };
@@ -158,6 +159,7 @@ test("projects active project, execution, evidence and next action with a strict
   assert.deepEqual(overview.evidence.gitEvidence, { certainty: "observed", causality: "not_proven", newCount: 1, changedCount: 0, preexistingCount: 0 });
   assert.deepEqual(overview.nextAction, { text: "先运行验收测试", source: "docs/ai-ops/NOW.md", state: "ready" });
   assert.deepEqual(calls.handoff, [{ repoRoot: "/tmp/project" }]);
+  assert.deepEqual(calls.inspect, [{ repoRoot: "/tmp/project" }]);
 });
 
 test("returns safe empty states when there is no active project", async () => {
@@ -174,6 +176,7 @@ test("returns safe empty states when there is no active project", async () => {
   assert.equal(res.body.overview.evidence.available, false);
   assert.deepEqual(res.body.overview.nextAction, { text: null, source: null, state: "unavailable" });
   assert.equal(calls.handoff.length, 0);
+  assert.equal(calls.inspect.length, 0);
 });
 
 test("does not expose task text, output, stderr, command arguments, cwd, or path arrays", async () => {
