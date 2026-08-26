@@ -6,7 +6,7 @@ milestone: v0.1-first-controlled-mission
 status: active
 stage: build
 current_slice: S05-recovery-and-overview
-slice_status: ready
+slice_status: active
 work_branch: codex/v0.1-s05-overview-readonly
 base_commit: b71bb50
 risk_level: high
