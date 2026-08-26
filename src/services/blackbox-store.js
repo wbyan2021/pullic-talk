@@ -202,6 +202,23 @@ export function createBlackboxStore({
     };
   }
 
+  async function listTasks({ projectId } = {}) {
+    assertId(projectId);
+    let entries;
+    try {
+      entries = await fs.readdir(join(rootDir, projectId), { withFileTypes: true });
+    } catch (error) {
+      if (error?.code === "ENOENT") return [];
+      throw new BlackboxStoreError("io_error", { retryable: true });
+    }
+    return entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
+      .map((entry) => entry.name.slice(0, -".jsonl".length))
+      .filter((taskId) => ID_PATTERN.test(taskId))
+      .sort()
+      .slice(0, 200);
+  }
+
   async function recoverIncomplete() {
     let projectEntries;
     try {
@@ -240,5 +257,5 @@ export function createBlackboxStore({
     return recovered;
   }
 
-  return { beginTask, appendEvent, closeTask, readTask, recoverIncomplete };
+  return { beginTask, appendEvent, closeTask, readTask, listTasks, recoverIncomplete };
 }

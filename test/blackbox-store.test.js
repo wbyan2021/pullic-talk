@@ -111,3 +111,15 @@ test("recovery leaves closed tasks untouched and missing tasks report stable err
   assert.equal(await rejectCode(recovered.readTask({ projectId: "project_a", taskId: "missing" })), "task_not_found");
   assert.equal(existsSync(join(root, "project_a", "task_001.jsonl")), true);
 });
+
+test("lists only bounded task record IDs for a project", async (t) => {
+  const root = makeRoot(t);
+  const store = createBlackboxStore({ rootDir: root });
+  await store.beginTask({ projectId: "project_a", taskId: "task_b" });
+  await store.beginTask({ projectId: "project_a", taskId: "task_a" });
+  writeFileSync(join(root, "project_a", "ignore.txt"), "not a task");
+  writeFileSync(join(root, "project_a", "../unsafe.jsonl"), "not a task");
+
+  assert.deepEqual(await store.listTasks({ projectId: "project_a" }), ["task_a", "task_b"]);
+  assert.deepEqual(await store.listTasks({ projectId: "missing_project" }), []);
+});

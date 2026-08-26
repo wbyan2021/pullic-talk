@@ -235,6 +235,25 @@ test("task start records ordered lifecycle events and after snapshot", async (t)
   assert.deepEqual(record.events.map((event) => event.seq), [1, 2, 3, 4, 5, 6, 7, 8]);
 });
 
+test("recovery start stores bounded source linkage on the new task only", async (t) => {
+  const pi = makePiFake();
+  const { evidence, store } = makeEvidence(t, pi);
+  await evidence.start("重启失败任务", {
+    recoveryOfTaskId: "task_failed_001",
+    recoveryReasonCode: "pi_not_authenticated",
+  });
+
+  const record = await store.readTask({ projectId: "project_001", taskId: "task_001" });
+  assert.deepEqual(record.events[0].data.recoveryOfTaskId, "task_failed_001");
+  assert.deepEqual(record.events[0].data.recoveryReasonCode, "pi_not_authenticated");
+  const linked = record.events.find((event) => event.type === "recovery_started");
+  assert.deepEqual(linked?.data, {
+    sourceTaskId: "task_failed_001",
+    reasonCode: "pi_not_authenticated",
+  });
+  assert.ok(!JSON.stringify(record).includes("stderr"));
+});
+
 test("Pi start failures close the evidence task without leaking raw errors", async (t) => {
   const pi = makePiFake({ startError: new PiExecutorError("pi_not_authenticated") });
   const { evidence, store } = makeEvidence(t, pi);

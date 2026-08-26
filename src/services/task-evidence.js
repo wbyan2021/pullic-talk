@@ -5,6 +5,8 @@ import { REDACTION_MARKER, redactText } from "./safe-redactor.js";
 
 const MAX_ENTRIES = 200;
 const MAX_PATH_LENGTH = 1024;
+const TASK_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const RECOVERY_CODE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
 const SNAPSHOT_FIELDS = [
   "repoRoot", "branch", "detached", "hasCommits", "headCommit",
   "counts", "entries", "truncated", "remotes", "inspectedAt",
@@ -100,6 +102,25 @@ function safePayload(value, depth = 0) {
     return output;
   }
   return REDACTION_MARKER;
+}
+
+function normalizeRecoveryOptions(options) {
+  if (options === undefined || options === null) return null;
+  if (!options || typeof options !== "object" || Array.isArray(options)) {
+    throw new TaskEvidenceError("invalid_recovery_metadata");
+  }
+  const sourceTaskId = options.recoveryOfTaskId;
+  const reasonCode = options.recoveryReasonCode;
+  if (typeof sourceTaskId !== "string" || !TASK_ID_PATTERN.test(sourceTaskId)) {
+    throw new TaskEvidenceError("invalid_recovery_metadata");
+  }
+  if (typeof reasonCode !== "string" || !RECOVERY_CODE_PATTERN.test(reasonCode)) {
+    throw new TaskEvidenceError("invalid_recovery_metadata");
+  }
+  return {
+    recoveryOfTaskId: sourceTaskId,
+    recoveryReasonCode: reasonCode,
+  };
 }
 
 function terminalForDone(data) {
@@ -328,7 +349,7 @@ export function createTaskEvidence({
     }
   }
 
-  async function start(rawTask) {
+  async function start(rawTask, options = undefined) {
     if (!piExecutor) throw new TaskEvidenceError("internal_error", { retryable: true });
     if (current && !current.closed && ["creating", "running", "stopping"].includes(current.state)) {
       throw new TaskEvidenceError("busy");
@@ -336,6 +357,7 @@ export function createTaskEvidence({
     if (typeof rawTask !== "string" || !rawTask.trim() || rawTask.length > 4000 || rawTask.includes("\u0000")) {
       throw new TaskEvidenceError("invalid_task");
     }
+    const recovery = normalizeRecoveryOptions(options);
     const before = await captureSnapshot();
     const taskId = createTaskId();
     const task = {
@@ -359,6 +381,8 @@ export function createTaskEvidence({
       validation: { result: "not_run", exitCode: null, output: "", withheld: false, truncated: false },
       acceptanceStatus: "pending",
       handoffWritten: false,
+      recoveryOfTaskId: recovery?.recoveryOfTaskId ?? null,
+      recoveryReasonCode: recovery?.recoveryReasonCode ?? null,
     };
     current = task;
     try {
@@ -371,6 +395,10 @@ export function createTaskEvidence({
           projectId: task.projectId,
           repoRoot: task.repoRoot,
           before: task.before,
+          ...(recovery ? {
+            recoveryOfTaskId: recovery.recoveryOfTaskId,
+            recoveryReasonCode: recovery.recoveryReasonCode,
+          } : {}),
         },
       });
       await appendEvent("before_snapshot", task.before);
@@ -383,6 +411,12 @@ export function createTaskEvidence({
       task.runId = typeof runId === "string" ? runId : null;
       task.state = "running";
       await appendEvent("pi_started", { runId: task.runId, startedAt: task.startedAt });
+      if (recovery) {
+        await appendEvent("recovery_started", {
+          sourceTaskId: recovery.recoveryOfTaskId,
+          reasonCode: recovery.recoveryReasonCode,
+        });
+      }
       emit("start", { runId: task.runId, startedAt: task.startedAt });
       unsubscribePi = piExecutor.subscribe(handlePiEvent);
       // A very short Pi process may have completed before subscribe; replay is intentional.
@@ -481,6 +515,8 @@ export function createTaskEvidence({
       evidence: { execution, git, validation: current.validation?.result ?? "not_run" },
       acceptanceStatus: current.acceptanceStatus,
       task: safeText(current.task),
+      recoveryOfTaskId: current.recoveryOfTaskId,
+      recoveryReasonCode: current.recoveryReasonCode,
       lastError: current.lastError ? { code: current.lastError.code, retryable: Boolean(current.lastError.retryable) } : null,
     };
   }
