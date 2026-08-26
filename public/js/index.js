@@ -165,12 +165,16 @@ function openTerminal(command){
 
 /* ---------- 视图切换 ---------- */
 function switchView(v){
+  const previousView = state.view;
   state.view = v;
   $$(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view===v));
   $("#console-view").classList.toggle("active", v==="console");
   $("#install-view").classList.toggle("active", v==="install");
   $("#chat-view").classList.toggle("active", v==="chat");
   $("#project-view").classList.toggle("active", v==="project");
+  $("#overview-view").classList.toggle("active", v==="overview");
+  if (previousView === "overview" && v !== "overview" && typeof window.Overview?.deactivate === "function") window.Overview.deactivate();
+  if (v === "overview" && typeof window.Overview?.activate === "function") window.Overview.activate();
   if (v==="install") loadInstallCatalog();
   if (v==="chat"){ const f=$("#chat-frame"); if(!f.src) f.src = f.dataset.src; }
 }

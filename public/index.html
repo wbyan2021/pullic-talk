@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/css/escort.css">
 <link rel="stylesheet" href="/css/project.css">
 <link rel="stylesheet" href="/css/execution.css">
+<link rel="stylesheet" href="/css/overview.css">
 </head>
 <body>
 
@@ -50,6 +51,7 @@
     <button class="tab" data-view="install" onclick="switchView('install')"><span class="g">⬇</span> 快捷安装</button>
     <button class="tab" data-view="chat" onclick="switchView('chat')"><span class="g">◧</span> 群聊</button>
     <button class="tab" data-view="project" onclick="switchView('project')"><span class="g">⌂</span> 项目</button>
+    <button class="tab" data-view="overview" onclick="switchView('overview')"><span class="g">▦</span> 总览 <span class="bilingual-en">Overview</span></button>
   </div>
   <div class="filters" id="filters"></div>
 </div>
@@ -92,6 +94,25 @@
   <div class="view" id="project-view">
     <div id="project-wrap"></div>
     <div id="execution-panel"></div>
+  </div>
+  <div class="view" id="overview-view">
+    <div id="overview-root">
+      <div class="overview-header">
+        <div>
+          <div class="overview-kicker">READ-ONLY CONTROL SURFACE</div>
+          <h1>任务总览 <span class="bilingual-en">Overview</span></h1>
+          <p>汇总当前项目、Pi 任务、证据和 AI 交接，不在此页执行写入操作。</p>
+        </div>
+        <div id="overview-refresh-state" class="overview-refresh-state" aria-live="polite">等待加载 <span class="bilingual-en">Waiting</span></div>
+      </div>
+      <div id="overview-error" class="overview-error" role="alert" hidden></div>
+      <div id="overview-grid" class="overview-grid">
+        <section id="overview-project-card" class="overview-card" aria-labelledby="overview-project-title"></section>
+        <section id="overview-task-card" class="overview-card" aria-labelledby="overview-task-title"></section>
+        <section id="overview-evidence-card" class="overview-card" aria-labelledby="overview-evidence-title"></section>
+        <section id="overview-handoff-card" class="overview-card" aria-labelledby="overview-handoff-title"></section>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -170,5 +191,6 @@
 <script src="/js/escort.js"></script>
 <script src="/js/project.js"></script>
 <script src="/js/execution.js"></script>
+<script src="/js/overview.js"></script>
 </body>
 </html>
