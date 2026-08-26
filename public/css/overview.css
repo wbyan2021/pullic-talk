@@ -106,11 +106,14 @@
 .overview-status[data-state="running"]::before,
 .overview-status[data-state="stopping"]::before,
 .overview-status[data-state="needs_review"]::before,
-.overview-status[data-state="pending"]::before { background: var(--accent); }
+.overview-status[data-state="pending"]::before,
+.overview-status[data-state="previewable"]::before,
+.overview-status[data-state="busy"]::before { background: var(--accent); }
 
 .overview-status[data-state="failed"]::before,
 .overview-status[data-state="rejected"]::before,
-.overview-status[data-state="stale"]::before { background: #ff5f57; }
+.overview-status[data-state="stale"]::before,
+.overview-status[data-state="not_available"]::before { background: #ff5f57; }
 
 .overview-row {
   display: flex;

@@ -76,6 +76,7 @@ test("execution.js talks only to project endpoints", () => {
     "/api/evidence/validation/preview",
     "/api/evidence/validation/run",
     "/api/evidence/close",
+    "/api/recovery/status",
   ]);
   for (const endpoint of endpoints) {
     assert.ok(allowed.has(endpoint), `unexpected endpoint ${endpoint}`);
@@ -90,7 +91,7 @@ test("execution.js talks only to project endpoints", () => {
 });
 
 test("execution.js exposes timeline, Git evidence, validation, and acceptance states", () => {
-  for (const marker of ["时间线", "Git 证据", "验收", "validation", "accepted", "needs_review", "interrupted", "/api/evidence/status", "/api/evidence/close"]) {
+  for (const marker of ["时间线", "Git 证据", "验收", "validation", "accepted", "needs_review", "interrupted", "安全恢复", "Safe Recovery", "Preview Recovery", "Confirm Recovery", "不会回退文件", "/api/evidence/status", "/api/evidence/close", "/api/recovery/status", "/api/recovery/"]) {
     assert.ok(EXECUTION_JS.includes(marker), `missing S04 UI marker: ${marker}`);
   }
 });
@@ -120,6 +121,11 @@ test("execution.js renders bilingual statuses, timeline labels, and actions", ()
     "Preview Validation Command",
     "Start Pi",
     "Refresh Status",
+    "Recoverable",
+    "Source Task",
+    "Review & Confirm",
+    "Cancel Preview",
+    "Files will not be rolled back",
   ]) {
     assert.ok(EXECUTION_JS.includes(marker), `missing bilingual execution marker: ${marker}`);
   }

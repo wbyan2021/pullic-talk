@@ -20,6 +20,10 @@
     not_enabled: ["未启用", "Not Enabled"],
     unavailable: ["暂不可用", "Unavailable"],
     ready: ["已就绪", "Ready"],
+    previewable: ["可恢复", "Recoverable"],
+    busy: ["已有任务运行", "Busy"],
+    stale: ["项目已失效", "Stale"],
+    not_available: ["不可恢复", "Not Recoverable"],
   });
 
   let active = false;
@@ -87,8 +91,8 @@
     card.appendChild(note);
   }
 
-  function addProjectLink(card) {
-    const button = element("button", "overview-link", "去项目页 / Open Project");
+  function addProjectLink(card, label = "去项目页 / Open Project") {
+    const button = element("button", "overview-link", label);
     button.type = "button";
     button.addEventListener("click", () => {
       if (typeof switchView === "function") switchView("project");
@@ -153,6 +157,7 @@
     if (!evidence?.available) {
       addStatus(card, "unavailable");
       addNote(card, "暂无可验收任务证据", "No evidence is available");
+      renderRecovery(card, evidence.recovery);
       addProjectLink(card);
       return;
     }
@@ -165,7 +170,26 @@
     renderSnapshot(card, "结束快照 / After", evidence.after);
     const git = evidence.gitEvidence;
     if (git) addRow(card, "文件变化", "File changes", `新增 ${git.newCount || 0} · 修改 ${git.changedCount || 0} · 既有 ${git.preexistingCount || 0}`);
+    renderRecovery(card, evidence.recovery);
     addProjectLink(card);
+  }
+
+  function renderRecovery(card, recovery) {
+    if (!recovery || (!recovery.available && !["busy", "stale", "unknown"].includes(recovery.state))) return;
+    const state = recovery.available ? "previewable" : recovery.state;
+    addStatus(card, state);
+    if (recovery.available) {
+      addRow(card, "恢复来源", "Recovery Source", recovery.sourceTaskId, true);
+      addRow(card, "失败原因", "Reason", recovery.reasonCode, true);
+      addNote(card, "可恢复：将以新 Pi 批次继续，项目文件不会自动回退。", "Recoverable: a new Pi run will start; Files are not rolled back.");
+      addProjectLink(card, "去项目页恢复 / Open Project to Recover");
+    } else if (recovery.state === "busy") {
+      addNote(card, "已有 Pi 任务运行，暂不能恢复。", "A Pi task is running; recovery is unavailable.");
+    } else if (recovery.state === "stale") {
+      addNote(card, "活动项目已失效，请重新选择项目。", "The active project is stale; select it again.");
+    } else {
+      addNote(card, "当前没有可安全恢复的任务。", "No task is safely recoverable right now.");
+    }
   }
 
   function renderHandoff(overview) {

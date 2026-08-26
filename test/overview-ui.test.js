@@ -44,6 +44,7 @@ test("overview maps task, evidence and acceptance states in Chinese and English"
     "Idle", "Running", "Stopping", "Stopped", "Failed", "Completed", "Interrupted", "Unknown",
     "Pending", "Not Run", "Passed", "Needs Review", "Accepted", "Rejected",
     "Project", "Task", "Evidence", "AI Handoff", "Next Action", "Before", "After", "Validation",
+    "Recoverable", "Not Recoverable", "Recovery Source", "Open Project to Recover", "Files are not rolled back",
   ]) assert.ok(OVERVIEW_JS.includes(marker), `missing overview status marker: ${marker}`);
 });
 

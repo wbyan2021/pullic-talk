@@ -20,6 +20,10 @@
     active: null,          // 活动项目 payload（来自 /api/project/status）
     execution: { state: "idle", runId: null, output: "", task: null },
     evidence: { state: "idle", acceptanceStatus: "pending", validation: { result: "not_run" } },
+    recovery: { available: false, sourceTaskId: null, sourceState: null, reasonCode: null, state: "not_available" },
+    recoveryPreview: null,
+    recoveryConfirm: false,
+    recoveryBusy: false,
     error: null,           // { message, action }
     riskConfirmed: false,  // 启动前的显式风险确认
     liveOutput: "",        // 运行中实时累积的输出
@@ -54,14 +58,21 @@
     state.error = null;
     render();
     try {
-      const [projectPayload, executionPayload, evidencePayload] = await Promise.all([
+      const [projectPayload, executionPayload, evidencePayload, recoveryPayload] = await Promise.all([
         request("/api/project/status"),
         request("/api/project/execution/status"),
         request("/api/evidence/status"),
+        request("/api/recovery/status").catch(() => ({ recovery: { available: false, state: "not_available" } })),
       ]);
-      state.active = findActiveProject(projectPayload);
+      const nextActive = findActiveProject(projectPayload);
+      if (state.active?.id !== nextActive?.id) {
+        state.recoveryPreview = null;
+        state.recoveryConfirm = false;
+      }
+      state.active = nextActive;
       state.execution = executionPayload.execution || { state: "idle" };
       state.evidence = evidencePayload.evidence || { state: "idle", acceptanceStatus: "pending", validation: { result: "not_run" } };
+      state.recovery = recoveryPayload.recovery || { available: false, state: "not_available" };
     } catch (error) {
       state.error = pickError(error);
     } finally {
@@ -219,6 +230,76 @@
       state.evidence = payload.evidence || state.evidence;
       render();
     } catch { /* 保持当前证据摘要，不覆盖执行状态 */ }
+    await refreshRecovery();
+  }
+
+  async function refreshRecovery() {
+    try {
+      const payload = await request("/api/recovery/status");
+      state.recovery = payload.recovery || { available: false, state: "not_available" };
+      if (!state.recovery.available) {
+        state.recoveryPreview = null;
+        state.recoveryConfirm = false;
+      }
+      render();
+    } catch {
+      state.recovery = { available: false, state: "not_available" };
+      state.recoveryPreview = null;
+      state.recoveryConfirm = false;
+    }
+  }
+
+  async function previewRecovery() {
+    if (state.recoveryBusy || !state.recovery?.available || !state.recovery.sourceTaskId) return;
+    state.recoveryBusy = true;
+    state.error = null;
+    render();
+    try {
+      const taskId = encodeURIComponent(state.recovery.sourceTaskId);
+      const payload = await request(`/api/recovery/${taskId}/preview`);
+      state.recoveryPreview = payload.recovery || null;
+      state.recoveryConfirm = false;
+    } catch (error) {
+      state.error = pickError(error);
+    } finally {
+      state.recoveryBusy = false;
+      render();
+    }
+  }
+
+  function cancelRecovery() {
+    state.recoveryPreview = null;
+    state.recoveryConfirm = false;
+    state.error = null;
+    render();
+  }
+
+  async function startRecovery() {
+    const preview = state.recoveryPreview;
+    if (state.recoveryBusy || !preview?.previewId || !state.recovery.sourceTaskId) return;
+    if (!state.recoveryConfirm) {
+      state.recoveryConfirm = true;
+      render();
+      return;
+    }
+    state.recoveryBusy = true;
+    state.error = null;
+    render();
+    try {
+      const taskId = encodeURIComponent(state.recovery.sourceTaskId);
+      await request(`/api/recovery/${taskId}/start`, {
+        method: "POST",
+        json: { previewId: preview.previewId, confirmed: true },
+      });
+      state.recoveryPreview = null;
+      state.recoveryConfirm = false;
+      await loadAll();
+    } catch (error) {
+      state.error = pickError(error);
+    } finally {
+      state.recoveryBusy = false;
+      render();
+    }
   }
 
   function parseValidationDraft() {
@@ -319,6 +400,9 @@
     accepted: ["验收通过", "Accepted"],
     rejected: ["已拒绝", "Rejected"],
     verified: ["已验证", "Verified"],
+    previewable: ["可恢复", "Recoverable"],
+    busy: ["已有任务运行", "Busy"],
+    stale: ["项目已失效", "Stale"],
   });
 
   function bilingual(zh, en) {
@@ -507,7 +591,61 @@
       appendInlinePair(result, "验收结果", "Acceptance Result", statusNode(evidence.acceptanceStatus));
       box.appendChild(result);
     }
+    renderRecovery(box);
     return box;
+  }
+
+  function renderRecovery(box) {
+    const recovery = state.recovery || {};
+    if (!recovery.available && !["busy", "stale", "unknown"].includes(recovery.state)) return;
+    const section = el("div", "exec-recovery");
+    section.appendChild(bilingualElement("h5", "exec-recovery-title", "安全恢复", "Safe Recovery"));
+    if (recovery.available) {
+      section.appendChild(statusNode("previewable"));
+      const source = el("p", "exec-note");
+      appendInlinePair(source, "来源任务", "Source Task", recovery.sourceTaskId || "—");
+      source.appendChild(document.createTextNode(" · "));
+      appendInlinePair(source, "原因", "Reason", recovery.reasonCode || "unknown");
+      section.appendChild(source);
+      if (state.recoveryPreview) {
+        const preview = state.recoveryPreview;
+        const facts = el("div", "exec-recovery-facts");
+        appendInlinePair(facts, "项目", "Project", preview.projectId || "—");
+        facts.appendChild(document.createTextNode(" · "));
+        appendInlinePair(facts, "分支", "Branch", preview.branch || "—");
+        facts.appendChild(document.createTextNode(" · "));
+        appendInlinePair(facts, "HEAD", "HEAD", preview.head || "—");
+        facts.appendChild(document.createTextNode(" · "));
+        appendInlinePair(facts, "改动", "Changes", `${preview.changedCount ?? 0}`);
+        section.appendChild(facts);
+        section.appendChild(bilingualElement("p", "exec-recovery-warning", "不会回退文件；恢复只会在当前活动项目中启动新的 Pi 批次。", "Files will not be rolled back; recovery starts a new Pi run in the active project."));
+        if (preview.expiresAt) {
+          const expires = el("p", "exec-note");
+          appendInlinePair(expires, "预览有效期至", "Preview expires", preview.expiresAt);
+          section.appendChild(expires);
+        }
+        const actions = el("div", "exec-actions");
+        actions.appendChild(button("exec-btn", bilingual("取消预览", "Cancel Preview"), cancelRecovery, { disabled: state.recoveryBusy }));
+        actions.appendChild(button("exec-btn primary", state.recoveryConfirm
+          ? bilingual("再次确认恢复", "Confirm Recovery")
+          : bilingual("确认恢复", "Review & Confirm"), startRecovery, { disabled: state.recoveryBusy }));
+        section.appendChild(actions);
+      } else {
+        section.appendChild(button("exec-btn primary", state.recoveryBusy
+          ? bilingual("正在生成预览…", "Preparing Preview…")
+          : bilingual("预览恢复", "Preview Recovery"), previewRecovery, { disabled: state.recoveryBusy }));
+      }
+    } else if (recovery.state === "busy") {
+      section.appendChild(statusNode("busy"));
+      section.appendChild(bilingualElement("p", "exec-note", "已有 Pi 任务正在运行，暂不能恢复。", "A Pi task is already running; recovery is unavailable."));
+    } else if (recovery.state === "stale") {
+      section.appendChild(statusNode("stale"));
+      section.appendChild(bilingualElement("p", "exec-note", "活动项目已失效，请重新识别或选择项目。", "The active project is stale; re-identify or select it."));
+    } else {
+      section.appendChild(statusNode("unknown"));
+      section.appendChild(bilingualElement("p", "exec-note", "当前没有可安全恢复的任务。", "No task is safely recoverable right now."));
+    }
+    box.appendChild(section);
   }
 
   function renderErrorCard() {
@@ -568,7 +706,7 @@
   function renderIdleForm(exState) {
     const box = el("section", "exec-card");
 
-    if (exState === "exited" || exState === "stopped" || exState === "error") {
+    if (exState === "exited" || exState === "stopped" || exState === "failed" || exState === "interrupted" || exState === "error") {
       const summary = el("p", "exec-note");
       if (exState === "exited") {
         summary.appendChild(bilingual(`上一次运行已结束（退出码 ${state.execution.exitCode ?? "—"}）。`, `Last run completed (exit code ${state.execution.exitCode ?? "—"}).`));
