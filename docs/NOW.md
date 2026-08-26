@@ -10,7 +10,7 @@ slice_status: active
 work_branch: codex/v0.1-s05-overview-readonly
 base_commit: b71bb50
 risk_level: high
-last_verified_commit: b29b191
+last_verified_commit: b3393b0
 updated: 2026-08-26
 ---
 
@@ -153,7 +153,7 @@ updated: 2026-08-26
 | 不暴露敏感任务/命令字段 | 路由字段白名单与总览敏感字段测试；不返回 task、output、stderr、args、cwd、完整路径列表 | 自动化 verified |
 | 可见时轮询、离开停止 | 总览生命周期使用 5 秒轮询、AbortController 和请求序号；用户页面验收待完成 | 自动化 verified，用户待验收 |
 
-S05-A 实现提交：`dc25964`（摘要读取）、`5e068d0`（聚合接口）、`4fc1037`（总览页面）。
+S05-A 实现提交：`dc25964`（摘要读取）、`5e068d0`（聚合接口）、`4fc1037`（总览页面）、`b29b191`（状态投影加固）、`b3393b0`（按实际交接文件校验状态）。
 
 ### S04 · 证据与黑匣子（done，2026-08-26 用户功能验收通过）
 
