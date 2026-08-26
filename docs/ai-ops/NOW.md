@@ -3,12 +3,12 @@
 type: ai-handoff-current
 schema_version: 1
 project: AI·OPS COCKPIT
-updated_at: 2026-08-26T14:35:00+08:00
+updated_at: 2026-08-26T15:05:00+08:00
 current_task_id: null
 task_status: in_progress
 plan:
   source: docs/NOW.md
-  revision: b3393b0
+  revision: 68d6d2d
   completed: 0
   total: 1
   percent: 0
@@ -38,6 +38,7 @@ facts:
   user_confirmed:
     - 用户于 2026-08-26 确认 S04 功能验收通过并要求开启下一阶段
     - 用户于 2026-08-26 接受 S05-B 第一版恢复边界：仅失败/中断可恢复；恢复新建 Pi 批次且不自动回退文件
+    - 用户于 2026-08-26 逐部分确认 S05-B 安全恢复设计：页面预览、二次确认、状态复核、失败处理和敏感字段边界
   agent_reported:
     - 当前分支包含成员/模型维护、实验性网页 Key 管理、项目页双语和发送后清空输入等用户提交
   recorded_not_reverified:
@@ -49,7 +50,7 @@ issues_and_risks:
   - `/api/secrets` 会将 Key 值返回给已认证浏览器，不能与 S01 Keychain 保护等同；该实验性能力不作为 S05 默认凭据路径
   - S05-A 只读总览不得暴露任务文本、原始输出、stderr、cwd、args 或完整路径数组
   - S05 涉及恢复语义，若触及项目文件回退必须单独进行高风险设计和用户确认
-next_action: 完成 S05-A 页面验收：打开总览，核对无项目、活动项目和空闲任务状态与项目页一致，确认任务证据和 AI 交接字段不泄露敏感内容，并确认离开总览后轮询停止。恢复与多任务并行保持非目标
+next_action: 请用户审阅并确认 docs/superpowers/specs/2026-08-26-s05b-safe-recovery-design.md；确认后生成 S05-B 实现计划。S05-A 总览页面验收仍待用户确认，恢复文件回退与多任务并行保持非目标
 latest_record: null
 ---
 
