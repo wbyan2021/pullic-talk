@@ -159,3 +159,68 @@ test("repair refuses to overwrite an existing non-managed current handoff", asyn
   );
   assert.equal(readFileSync(currentPath, "utf8"), "user-owned now\n");
 });
+
+test("reads only a bounded safe summary from the managed current handoff", async (t) => {
+  const repoRoot = makeRoot(t);
+  const writer = createAiHandoff({ now: () => 1_750_000_000_000 });
+  await writer.writeCurrent({ ...baseInput(repoRoot), nextAction: "先运行验收测试" });
+
+  const summary = await writer.readSummary({ repoRoot });
+
+  assert.deepEqual(summary, {
+    state: "ready",
+    taskStatus: "needs_review",
+    nextAction: "先运行验收测试",
+  });
+});
+
+test("returns an unavailable summary for missing, conflicting, malformed, or overlong handoff files", async (t) => {
+  const cases = [
+    { name: "missing", content: null },
+    { name: "conflicting", content: "user-owned now\n" },
+    { name: "malformed", content: "<!-- ai-ops-managed:v1 -->\n---\ntype: ai-handoff-current\n---\n" },
+    {
+      name: "overlong",
+      content: `<!-- ai-ops-managed:v1 -->\n---\ntype: ai-handoff-current\ntask_status: in_progress\nnext_action: ${"x".repeat(301)}\n---\n`,
+    },
+  ];
+
+  for (const item of cases) {
+    const repoRoot = makeRoot(t);
+    const currentPath = join(repoRoot, "docs/ai-ops/NOW.md");
+    if (item.content !== null) {
+      const { mkdirSync } = await import("node:fs");
+      mkdirSync(join(repoRoot, "docs/ai-ops"), { recursive: true });
+      writeFileSync(currentPath, item.content);
+    }
+    const summary = await createAiHandoff().readSummary({ repoRoot });
+    assert.deepEqual(summary, {
+      state: "unavailable",
+      taskStatus: null,
+      nextAction: null,
+    }, item.name);
+  }
+});
+
+test("readSummary never reads records or writes files", async (t) => {
+  const repoRoot = makeRoot(t);
+  const writer = createAiHandoff({ now: () => 1_750_000_000_000 });
+  await writer.writeCurrent({ ...baseInput(repoRoot), nextAction: "检查 API_KEY=sk-test-12345678901234567890" });
+
+  const accessed = [];
+  const reader = createAiHandoff({
+    fsImpl: {
+      access: async (filePath) => { accessed.push(filePath); },
+      readFile: async (filePath) => readFileSync(filePath, "utf8"),
+      mkdir: async () => { throw new Error("readSummary must not write"); },
+      writeFile: async () => { throw new Error("readSummary must not write"); },
+      rename: async () => { throw new Error("readSummary must not write"); },
+    },
+  });
+
+  const summary = await reader.readSummary({ repoRoot });
+
+  assert.equal(summary.state, "ready");
+  assert.equal(summary.nextAction, "[withheld_sensitive]");
+  assert.ok(accessed.every((filePath) => !filePath.includes(`${join("docs", "ai-ops", "records")}`)));
+});

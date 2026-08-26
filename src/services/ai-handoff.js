@@ -15,6 +15,8 @@ const MANAGED_MARKER = "<!-- ai-ops-managed:v1 -->";
 const POINTER_BEGIN = "<!-- AI-OPS-COCKPIT:BEGIN -->";
 const POINTER_END = "<!-- AI-OPS-COCKPIT:END -->";
 const MAX_VALUE_BYTES = 8 * 1024;
+const MAX_SUMMARY_STATUS_CHARS = 64;
+const MAX_SUMMARY_ACTION_CHARS = 300;
 const SENSITIVE_KEY = /(?:api[-_]?key|token|password|secret|private[-_]?key|authorization)/i;
 
 export class AiHandoffError extends Error {
@@ -59,6 +61,25 @@ function safeValue(value, redactText, key = "", depth = 0) {
     return result;
   }
   return REDACTION_MARKER;
+}
+
+function unavailableSummary() {
+  return { state: "unavailable", taskStatus: null, nextAction: null };
+}
+
+function parseDocumentScalar(value) {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return typeof parsed === "string" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) return trimmed.slice(1, -1);
+  return trimmed;
 }
 
 function listLines(name, values, redactText) {
@@ -227,6 +248,55 @@ export function createAiHandoff({ now = () => Date.now(), fsImpl = {}, redactTex
     return { agentsPointer, current, records, state };
   }
 
+  async function readSummary({ repoRoot } = {}) {
+    const paths = pathsFor(repoRoot);
+    if (!(await exists(paths.current))) return unavailableSummary();
+
+    let content;
+    try {
+      content = await fs.readFile(paths.current, "utf8");
+    } catch {
+      throw new AiHandoffError("io_error", { retryable: true });
+    }
+    if (typeof content !== "string" || Buffer.byteLength(content, "utf8") > MAX_VALUE_BYTES * 2) {
+      return unavailableSummary();
+    }
+    if (!content.includes(MANAGED_MARKER)) return unavailableSummary();
+
+    const lines = content.split(/\r?\n/);
+    const begin = lines.findIndex((line) => line.trim() === "---");
+    const end = begin < 0
+      ? -1
+      : lines.findIndex((line, index) => index > begin && line.trim() === "---");
+    if (begin < 0 || end < 0) return unavailableSummary();
+
+    let type = null;
+    let taskStatus = null;
+    let nextAction = null;
+    for (const line of lines.slice(begin + 1, end)) {
+      const match = line.match(/^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)$/);
+      if (!match) continue;
+      if (match[1] === "type") type = parseDocumentScalar(match[2]);
+      if (match[1] === "task_status") taskStatus = parseDocumentScalar(match[2]);
+      if (match[1] === "next_action") nextAction = parseDocumentScalar(match[2]);
+    }
+
+    if (type !== "ai-handoff-current" || typeof taskStatus !== "string" || typeof nextAction !== "string") {
+      return unavailableSummary();
+    }
+    if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(taskStatus)) return unavailableSummary();
+    if (Array.from(nextAction).length > MAX_SUMMARY_ACTION_CHARS) return unavailableSummary();
+
+    const redacted = redactText(nextAction, { maxBytes: MAX_SUMMARY_ACTION_CHARS * 4 });
+    const boundedAction = Array.from(redacted.text).slice(0, MAX_SUMMARY_ACTION_CHARS).join("");
+    if (!boundedAction.trim()) return unavailableSummary();
+    return {
+      state: "ready",
+      taskStatus,
+      nextAction: /\bstderr\b\s*[:=]/i.test(nextAction) ? REDACTION_MARKER : boundedAction,
+    };
+  }
+
   async function enableProject({ repoRoot, allowAgentsPointer = false } = {}) {
     const paths = pathsFor(repoRoot);
     const pointer = [
@@ -262,5 +332,5 @@ export function createAiHandoff({ now = () => Date.now(), fsImpl = {}, redactTex
     };
   }
 
-  return { writeCurrent, writeRecord, enableProject, inspectProject, pathsFor };
+  return { writeCurrent, writeRecord, enableProject, inspectProject, readSummary, pathsFor };
 }
