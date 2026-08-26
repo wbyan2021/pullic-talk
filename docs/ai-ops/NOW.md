@@ -3,7 +3,7 @@
 type: ai-handoff-current
 schema_version: 1
 project: AI·OPS COCKPIT
-updated_at: 2026-08-26T16:12:00+08:00
+updated_at: 2026-08-26T08:26:07Z
 current_task_id: s05b-safe-recovery
 task_status: needs_review
 plan:
@@ -41,6 +41,9 @@ facts:
     - 隔离端口 `43211` 已重启；`/api/health` 返回 HTTP 200，未带 Token 的 `/api/recovery/status` 返回 HTTP 401
     - 页面只读检查完成；项目页重新识别后显示当前分支与 HEAD `dfa3045`，暂存、未暂存、未跟踪和冲突均为 0
     - 页面显示 S05-B“安全恢复 / Safe Recovery”卡片和 `pi_not_authenticated` 原因码；本次未生成预览、未启动或停止 Pi、未执行验收命令
+    - Pi CLI 版本 0.84.2；`google` 认证检查为 `not_ready`，`aliyun-token-plan` 为 `ready`
+    - 服务已用 `PI_AUTH_PROVIDER=aliyun-token-plan PORT=43211 npm start` 重启，健康接口返回 HTTP 200
+    - 当前活动项目是“AI+ 知识学习项目”，其路径当前不是 Git 仓库；尚未在该项目启动 Pi
   user_confirmed:
     - 用户于 2026-08-26 确认 S04 功能验收通过并要求开启下一阶段
     - 用户于 2026-08-26 接受 S05-B 第一版恢复边界：仅失败/中断可恢复；恢复新建 Pi 批次且不自动回退文件
@@ -59,7 +62,7 @@ issues_and_risks:
   - 恢复只允许失败/中断任务，采用新 Pi 批次重启；不续接旧进程、不执行 Git 回退、不覆盖旧记录
   - 文件回退、Pi 会话续接和多任务并行仍是后续高风险切片，不能从本功能隐式扩展
 next_action: 在隔离端口 43211 完成 S05-A/S05-B 页面验收：从总览进入项目页，查看失败/中断任务恢复预览，确认“不会回退文件”，二次确认后核对新任务 ID 与来源关联；再检查停止、成功、已验收、过期、项目失效和忙碌场景均被阻止。用户确认前不得将 S05 标记为 done
-latest_record: docs/ai-ops/records/2026-08-26-s05b-page-check.md
+latest_record: docs/ai-ops/records/2026-08-26-pi-start-diagnosis.md
 ---
 
 # AI 交接当前状态
