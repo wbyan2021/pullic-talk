@@ -1,11 +1,16 @@
 "use strict";
 
+import { REDACTION_MARKER, redactText } from "../services/safe-redactor.js";
+
 // Read-only S05-A aggregation. This route deliberately owns no state: every
 // value is projected from the existing project, evidence, execution and
 // handoff services and is reduced to the fields the Overview UI needs.
 
 const HANDOFF_SOURCE = "docs/ai-ops/NOW.md";
 const ACCEPTANCE_STATES = new Set(["pending", "accepted", "needs_review", "rejected"]);
+const EXECUTION_STATES = new Set(["idle", "running", "stopping", "stopped", "failed", "exited", "completed", "interrupted", "error", "unknown"]);
+const EVIDENCE_STATES = new Set(["verified", "unknown", "pending", "not_run", "passed", "failed", "stopped"]);
+const HANDOFF_STATES = new Set(["not_enabled", "repair_required", "conflict", "ready", "unknown", "unavailable"]);
 
 const UNKNOWN_ERROR = {
   ok: false,
@@ -61,8 +66,9 @@ function safeFileState(source) {
 
 function safeHandoff(source) {
   const handoff = source && typeof source === "object" ? source : {};
+  const rawState = nullableString(handoff.state, 64);
   return {
-    state: nullableString(handoff.state, 64) ?? (handoff.enabled === true ? "unknown" : "not_enabled"),
+    state: HANDOFF_STATES.has(rawState) ? rawState : (handoff.enabled === true ? "unknown" : "not_enabled"),
     currentPath: nullableString(handoff.currentPath, 256),
     recordsPath: nullableString(handoff.recordsPath, 256),
     fileState: safeFileState(handoff.fileState),
@@ -93,7 +99,8 @@ function safeExecution(execution, evidence) {
   const evidenceSource = evidence && typeof evidence === "object" ? evidence : {};
   const taskId = nullableString(source.taskId ?? evidenceSource.taskId, 128);
   const projectId = nullableString(source.projectId ?? evidenceSource.projectId, 128);
-  const state = nullableString(source.state ?? evidenceSource.state ?? evidenceSource.executionStatus, 64) ?? "idle";
+  const rawState = nullableString(source.state ?? evidenceSource.state ?? evidenceSource.executionStatus, 64);
+  const state = taskId ? (EXECUTION_STATES.has(rawState) ? rawState : "unknown") : "idle";
   return {
     available: Boolean(taskId),
     state,
@@ -112,7 +119,7 @@ function safeSnapshot(source) {
   return {
     branch: nullableString(source.branch, 256),
     head: nullableString(source.head, 128),
-    worktree: nullableString(source.worktree, 64),
+    worktree: ["clean", "modified", "unknown"].includes(source.worktree) ? source.worktree : "unknown",
     changedCount: Number.isInteger(source.changedCount) && source.changedCount >= 0
       ? source.changedCount
       : changedPaths.length,
@@ -136,8 +143,9 @@ function safeGitEvidence(source) {
 
 function safeValidation(source) {
   const validation = source && typeof source === "object" ? source : {};
+  const result = nullableString(validation.result, 32) ?? "not_run";
   return {
-    result: nullableString(validation.result, 32) ?? "not_run",
+    result: EVIDENCE_STATES.has(result) ? result : "unknown",
     exitCode: Number.isInteger(validation.exitCode) ? validation.exitCode : null,
     durationMs: Number.isFinite(validation.durationMs) ? validation.durationMs : null,
     withheld: Boolean(validation.withheld),
@@ -150,19 +158,25 @@ function safeEvidence(source) {
   const acceptanceStatus = ACCEPTANCE_STATES.has(evidence.acceptanceStatus)
     ? evidence.acceptanceStatus
     : "pending";
+  const evidenceState = (value, fallback) => {
+    const normalized = nullableString(value, 32);
+    return EVIDENCE_STATES.has(normalized) ? normalized : fallback;
+  };
+  const executionState = nullableString(evidence.state, 64);
+  const executionStatus = nullableString(evidence.executionStatus, 64);
   return {
     available: Boolean(evidence.taskId),
     taskId: nullableString(evidence.taskId, 128),
     projectId: nullableString(evidence.projectId, 128),
-    state: nullableString(evidence.state, 64) ?? "idle",
-    executionStatus: nullableString(evidence.executionStatus, 64) ?? "idle",
+    state: evidence.taskId && EXECUTION_STATES.has(executionState) ? executionState : "idle",
+    executionStatus: evidence.taskId && EXECUTION_STATES.has(executionStatus) ? executionStatus : "idle",
     before: safeSnapshot(evidence.before),
     after: safeSnapshot(evidence.after),
     gitEvidence: safeGitEvidence(evidence.gitEvidence),
     evidence: {
-      execution: nullableString(evidence.evidence?.execution, 32) ?? "unknown",
-      git: nullableString(evidence.evidence?.git, 32) ?? "unknown",
-      validation: nullableString(evidence.evidence?.validation, 32) ?? "not_run",
+      execution: evidenceState(evidence.evidence?.execution, "unknown"),
+      git: evidenceState(evidence.evidence?.git, "unknown"),
+      validation: evidenceState(evidence.evidence?.validation, "not_run"),
     },
     validation: safeValidation(evidence.validation),
     acceptanceStatus,
@@ -172,8 +186,11 @@ function safeEvidence(source) {
 
 function safeNextAction(summary) {
   const ready = summary && summary.state === "ready" && typeof summary.nextAction === "string";
+  const redacted = ready ? redactText(summary.nextAction, { maxBytes: 1_200 }) : null;
   return {
-    text: ready ? summary.nextAction.slice(0, 300) : null,
+    text: ready
+      ? (redacted.withheld ? REDACTION_MARKER : Array.from(redacted.text).slice(0, 300).join(""))
+      : null,
     source: HANDOFF_SOURCE,
     state: ready ? "ready" : "unavailable",
   };

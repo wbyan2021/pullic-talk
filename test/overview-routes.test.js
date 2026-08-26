@@ -198,6 +198,14 @@ test("keeps handoff unavailable when the managed summary cannot be read", async 
   assert.deepEqual(res.body.overview.nextAction, { text: null, source: "docs/ai-ops/NOW.md", state: "unavailable" });
 });
 
+test("redacts a malformed or sensitive next action even when the reader reports ready", async () => {
+  const fakes = createFakes({ aiHandoff: { async readSummary() { return { state: "ready", taskStatus: "in_progress", nextAction: "API_KEY=sk-test-12345678901234567890" }; } } });
+  const { app } = setup(fakes);
+  const res = await invoke(app);
+  assert.deepEqual(res.body.overview.nextAction, { text: "[withheld_sensitive]", source: "docs/ai-ops/NOW.md", state: "ready" });
+  assert.ok(!JSON.stringify(res.body).includes("sk-test-12345678901234567890"));
+});
+
 test("maps service failures to a stable internal error without raw details", async () => {
   const fakes = createFakes({ projectBoundary: { async getStatus() { throw new Error("secret internal path"); } } });
   const { app } = setup(fakes);
