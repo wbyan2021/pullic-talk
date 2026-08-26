@@ -74,7 +74,7 @@ function idleEvidence() {
 }
 
 function createFakes(overrides = {}) {
-  const calls = { project: 0, evidence: 0, execution: 0, handoff: [], inspect: [] };
+  const calls = { project: 0, evidence: 0, execution: 0, recovery: 0, handoff: [], inspect: [] };
   const projectBoundary = {
     async getStatus() {
       calls.project += 1;
@@ -87,12 +87,19 @@ function createFakes(overrides = {}) {
     async getStatus() { calls.execution += 1; return { state: "exited", runId: "run_001", startedAt: "2026-08-26T00:00:00.000Z", durationMs: 123, task: "do not return", output: "raw output", taskId: "task_001", projectId: "project_001", lastError: null }; },
     ...overrides.taskEvidence,
   };
+  const taskRecovery = {
+    async getStatus() {
+      calls.recovery += 1;
+      return { available: true, sourceTaskId: "task_failed", sourceState: "failed", reasonCode: "pi_not_authenticated", state: "previewable", secret: "no" };
+    },
+    ...overrides.taskRecovery,
+  };
   const aiHandoff = {
     async inspectProject(input) { calls.inspect.push(input); return { agentsPointer: "managed", current: "managed", records: "present", state: "ready" }; },
     async readSummary(input) { calls.handoff.push(input); return { state: "ready", taskStatus: "needs_review", nextAction: "先运行验收测试" }; },
     ...overrides.aiHandoff,
   };
-  return { projectBoundary, taskEvidence, aiHandoff, calls };
+  return { projectBoundary, taskEvidence, taskRecovery, aiHandoff, calls };
 }
 
 function setup(fakes = createFakes()) {
@@ -158,8 +165,16 @@ test("projects active project, execution, evidence and next action with a strict
   assert.deepEqual(overview.evidence.after, { branch: "codex/s05", head: "def5678", worktree: "modified", changedCount: 1, truncated: false });
   assert.deepEqual(overview.evidence.gitEvidence, { certainty: "observed", causality: "not_proven", newCount: 1, changedCount: 0, preexistingCount: 0 });
   assert.deepEqual(overview.nextAction, { text: "先运行验收测试", source: "docs/ai-ops/NOW.md", state: "ready" });
+  assert.deepEqual(overview.evidence.recovery, {
+    available: true,
+    sourceTaskId: "task_failed",
+    sourceState: "failed",
+    reasonCode: "pi_not_authenticated",
+    state: "previewable",
+  });
   assert.deepEqual(calls.handoff, [{ repoRoot: "/tmp/project" }]);
   assert.deepEqual(calls.inspect, [{ repoRoot: "/tmp/project" }]);
+  assert.equal(calls.recovery, 1);
 });
 
 test("returns safe empty states when there is no active project", async () => {

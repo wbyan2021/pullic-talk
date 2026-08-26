@@ -11,6 +11,8 @@ const ACCEPTANCE_STATES = new Set(["pending", "accepted", "needs_review", "rejec
 const EXECUTION_STATES = new Set(["idle", "running", "stopping", "stopped", "failed", "exited", "completed", "interrupted", "error", "unknown"]);
 const EVIDENCE_STATES = new Set(["verified", "unknown", "pending", "not_run", "passed", "failed", "stopped"]);
 const HANDOFF_STATES = new Set(["not_enabled", "repair_required", "conflict", "ready", "unknown", "unavailable"]);
+const RECOVERY_STATES = new Set(["not_available", "previewable", "busy", "stale", "unknown"]);
+const RECOVERY_SOURCE_STATES = new Set(["failed", "interrupted"]);
 
 const UNKNOWN_ERROR = {
   ok: false,
@@ -153,7 +155,18 @@ function safeValidation(source) {
   };
 }
 
-function safeEvidence(source) {
+function safeRecovery(source) {
+  const recovery = source && typeof source === "object" ? source : {};
+  return {
+    available: recovery.available === true,
+    sourceTaskId: nullableString(recovery.sourceTaskId, 128),
+    sourceState: RECOVERY_SOURCE_STATES.has(recovery.sourceState) ? recovery.sourceState : null,
+    reasonCode: nullableString(recovery.reasonCode, 64),
+    state: RECOVERY_STATES.has(recovery.state) ? recovery.state : "not_available",
+  };
+}
+
+function safeEvidence(source, recoverySource = null) {
   const evidence = source && typeof source === "object" ? source : {};
   const acceptanceStatus = ACCEPTANCE_STATES.has(evidence.acceptanceStatus)
     ? evidence.acceptanceStatus
@@ -180,6 +193,7 @@ function safeEvidence(source) {
     },
     validation: safeValidation(evidence.validation),
     acceptanceStatus,
+    recovery: safeRecovery(recoverySource),
     lastError: safeLastError(evidence.lastError),
   };
 }
@@ -196,7 +210,7 @@ function safeNextAction(summary) {
   };
 }
 
-export default function overviewRoutes(app, { projectBoundary, taskEvidence, aiHandoff = null } = {}) {
+export default function overviewRoutes(app, { projectBoundary, taskEvidence, taskRecovery = null, aiHandoff = null } = {}) {
   if (!projectBoundary) throw new TypeError("projectBoundary is required");
   if (!taskEvidence) throw new TypeError("taskEvidence is required");
 
@@ -228,7 +242,7 @@ export default function overviewRoutes(app, { projectBoundary, taskEvidence, aiH
           overview: {
             project,
             execution: safeExecution(null, null),
-            evidence: safeEvidence(null),
+            evidence: safeEvidence(null, null),
             nextAction: { text: null, source: null, state: "unavailable" },
           },
         });
@@ -241,13 +255,16 @@ export default function overviewRoutes(app, { projectBoundary, taskEvidence, aiH
       const summary = typeof aiHandoff?.readSummary === "function"
         ? await aiHandoff.readSummary({ repoRoot: active.repoRoot })
         : { state: "unavailable", taskStatus: null, nextAction: null };
+      const recovery = typeof taskRecovery?.getStatus === "function"
+        ? await taskRecovery.getStatus()
+        : null;
 
       return res.json({
         ok: true,
         overview: {
           project,
           execution: safeExecution(execution, evidence),
-          evidence: safeEvidence(evidence),
+          evidence: safeEvidence(evidence, recovery),
           nextAction: safeNextAction(summary),
         },
       });

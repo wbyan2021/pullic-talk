@@ -20,6 +20,7 @@ import projectRoutes from "./routes/project.js";
 import executionRoutes from "./routes/execution.js";
 import evidenceRoutes from "./routes/evidence.js";
 import overviewRoutes from "./routes/overview.js";
+import recoveryRoutes from "./routes/recovery.js";
 import { createCredentialStore } from "./services/credential-store.js";
 import { createDeepSeekProvider } from "./providers/deepseek.js";
 import { createEscortService } from "./services/escort-service.js";
@@ -28,6 +29,7 @@ import { createProjectBoundary } from "./services/project-boundary.js";
 import { createPiExecutor } from "./services/pi-executor.js";
 import { createBlackboxStore } from "./services/blackbox-store.js";
 import { createTaskEvidence } from "./services/task-evidence.js";
+import { createTaskRecovery } from "./services/task-recovery.js";
 import { createAiHandoff } from "./services/ai-handoff.js";
 import { createValidationRunner } from "./services/validation-runner.js";
 
@@ -57,6 +59,11 @@ const taskEvidence = createTaskEvidence({
   gitInspector,
   blackboxStore,
   piExecutor,
+});
+const taskRecovery = createTaskRecovery({
+  projectBoundary,
+  blackboxStore,
+  taskEvidence,
 });
 const validationRunner = createValidationRunner({ projectBoundary });
 void taskEvidence.recoverIncomplete().catch(() => {
@@ -183,6 +190,7 @@ projectRoutes(app, { projectBoundary, aiHandoff });
 executionRoutes(app, { piExecutor, taskEvidence });
 evidenceRoutes(app, { taskEvidence, validationRunner, aiHandoff, projectBoundary });
 overviewRoutes(app, { projectBoundary, taskEvidence, aiHandoff });
+recoveryRoutes(app, { taskRecovery });
 apiRoutes(app);
 membersRoutes(app);
 secretsRoutes(app);
