@@ -87,6 +87,17 @@ test("status returns only the safe recovery summary", async () => {
   assert.ok(!JSON.stringify(res.body).includes("secret"));
 });
 
+test("status returns a safe empty state when recovery is unavailable", async () => {
+  const { app } = setup({ async getStatus() { return { available: false, state: "stale", internalPath: "/private/project" }; } });
+  const res = await invoke(app, "GET", "/api/recovery/status");
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, {
+    ok: true,
+    recovery: { available: false, sourceTaskId: null, sourceState: null, reasonCode: null, state: "stale" },
+  });
+  assert.ok(!JSON.stringify(res.body).includes("private"));
+});
+
 test("preview validates the task path and projects only bounded fields", async () => {
   const { app, calls } = setup();
   const res = await invoke(app, "GET", "/api/recovery/:taskId/preview", { params: { taskId: "task_failed" } });
@@ -95,6 +106,26 @@ test("preview validates the task path and projects only bounded fields", async (
   assert.deepEqual(res.body.recovery, safePreview());
   assert.deepEqual(calls.preview, ["task_failed"]);
   assert.ok(!JSON.stringify(res.body).includes("task text"));
+});
+
+test("preview never forwards task text, output, commands, or path arrays", async () => {
+  const { app } = setup({
+    async preview() {
+      return {
+        ...safePreview(),
+        task: "API_KEY=sk-test-12345678901234567890",
+        output: "stderr secret",
+        args: ["--unsafe"],
+        cwd: "/private/project",
+        changedPaths: ["secret.txt"],
+      };
+    },
+  });
+  const res = await invoke(app, "GET", "/api/recovery/:taskId/preview", { params: { taskId: "task_failed" } });
+  const serialized = JSON.stringify(res.body);
+  for (const value of ["API_KEY", "sk-test", "stderr", "--unsafe", "/private/project", "secret.txt"]) {
+    assert.ok(!serialized.includes(value), `sensitive field leaked: ${value}`);
+  }
 });
 
 test("start requires explicit confirmation and a preview handle", async () => {

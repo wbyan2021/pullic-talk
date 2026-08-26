@@ -160,6 +160,16 @@ test("preview returns bounded safe fields and expires", async (t) => {
   assert.equal(await rejectCode(ctx.recovery.start({ taskId: "task_failed", previewId: preview.previewId, confirmed: true })), "recovery_preview_expired");
 });
 
+test("recovery replays only the stored redacted task payload", async (t) => {
+  const ctx = makeRecovery(t);
+  await createSource(ctx.blackboxStore, { taskId: "task_secret", task: "API_KEY=sk-test-12345678901234567890" });
+  const preview = await ctx.recovery.preview({ taskId: "task_secret" });
+  await ctx.recovery.start({ taskId: "task_secret", previewId: preview.previewId, confirmed: true });
+  const replayed = ctx.taskEvidence.calls[0].task;
+  assert.equal(replayed, "[withheld_sensitive]");
+  assert.ok(!replayed.includes("sk-test-12345678901234567890"));
+});
+
 test("confirmation rechecks the project fingerprint and execution lock", async (t) => {
   const ctx = makeRecovery(t);
   await createSource(ctx.blackboxStore, { taskId: "task_failed" });
@@ -200,4 +210,17 @@ test("stale projects are never recoverable", async (t) => {
   const ctx = makeRecovery(t, { boundary });
   await createSource(ctx.blackboxStore, { taskId: "task_failed" });
   assert.equal(await rejectCode(ctx.recovery.preview({ taskId: "task_failed" })), "recovery_project_stale");
+});
+
+test("status returns a safe stale state when no active project is selected", async (t) => {
+  const ctx = makeRecovery(t, {
+    boundary: { active: null, async getStatus() { return { active: null, activeProjectId: null, projects: [] }; } },
+  });
+  assert.deepEqual(await ctx.recovery.getStatus(), {
+    available: false,
+    sourceTaskId: null,
+    sourceState: null,
+    reasonCode: null,
+    state: "stale",
+  });
 });

@@ -10,6 +10,7 @@ import { createBlackboxStore } from "../src/services/blackbox-store.js";
 import { createGitInspector } from "../src/services/git-inspector.js";
 import { createProjectBoundary } from "../src/services/project-boundary.js";
 import { createTaskEvidence } from "../src/services/task-evidence.js";
+import { createTaskRecovery } from "../src/services/task-recovery.js";
 import { createPiExecutor } from "../src/services/pi-executor.js";
 import { createValidationRunner } from "../src/services/validation-runner.js";
 
@@ -52,6 +53,14 @@ if [ "$1" = "auth" ]; then echo '{"status":"ready"}'; exit 0; fi
 printf 'created by pi\\n' > pi-created.txt
 echo '{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":1,"delta":"task complete"}}'
 exit 0
+`);
+}
+
+function makeFailingPi(t) {
+  return makeBinary(t, "pi", `
+if [ "$1" = "auth" ]; then echo '{"status":"ready"}'; exit 0; fi
+echo "internal failure" 1>&2
+exit 3
 `);
 }
 
@@ -141,4 +150,88 @@ test("S04 recovery marks an open task interrupted without creating an orphan pro
   assert.deepEqual(await recovered.recoverIncomplete(), [{ projectId: "project_001", taskId: "task_open", state: "interrupted" }]);
   const record = await recovered.readTask({ projectId: "project_001", taskId: "task_open" });
   assert.equal(record.events.at(-1).type, "interrupted");
+});
+
+test("S05-B recovery restarts a failed task without restoring files or rewriting its record", async (t) => {
+  const repo = makeRepo(t);
+  const stateRoot = makeRoot(t);
+  const inspector = createGitInspector();
+  const boundary = createProjectBoundary({ inspector, statePath: join(stateRoot, "projects.local.json") });
+  const selected = await boundary.select(repo);
+  await boundary.setActive(selected.id);
+  const store = createBlackboxStore({ rootDir: join(stateRoot, "blackbox.local") });
+  let taskSeq = 0;
+  const evidence = createTaskEvidence({
+    projectBoundary: boundary,
+    gitInspector: inspector,
+    blackboxStore: store,
+    piExecutor: createPiExecutor({ projectBoundary: boundary, piBinary: makeFailingPi(t), authProvider: "test-provider" }),
+    taskIdFactory: () => `task_s05_${++taskSeq}`,
+  });
+  const recovery = createTaskRecovery({ projectBoundary: boundary, blackboxStore: store, taskEvidence: evidence });
+
+  await evidence.start("第一次失败任务");
+  const failed = await waitForEvidence(evidence, ["failed"]);
+  assert.equal(failed.executionStatus, "failed");
+  const sourceBefore = (await store.readTask({ projectId: selected.id, taskId: failed.taskId })).events;
+  const sourcePrefix = sourceBefore.map((event) => JSON.stringify(event)).join("\n");
+  const headBefore = git(repo, "rev-parse", "HEAD");
+  const fileBefore = readFileSync(join(repo, "existing.txt"), "utf8");
+
+  const preview = await recovery.preview({ taskId: failed.taskId });
+  assert.equal(preview.sourceTaskId, failed.taskId);
+  assert.equal(preview.fileRollback, "not_included");
+  const started = await recovery.start({ taskId: failed.taskId, previewId: preview.previewId, confirmed: true });
+  assert.equal(started.sourceTaskId, failed.taskId);
+  assert.notEqual(started.taskId, failed.taskId);
+  const retried = await waitForEvidence(evidence, ["failed"]);
+  assert.equal(retried.taskId, started.taskId);
+
+  const sourceAfter = (await store.readTask({ projectId: selected.id, taskId: failed.taskId })).events;
+  assert.ok(sourceAfter.map((event) => JSON.stringify(event)).join("\n").startsWith(sourcePrefix));
+  const newRecord = await store.readTask({ projectId: selected.id, taskId: started.taskId });
+  assert.equal(newRecord.events[0].data.recoveryOfTaskId, failed.taskId);
+  assert.equal(newRecord.events.find((event) => event.type === "recovery_started")?.data.sourceTaskId, failed.taskId);
+  assert.equal(git(repo, "rev-parse", "HEAD"), headBefore);
+  assert.equal(readFileSync(join(repo, "existing.txt"), "utf8"), fileBefore);
+});
+
+test("S05-B recovery can restart a service-restart interrupted task", async (t) => {
+  const repo = makeRepo(t);
+  const stateRoot = makeRoot(t);
+  const inspector = createGitInspector();
+  const boundary = createProjectBoundary({ inspector, statePath: join(stateRoot, "projects.local.json") });
+  const selected = await boundary.select(repo);
+  await boundary.setActive(selected.id);
+  const store = createBlackboxStore({ rootDir: join(stateRoot, "blackbox.local") });
+  const before = await createTaskEvidence({
+    projectBoundary: boundary,
+    gitInspector: inspector,
+    blackboxStore: store,
+  }).captureSnapshot();
+  await store.beginTask({
+    projectId: selected.id,
+    taskId: "task_interrupted_001",
+    data: { task: "服务重启后继续任务", projectId: selected.id, repoRoot: repo, before },
+  });
+  const restartedStore = createBlackboxStore({ rootDir: join(stateRoot, "blackbox.local") });
+  assert.deepEqual(await restartedStore.recoverIncomplete(), [{ projectId: selected.id, taskId: "task_interrupted_001", state: "interrupted" }]);
+
+  const evidence = createTaskEvidence({
+    projectBoundary: boundary,
+    gitInspector: inspector,
+    blackboxStore: restartedStore,
+    piExecutor: createPiExecutor({ projectBoundary: boundary, piBinary: makePi(t), authProvider: "test-provider" }),
+    taskIdFactory: () => "task_after_restart_001",
+  });
+  const recovery = createTaskRecovery({ projectBoundary: boundary, blackboxStore: restartedStore, taskEvidence: evidence });
+  const preview = await recovery.preview({ taskId: "task_interrupted_001" });
+  assert.equal(preview.sourceState, "interrupted");
+  const started = await recovery.start({ taskId: "task_interrupted_001", previewId: preview.previewId, confirmed: true });
+  assert.equal(started.taskId, "task_after_restart_001");
+  const finished = await waitForEvidence(evidence, ["exited"]);
+  assert.equal(finished.taskId, started.taskId);
+  const source = await restartedStore.readTask({ projectId: selected.id, taskId: "task_interrupted_001" });
+  assert.equal(source.events[1].type, "interrupted");
+  assert.ok(source.events.some((event) => event.type === "recovery_started"));
 });

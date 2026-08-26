@@ -292,7 +292,15 @@ export function createTaskRecovery({
   }
 
   async function getStatus() {
-    const active = await activeProject();
+    let active;
+    try {
+      active = await activeProject();
+    } catch (error) {
+      if (error?.code === "recovery_project_stale") {
+        return { available: false, sourceTaskId: null, sourceState: null, reasonCode: null, state: "stale" };
+      }
+      throw error;
+    }
     if (await executionBusy()) return { available: false, sourceTaskId: null, sourceState: null, reasonCode: null, state: "busy" };
     let taskIds;
     try { taskIds = await blackboxStore.listTasks({ projectId: active.id }); }
