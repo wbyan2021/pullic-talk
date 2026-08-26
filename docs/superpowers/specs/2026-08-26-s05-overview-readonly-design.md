@@ -5,7 +5,7 @@ workflow_version: 4
 milestone: v0.1-first-controlled-mission
 slice: S05-recovery-and-overview
 design_status: accepted
-ready_status: pending
+ready_status: accepted
 risk_level: medium
 created: 2026-08-26
 updated: 2026-08-26
@@ -144,9 +144,8 @@ overview.nextAction
 
 ## 8. Definition of Ready 入口条件
 
-- [ ] 用户确认本设计与只读范围。
-- [ ] `/api/overview` 响应字段和敏感信息边界通过代码/安全审查。
-- [ ] `readSummary` 的解析失败与冲突策略通过测试设计审查。
-- [ ] 前端总览入口、卡片和轮询策略通过 UI 设计审查。
-- [ ] 实现计划明确文件范围、回滚点和测试命令。
-
+- [x] 用户确认本设计与只读范围。
+- [x] `/api/overview` 响应字段和敏感信息边界通过代码/安全审查。
+- [x] `readSummary` 的解析失败与冲突策略通过测试设计审查。
+- [x] 前端总览入口、卡片和轮询策略通过 UI 设计审查。
+- [x] 实现计划明确文件范围、回滚点和测试命令。
