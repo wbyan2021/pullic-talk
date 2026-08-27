@@ -3,15 +3,15 @@
 type: ai-handoff-current
 schema_version: 1
 project: AI·OPS COCKPIT
-updated_at: 2026-08-26T09:08:42Z
+updated_at: 2026-08-28T00:00:00Z
 current_task_id: s05b-safe-recovery
-task_status: needs_review
+task_status: done
 plan:
   source: docs/NOW.md
-  revision: 4053ff7
-  completed: 5
+  revision: 1044852
+  completed: 6
   total: 6
-  percent: 83.3
+  percent: 100
 before:
   branch: [withheld_sensitive]
   head: [withheld_sensitive]
@@ -21,9 +21,9 @@ after:
   head: [withheld_sensitive]
   changedPaths: [withheld_sensitive]
 evidence:
-  execution: not_run
+  execution: user_reported
   git: verified
-  validation: not_run
+  validation: verified
 facts:
   verified:
     - 当前分支与 HEAD 已通过只读 Git 检查
@@ -45,17 +45,20 @@ facts:
     - 服务已用 `PI_AUTH_PROVIDER=aliyun-token-plan PORT=43211 npm start` 重启，健康接口返回 HTTP 200
     - Pi 启动诊断期间发现活动项目曾误切到非 Git 的“AI+ 知识学习项目”；现已切回 pullic-talk，项目页显示 ACTIVE 且工作树四项计数均为 0
     - 本次诊断未自动替用户启动 Pi；随后用户报告已完成启动测试且无问题
+    - 2026-08-28 服务以 PI_AUTH_PROVIDER=aliyun-token-plan 在隔离端口 43211 重启，健康接口 ok、首页 200
+    - 2026-08-28 合并前全量 node --test 299/299，strict 结构校验通过，工作树干净
   user_confirmed:
     - 用户于 2026-08-26 确认 S04 功能验收通过并要求开启下一阶段
     - 用户于 2026-08-26 接受 S05-B 第一版恢复边界：仅失败/中断可恢复；恢复新建 Pi 批次且不自动回退文件
     - 用户于 2026-08-26 逐部分确认 S05-B 安全恢复设计：页面预览、二次确认、状态复核、失败处理和敏感字段边界
     - 用户于 2026-08-26 要求直接开始 S05-B 实现；实现计划 `697fa21` 已提交
     - 用户于 2026-08-26 确认 Pi 已可以启动，测试无问题
+    - 用户于 2026-08-28 在隔离端口 43211 完成 S05-A/S05-B 页面验收并确认通过
   agent_reported:
     - 当前分支包含成员/模型维护、实验性网页 Key 管理、项目页双语和发送后清空输入等用户提交
   recorded_not_reverified:
     - 用户测试的任务文本、黑匣子记录、Git 前后快照和验收证据尚未由 AI 重新读取
-    - S05-A/S05-B 用户页面验收尚未完成
+    - 用户 2026-08-28 验收过程中的具体点击顺序未由 AI 逐项复核
   unknown:
     - 网页 Key 管理是否纳入 v0.1 以及其浏览器暴露风险是否可接受
     - 应用重启后是否由外部启动环境加载 ~/.secrets.env
@@ -64,8 +67,8 @@ issues_and_risks:
   - S05-A/S05-B 只读与恢复接口不得暴露任务文本、原始输出、stderr、cwd、args 或完整路径数组
   - 恢复只允许失败/中断任务，采用新 Pi 批次重启；不续接旧进程、不执行 Git 回退、不覆盖旧记录
   - 文件回退、Pi 会话续接和多任务并行仍是后续高风险切片，不能从本功能隐式扩展
-next_action: 在 pullic-talk 项目页完成 S05-A/S05-B 页面验收：查看失败/中断任务恢复预览，确认“不会回退文件”，二次确认后核对新任务 ID 与来源关联，并检查停止、成功、已验收、过期、项目失效和忙碌场景均被阻止。用户确认前不得将 S05 标记为 done
-latest_record: docs/ai-ops/records/2026-08-26-pi-start-user-acceptance.md
+next_action: 在合并后的 main 基线上完成 v0.1 收尾验收：用户用活动项目真实完成一条任务的全流程（启动 Pi、观察流式、核对证据与黑匣子、结束或恢复），随后收口版本
+latest_record: docs/ai-ops/records/2026-08-28-s05-user-page-acceptance.md
 ---
 
 # AI 交接当前状态
