@@ -7,16 +7,16 @@ status: active
 stage: release
 current_slice: S05-recovery-and-overview
 slice_status: done
-work_branch: 无（S05 验收后合并 main）
+work_branch: 无（S05 已合并 main）
 base_commit: b71bb50
 risk_level: high
-last_verified_commit: 4053ff7
+last_verified_commit: a19f146
 updated: 2026-08-28
 ---
 
 # 当前版本：v0.1 · 第一次可控任务
 
-> S01、S02、S02b、S03 均已通过用户验收并合并入 `main`。S04 已完成实现、自动化验证和用户功能验收，于 2026-08-26 收口为 done。S05-A「只读任务总览」与 S05-B「安全恢复」已于 2026-08-28 通过用户页面验收并收口为 done；全部实现位于 `codex/v0.1-s05-overview-readonly` 分支（自 S04 分支提交 `b71bb50` 创建，含 S04 全部实现），正在按惯例 fast-forward 合并入 `main`。恢复采用新批次重启，不回退文件；多任务并行仍不在本切片范围内。当前分支另外包含群聊成员/模型维护、实验性本地 Key 管理、项目页双语和发送体验修复；这些变化已纳入文档事实，但不改变 S04 的验收结论。v0.1 剩余收尾项：用户在合并后的基线上真实完成一条任务的全流程。
+> S01、S02、S02b、S03 均已通过用户验收并合并入 `main`。S04 已完成实现、自动化验证和用户功能验收，于 2026-08-26 收口为 done。S05-A「只读任务总览」与 S05-B「安全恢复」已于 2026-08-28 通过用户页面验收并收口为 done；全部实现已随 `codex/v0.1-s05-overview-readonly` 分支 fast-forward 合并入 `main`（基线 `a19f146`，该分支自 S04 分支提交 `b71bb50` 创建，含 S04 全部实现）。恢复采用新批次重启，不回退文件；多任务并行仍不在本切片范围内。本次合并同时带入群聊成员/模型维护、实验性本地 Key 管理、项目页双语和发送体验修复；这些变化已纳入文档事实，但不改变 S04 的验收结论。v0.1 剩余收尾项：用户在合并后的基线上真实完成一条任务的全流程。
 
 ## 产品基线
 
@@ -107,8 +107,8 @@ updated: 2026-08-28
 
 - 代码地图：[CODEMAP.md](CODEMAP.md)
 - 稳定分支：`main`
-- 稳定基线：`8a72e99`（S01 + S02 + S02b + S03 均已 fast-forward 合并入 main）
-- 产品工作分支：`codex/v0.1-s05-overview-readonly`（自 S04 已验收分支提交 `b71bb50` 创建；S05 验收通过后按惯例 fast-forward 合并入 `main` 并删除）
+- 稳定基线：`a19f146`（S01 + S02 + S02b + S03 + S04 + S05 均已 fast-forward 合并入 main）
+- 产品工作分支：无（`codex/v0.1-s05-overview-readonly` 已于 2026-08-28 fast-forward 合并入 `main` 并删除）
 - 依赖检查：`npm ls --depth=0`
 - 语法检查：`git ls-files '*.js' | xargs -n1 node --check`
 - 自动化测试：`npm test`

@@ -22,7 +22,7 @@ updated: 2026-08-26
 - Agent 流式协议：SSE；终端协议：WebSocket
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
-- 稳定基线：`8a72e99`
+- 稳定基线：`a19f146`
 - 当前验证基线：依赖完整；`node --test` 299/299 通过；逐文件语法、差异和 strict 结构检查通过。S04 用户功能验收已于 2026-08-26 确认；S05-A 只读总览与 S05-B 安全恢复已于 2026-08-28 通过用户页面验收并收口为 done；文件回退与多任务并行仍未实现。没有 lint、CI 或 build 脚本。
 
 ## 关键路径
@@ -107,7 +107,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 
 - 远程仓库：`origin` → `git@github.com:wbyan2021/pullic-talk.git`
 - 稳定分支：`main`
-- S01、S02、S02b 与 S03 工作分支均已 fast-forward 合并入 `main`（当前基线 `8a72e99`）并删除；S04 用户已确认功能验收通过；S05-A/S05-B 已于 2026-08-28 通过用户页面验收，工作分支 `codex/v0.1-s05-overview-readonly` 按惯例 fast-forward 合并入 `main` 并删除；文件回退与多任务并行不在范围内。
+- S01–S05 工作分支均已 fast-forward 合并入 `main`（当前基线 `a19f146`）并删除；S04 用户已确认功能验收通过（2026-08-26）；S05-A/S05-B 用户页面验收已于 2026-08-28 通过；文件回退与多任务并行不在范围内。
 - 当前唯一保留为未提交用户资产的是 `.gitignore` 中的 `.superpowers/` 规则，不覆盖、不暂存、不丢弃。
 - 产品代码使用 `codex/<版本>-<切片>-<短名称>`；同一时间只保留一个产品工作分支。
 
