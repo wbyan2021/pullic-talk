@@ -47,6 +47,7 @@ facts:
     - 本次诊断未自动替用户启动 Pi；随后用户报告已完成启动测试且无问题
     - 2026-08-28 服务以 PI_AUTH_PROVIDER=aliyun-token-plan 在隔离端口 43211 重启，健康接口 ok、首页 200
     - 2026-08-28 合并前全量 node --test 299/299，strict 结构校验通过，工作树干净
+    - 工作分支已 fast-forward 合并入 main（a19f146）并删除；基线记录提交 032696d，origin/main 已推送至 032696d
   user_confirmed:
     - 用户于 2026-08-26 确认 S04 功能验收通过并要求开启下一阶段
     - 用户于 2026-08-26 接受 S05-B 第一版恢复边界：仅失败/中断可恢复；恢复新建 Pi 批次且不自动回退文件
@@ -54,6 +55,7 @@ facts:
     - 用户于 2026-08-26 要求直接开始 S05-B 实现；实现计划 `697fa21` 已提交
     - 用户于 2026-08-26 确认 Pi 已可以启动，测试无问题
     - 用户于 2026-08-28 在隔离端口 43211 完成 S05-A/S05-B 页面验收并确认通过
+    - 用户于 2026-08-28 决定推送 origin/main，并把实验性网页 Key 管理纳入 v0.1（S06 切片，candidate）
   agent_reported:
     - 当前分支包含成员/模型维护、实验性网页 Key 管理、项目页双语和发送后清空输入等用户提交
   recorded_not_reverified:
@@ -67,8 +69,8 @@ issues_and_risks:
   - S05-A/S05-B 只读与恢复接口不得暴露任务文本、原始输出、stderr、cwd、args 或完整路径数组
   - 恢复只允许失败/中断任务，采用新 Pi 批次重启；不续接旧进程、不执行 Git 回退、不覆盖旧记录
   - 文件回退、Pi 会话续接和多任务并行仍是后续高风险切片，不能从本功能隐式扩展
-next_action: 在合并后的 main 基线上完成 v0.1 收尾验收：用户用活动项目真实完成一条任务的全流程（启动 Pi、观察流式、核对证据与黑匣子、结束或恢复），随后收口版本
-latest_record: docs/ai-ops/records/2026-08-28-s05-user-page-acceptance.md
+next_action: 用户逐项确认 S06 网页 Key 管理的 D1–D4 设计决策（浏览器明文返回、重启加载、使用边界、假 Key 验收方式）后，AI 产出设计稿并过 DoR；未过 DoR 前不修改产品代码。v0.1 版本收尾验收（真实任务全流程）保留在 S06 之后
+latest_record: docs/ai-ops/records/2026-08-28-s06-scope-decision.md
 ---
 
 # AI 交接当前状态
