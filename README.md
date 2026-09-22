@@ -156,6 +156,7 @@ pullic-talk/
 ## 🛡 安全模型
 
 - **随机 token 认证**：启动时生成 24 字节随机 token，写入项目根 `.token`（0600，已 gitignore）；服务端渲染页面时注入 `window.__OPS_TOKEN__`，所有敏感 API 和终端 WebSocket 都校验它——恶意网页无法跨域读到 token，CSRF 打不进来
+- **Host 校验（防 DNS 重新绑定）**：默认绑定时，HTTP 请求的 Host 必须是 `127.0.0.1`/`localhost`/`::1`，攻击者域名解析到本机也会被 403；`HOST` 显式改绑非回环地址时跳过此检查（局域网部署的明确选择）
 - HTTP 服务默认只监听 `127.0.0.1`（改绑 `0.0.0.0` 需自行设置 `HOST` 环境变量，不建议）
 - 终端 WebSocket：origin 检查 + token 双重校验，单帧上限 1MB
 - `/terminal?run=` 命令注入**必须用户在弹框确认后**才执行（防恶意链接借刀杀人）

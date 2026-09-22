@@ -23,7 +23,7 @@ updated: 2026-09-23
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
 - 稳定基线：`a19f146`
-- 当前验证基线：依赖完整；`node --test` 308/308 通过；逐文件语法、差异和 strict 结构检查通过。S04 用户功能验收已于 2026-08-26 确认；S05-A 只读总览与 S05-B 安全恢复已于 2026-08-28 通过用户页面验收并收口为 done；S06 网页 Key 管理加固已实现并通过自动化验证，用户真实验收待完成。文件回退与多任务并行仍未实现。没有 lint、CI 或 build 脚本。
+- 当前验证基线：依赖完整；`node --test` 322/322 通过；逐文件语法、差异和 strict 结构检查通过。S04 用户功能验收已于 2026-08-26 确认；S05-A 只读总览与 S05-B 安全恢复已于 2026-08-28 通过用户页面验收并收口为 done；S06 网页 Key 管理加固已实现并通过自动化验证，用户真实验收待完成；2026-09-23 完成全项目缺陷排查与修复插播（并发竞态、事件队列自愈、脱敏加宽、fail-closed 渲染等，详见 NOW.md）。文件回退与多任务并行仍未实现。没有 lint、CI 或 build 脚本。
 
 ## 关键路径
 
@@ -89,7 +89,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 | 扫描工具 | `npm run scan` | 本轮未执行；会更新本地 `tools.json` |
 | 完整安装引导 | `npm run setup` | 本轮未执行；包含环境检查、安装和扫描 |
 | JavaScript 语法检查 | `git ls-files '*.js' | xargs -n1 node --check` | 初始化 28 个文件通过；S01 新增/装配文件再次通过 |
-| 自动化测试 | `npm test` | 308 项定义；本轮 `node --test` 308/308；含 S06 掩码快照、无明文断言、启动加载与 UI 静态合约测试 |
+| 自动化测试 | `npm test` | 322 项定义；本轮 `node --test` 322/322；含 S06 掩码快照、无明文断言、启动加载、UI 静态合约与 2026-09-23 缺陷修复的回归测试 |
 | lint | 未配置 | 不可用 |
 | build | 无需前端构建，且未配置 build 脚本 | 不适用 |
 
@@ -160,11 +160,11 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 | `src/agent-caller.js` | CLI 在用户主目录运行并继承环境变量 | 工作目录、参数注入、输出上限、超时和停止 |
 | `src/utils/auth.js`、`src/server.js` | 本地控制面的认证与暴露边界 | Token、Origin、监听地址、CSP、速率限制 |
 | `src/services/credential-store.js` | 接触真实 Provider Key 与系统钥匙串 | 绝对命令路径、shell 禁用、受控 PTY 固定提示、输出边界、超时回收、无明文回退 |
-| `src/routes/secrets.js`、`src/utils/secrets-env.js`、`public/js/secrets.js` | 网页管理本地 Key 文件，启动时自动加载进服务进程 | 认证闸门、变量名/长度白名单、原子写入、0600、浏览器只见掩码（D1）；只用于群聊成员/自定义 CLI Key，不作 S01 级别凭据路径 |
+| `src/routes/secrets.js`、`src/utils/secrets-env.js`、`public/js/secrets.js` | 网页管理本地 Key 文件，启动时自动加载进服务进程 | 认证闸门、变量名/长度白名单、原子写入、0600、浏览器只见掩码（D1）、掩码值回传被拒绝；只用于群聊成员/自定义 CLI Key，不作 S01 级别凭据路径 |
 | `src/routes/members.js`、`src/config.js`、`public/js/members.js` | 修改 Agent 成员和模型配置并热加载 | 字段白名单、原子写入、禁用/自定义语义、配置损坏回退和并发写入审查 |
 | `src/providers/deepseek.js`、`src/routes/escort.js` | 付费外部请求与错误/秘密泄露 | 超时、单并发、频率、状态字段白名单、原始错误不透传 |
 | `src/services/git-inspector.js`、`src/routes/project.js` | 任意路径输入与 Git 子进程 | 只读命令白名单、无 shell、超时、输出截断、realpath 校验、禁止根 |
-| `src/services/pi-executor.js`、`src/routes/execution.js`、`src/services/task-recovery.js`、`src/routes/recovery.js` | Pi 在活动项目内以完整用户权限执行及失败/中断恢复 | 无 shell、argv 永不含密钥、cwd 限定活动项目 repoRoot、SIGTERM+超时回收、单实例 busy、恢复预览指纹和二次确认；不回退文件 |
+| `src/services/pi-executor.js`、`src/routes/execution.js`、`src/services/task-recovery.js`、`src/routes/recovery.js` | Pi 在活动项目内以完整用户权限执行及失败/中断恢复 | 无 shell、argv 永不含密钥、cwd 限定活动项目 repoRoot、SIGTERM+超时回收、单实例（含 starting 窗口的并发占位）、恢复预览指纹和二次确认；不回退文件 |
 | `src/services/validation-runner.js`、`src/routes/evidence.js` | 用户批准的验收命令可能执行任意项目测试 | 只接受结构化 executable/argv；禁止 shell 语法和环境赋值；cwd 必须是活动项目；超时、输出上限、stderr 丢弃、结果分层 |
 | `src/services/ai-handoff.js`、`src/services/blackbox-store.js` | 任务事实写入项目文件和本机记录 | 统一脱敏、原子当前文件、历史不可覆盖、追加 JSONL、截断/恢复安全、未验证事实不得伪装 verified |
 | `public/js/chat.js` | 单文件较大，状态、DOM 与流式逻辑耦合 | XSS、会话兼容、停止流程和现有交互回归 |
@@ -173,13 +173,14 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 
 ## 已知工程缺口
 
-- 已有 308 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；本轮包含 S06 掩码/启动加载与无明文断言、恢复集成/安全路径与隔离端口认证检查；此前沙箱不能监听 loopback，成员/Key 路由已在受限环境外复跑并记录通过。
+- 已有 322 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；2026-09-23 的全项目缺陷排查插播修复了并发启动竞态、事件队列中毒、脱敏遗漏形态、DOMPurify fail-open、spawn error 崩溃、Host 重新绑定等缺陷（提交 6ed5a4c…9f38e4f）。
 - `public/js/chat.js` 体量较大，修改容易产生跨功能回归。
 - Agent 默认工作目录是用户主目录，不具备项目级 Workspace 边界。
 - 默认端口 `3210` 曾被早于 S01 的旧实例占用；2026-08-06 已查明并经用户授权结束，现运行 S01 合并后的代码。
 - DeepSeek 与 macOS Keychain 的真实验收尚未完成；Mock 证据不能替代用户自己的 Key 和本机授权策略。
 - 网页 Key 管理（S06）已完成掩码快照与启动自动加载的自动化验证，但用户假 Key 全流程验收尚未完成；`~/.secrets.env` 本身仍是本机明文文件，只用于群聊成员/自定义 CLI Key。
 - 成员/模型维护已能写回配置并热加载，但尚未完成用户页面验收；`agents.config.json` 中的本机启用/停用状态不是产品基线。
+- 已接受的取舍：`reloadConfig` 的写后校验只检测“合并后无任何 agent”，单条无效成员配置不会触发回滚；`credential-store` 的输出累积仍按 chunk 解码（密钥通常为 ASCII，非 ASCII 密钥理论上有乱码风险）；`members.js` 等前端内联事件插值依赖 key 白名单正则保证安全。
 
 ## 维护规则
 
