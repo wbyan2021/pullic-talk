@@ -58,13 +58,16 @@ export function redactText(value, { maxBytes = DEFAULT_MAX_BYTES } = {}) {
   );
   text = replaceSensitive(
     text,
-    /(--(?:api[-_]?key|token|password)\s+)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/gi,
+    /(--(?:api[-_]?key|token|password|secret|private[-_]?key|credential)\s+)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/gi,
     (_match, prefix) => prefix + REDACTION_MARKER,
     state,
   );
+  // 键形态：access_token / refresh_token / client_secret 等下划线复合词、
+  // JSON 形态 "api_key": "…"、YAML 形态 password: …。
+  // 不能用 \b 起界（下划线是单词字符，\b 会漏掉 access_token）；用负向后行断言。
   text = replaceSensitive(
     text,
-    /(\b(?:api[-_]?key|token|password|secret|private[-_]?key|authorization)\b\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/gi,
+    /(?<![A-Za-z0-9])(["']?(?:api[-_]?key|api[-_]?secret|auth[-_]?token|access[-_]?token|refresh[-_]?token|id[-_]?token|client[-_]?secret|secret[-_]?key|private[-_]?key|token|secret|password|passwd|authorization|credential)["']?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;\]}]+)/gi,
     (_match, prefix) => prefix + REDACTION_MARKER,
     state,
   );

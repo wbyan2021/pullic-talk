@@ -72,15 +72,19 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
   let projects = new Map(); // id -> record（保持插入顺序，selectedAt 升序由重选更新维护）
   let activeProjectId = null;
   let loaded = false;
+  let loadPromise = null;
 
-  async function ensureLoaded() {
-    if (loaded) return;
+  async function load() {
     loaded = true;
     let raw;
     try {
       raw = await readFile(statePath, "utf8");
-    } catch {
-      return; // 文件不存在 → 空状态
+    } catch (error) {
+      if (error && error.code === "ENOENT") return; // 文件不存在 → 空状态
+      // 其他 IO 错误（权限/损坏目录等）不能当成“空状态”：
+      // 否则下一次写操作会用内存里的空数据覆盖掉真实的状态文件
+      loaded = false;
+      throw error;
     }
     let parsed;
     try {
@@ -117,13 +121,21 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
     console.warn("[project-boundary] state file has unknown shape; starting with no selection");
   }
 
+  function ensureLoaded() {
+    if (loaded) return Promise.resolve();
+    // 备忘录化加载 promise：并发首调共享同一次读取，后来者不会在空状态上抢先写入
+    if (!loadPromise) loadPromise = load().finally(() => { loadPromise = null; });
+    return loadPromise;
+  }
+
   async function persist() {
     const data = JSON.stringify(
       { version: 2, activeProjectId, projects: Object.fromEntries(projects) },
       null,
       2
     );
-    const tmpPath = `${statePath}.tmp`;
+    // 唯一临时名：并发写回不会互踩同一个 .tmp（最后一个 rename 胜出，但内容始终完整）
+    const tmpPath = `${statePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     await writeFile(tmpPath, data, "utf8");
     await rename(tmpPath, statePath);
   }

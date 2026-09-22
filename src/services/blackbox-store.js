@@ -242,7 +242,13 @@ export function createBlackboxStore({
         const taskId = taskEntry.name.slice(0, -".jsonl".length);
         if (!ID_PATTERN.test(taskId)) continue;
         const filePath = fileFor(projectEntry.name, taskId);
-        const state = await readState(filePath);
+        let state;
+        try {
+          state = await readState(filePath);
+        } catch {
+          // 单个文件不可读不能中断整个恢复流程，其余未闭合任务仍需标记 interrupted
+          continue;
+        }
         const last = state.events.at(-1);
         if (!last || state.events.some((event) => TERMINAL_TYPES.has(event.type))) continue;
         await appendEvent({

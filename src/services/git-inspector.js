@@ -56,7 +56,8 @@ export function createGitInspector({
   async function runGit(args, cwd, { allowFail = false, byteLimit = null } = {}) {
     assertReadOnlyGitArgs(args);
     return new Promise((resolve, reject) => {
-      let stdout = "";
+      const stdoutChunks = [];
+      let stdoutBytes = 0;
       let limitHit = false;
       let settled = false;
 
@@ -76,8 +77,10 @@ export function createGitInspector({
 
       child.stdout.on("data", (chunk) => {
         if (limitHit) return;
-        stdout += chunk.toString("utf8");
-        if (byteLimit !== null && stdout.length > byteLimit) {
+        // 按 Buffer 累积：跨 chunk 拆开的多字节 UTF-8 序列不能在这里提前解码
+        stdoutChunks.push(chunk);
+        stdoutBytes += chunk.length;
+        if (byteLimit !== null && stdoutBytes > byteLimit) {
           limitHit = true;
           try { child.kill("SIGKILL"); } catch { /* already gone */ }
         }
@@ -100,6 +103,7 @@ export function createGitInspector({
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        const stdout = Buffer.concat(stdoutChunks).toString("utf8");
         if (limitHit) {
           resolve({ stdout, exitCode: code, limitHit: true });
           return;

@@ -244,6 +244,8 @@ export function createTaskRecovery({
     if (!entry || entry.used || entry.sourceTaskId !== taskId || now() >= Date.parse(entry.expiresAt)) {
       throw new TaskRecoveryError("recovery_preview_expired");
     }
+    // 句柄在第一个 await 之前同步消费：并发确认同一 preview 不能双双通过检查
+    entry.used = true;
     const active = await activeProject();
     const source = await readSource(active, taskId);
     if (await executionBusy()) throw new TaskRecoveryError("recovery_busy");
@@ -259,7 +261,6 @@ export function createTaskRecovery({
     });
     if (currentFingerprint !== entry.fingerprint) throw new TaskRecoveryError("recovery_preview_expired");
 
-    entry.used = true;
     await appendSourceEvent(active, taskId, "recovery_confirmed", {
       sourceState: entry.sourceState,
       reasonCode: entry.reasonCode,

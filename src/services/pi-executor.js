@@ -13,6 +13,7 @@
 // - 运行进程注册进 activeProcs，服务关闭时被统一清理。
 // ─────────────────────────────────────────────────────────────
 import { spawn } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 
 import { activeProcs } from "../utils/process-registry.js";
 
@@ -136,21 +137,32 @@ export function createPiExecutor({
   }
 
   async function start(rawTask) {
-    if (run && (run.state === "running" || run.state === "stopping")) {
+    if (run && (run.state === "running" || run.state === "stopping" || run.state === "starting")) {
       throw new PiExecutorError("busy");
     }
     const task = validateTask(rawTask);
 
-    // D8：边界取活动项目
-    const boundaryStatus = await projectBoundary.getStatus();
-    const active = boundaryStatus && boundaryStatus.active;
-    if (!active) throw new PiExecutorError("no_project_selected");
-    if (active.stale) throw new PiExecutorError("project_stale");
+    // 并发占位：必须在第一个 await 之前同步占用槽位。否则两个并发 start 都能通过
+    // busy 检查（检查与赋值之间隔着边界解析 + 可达 10s 的 auth 子进程），后者会覆盖
+    // 前者的 run 并让两个 Pi 进程同时运行。失败时恢复先前的（终态）运行记录。
+    const previousRun = run;
+    run = { state: "starting", proc: null, timeoutTimer: null, killTimer: null };
+    let active;
+    try {
+      // D8：边界取活动项目
+      const boundaryStatus = await projectBoundary.getStatus();
+      active = boundaryStatus && boundaryStatus.active;
+      if (!active) throw new PiExecutorError("no_project_selected");
+      if (active.stale) throw new PiExecutorError("project_stale");
 
-    // D7：auth 就绪检查（不读取、不传递任何凭据）
-    const auth = await checkAuth();
-    if (!auth.ready) {
-      throw new PiExecutorError(auth.code ?? "pi_not_authenticated", { retryable: auth.retryable === true });
+      // D7：auth 就绪检查（不读取、不传递任何凭据）
+      const auth = await checkAuth();
+      if (!auth.ready) {
+        throw new PiExecutorError(auth.code ?? "pi_not_authenticated", { retryable: auth.retryable === true });
+      }
+    } catch (error) {
+      run = previousRun;
+      throw error;
     }
 
     const startedAtMs = now();
@@ -164,6 +176,7 @@ export function createPiExecutor({
       timeoutHit: false,
       output: "",
       truncated: false,
+      closed: false,
       exitCode: null,
       durationMs: null,
       lastError: null,
@@ -172,6 +185,9 @@ export function createPiExecutor({
       timeoutTimer: null,
       killTimer: null,
     };
+    // 闭包一律捕获本次运行的独立引用：exit 之后残留的管道数据、以及极端情况下
+    // 的新运行都不能再把旧输出写进新 run
+    const myRun = run;
 
     let proc;
     try {
@@ -184,8 +200,8 @@ export function createPiExecutor({
     } catch {
       throw new PiExecutorError("spawn_failed", { retryable: true });
     }
-    run.proc = proc;
-    emit("start", { runId: run.runId, startedAt: run.startedAt });
+    myRun.proc = proc;
+    emit("start", { runId: myRun.runId, startedAt: myRun.startedAt });
 
     // 等待 spawn 成功；ENOENT 等错误在 start 阶段就抛出（路由尚未进入 SSE）
     try {
@@ -195,10 +211,10 @@ export function createPiExecutor({
       });
     } catch (error) {
       const code = error && error.code === "ENOENT" ? "pi_not_found" : "spawn_failed";
-      run.state = "error";
-      run.lastError = { code, retryable: true };
-      run.durationMs = 0;
-      run.proc = null;
+      myRun.state = "error";
+      myRun.lastError = { code, retryable: true };
+      myRun.durationMs = 0;
+      myRun.proc = null;
       emit("status", { state: "error" });
       emit("done", { state: "error", exitCode: null, truncated: false, durationMs: 0 });
       throw new PiExecutorError(code, { retryable: true });
@@ -209,19 +225,21 @@ export function createPiExecutor({
     // D10：pi 文本模式会把输出全部缓存到结束才一次性吐出，无法流式；
     // 改用 --mode json（NDJSON）后逐条增量到达。只提取 assistant text_delta 的
     // delta 文本进入输出流；thinking/其他事件与非 JSON 行一律不进流。
+    const decoder = new StringDecoder("utf8");
     let stdoutLineBuffer = "";
+    const MAX_LINE_BUFFER_BYTES = 1024 * 1024;
 
     function appendOutput(text) {
-      if (!run || run.truncated) return;
-      const remaining = outputLimit - Buffer.byteLength(run.output);
+      if (!myRun || myRun.closed || myRun.truncated) return;
+      const remaining = outputLimit - Buffer.byteLength(myRun.output);
       if (Buffer.byteLength(text) <= remaining) {
-        run.output += text;
+        myRun.output += text;
         emit("chunk", { text });
       } else {
-        run.truncated = true;
+        myRun.truncated = true;
         const slice = Buffer.from(text).subarray(0, Math.max(0, remaining)).toString();
         if (slice) {
-          run.output += slice;
+          myRun.output += slice;
           emit("chunk", { text: slice });
         }
       }
@@ -239,7 +257,12 @@ export function createPiExecutor({
     }
 
     proc.stdout.on("data", (chunk) => {
-      stdoutLineBuffer += chunk.toString();
+      // StringDecoder 保证多字节 UTF-8 序列跨 chunk 边界时不会产生乱码
+      stdoutLineBuffer += decoder.write(chunk);
+      // 无换行的异常输出不能撑爆内存：丢掉较旧的一半，残行最多导致一次 JSON 解析失败
+      if (Buffer.byteLength(stdoutLineBuffer) > MAX_LINE_BUFFER_BYTES) {
+        stdoutLineBuffer = stdoutLineBuffer.slice(Math.floor(stdoutLineBuffer.length / 2));
+      }
       let idx;
       while ((idx = stdoutLineBuffer.indexOf("\n")) !== -1) {
         const line = stdoutLineBuffer.slice(0, idx);
@@ -256,36 +279,37 @@ export function createPiExecutor({
       if (stderrBuffer.length > STDERR_CAP) stderrBuffer = stderrBuffer.slice(0, STDERR_CAP);
     });
 
-    run.timeoutTimer = setTimeout(() => {
-      if (!run || run.state !== "running") return;
-      run.timeoutHit = true;
-      run.lastError = { code: "timeout", retryable: true };
+    myRun.timeoutTimer = setTimeout(() => {
+      if (run !== myRun || !myRun || myRun.state !== "running") return;
+      myRun.timeoutHit = true;
+      myRun.lastError = { code: "timeout", retryable: true };
       terminate();
     }, timeoutMs);
 
     proc.on("exit", (code) => {
       // 用 exit 而非 close：孙进程持有管道时 close 会延迟；exit 在进程终止时立即触发
-      clearTimeout(run.timeoutTimer);
-      clearTimeout(run.killTimer);
+      clearTimeout(myRun.timeoutTimer);
+      clearTimeout(myRun.killTimer);
       activeProcs.delete(proc);
-      if (run.state !== "running" && run.state !== "stopping") return;
-      if (run.stopping) run.state = "stopped";
-      else if (run.timeoutHit) run.state = "error";
-      else if (code === 0) run.state = "exited";
-      else run.state = "error";
-      run.exitCode = code;
-      run.durationMs = now() - run.startedAtMs;
-      run.proc = null;
-      emit("status", { state: run.state });
+      myRun.closed = true; // 此后残留管道数据不再进入输出流
+      if (myRun.state !== "running" && myRun.state !== "stopping") return;
+      if (myRun.stopping) myRun.state = "stopped";
+      else if (myRun.timeoutHit) myRun.state = "error";
+      else if (code === 0) myRun.state = "exited";
+      else myRun.state = "error";
+      myRun.exitCode = code;
+      myRun.durationMs = now() - myRun.startedAtMs;
+      myRun.proc = null;
+      emit("status", { state: myRun.state });
       emit("done", {
-        state: run.state,
+        state: myRun.state,
         exitCode: code,
-        truncated: run.truncated,
-        durationMs: run.durationMs,
+        truncated: myRun.truncated,
+        durationMs: myRun.durationMs,
       });
     });
 
-    return run.runId;
+    return myRun.runId;
   }
 
   function terminate() {

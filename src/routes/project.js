@@ -232,7 +232,9 @@ export default function projectRoutes(app, { projectBoundary, aiHandoff = null }
         : (Array.isArray(status?.projects) ? status.projects.find((project) => project.id === id) : null);
       if (!target) throw new ProjectBoundaryError(id === undefined ? "no_project_selected" : "project_not_found");
       const enabled = await aiHandoff.enableProject({ repoRoot: target.repoRoot, allowAgentsPointer: true });
-      const payload = await projectBoundary.enableHandoff(id, { agentsPointer: enabled.agentsPointer === true });
+      // 显式用 target.id：省略 id 会让边界服务重新解析“当前活动项目”，
+      // 与本次解析结果之间可能被并发的 activate 改变
+      const payload = await projectBoundary.enableHandoff(target.id, { agentsPointer: enabled.agentsPointer === true });
       const project = await projectWithHandoffState(payload, aiHandoff);
       return res.json({ ok: true, project, handoff: project.handoff ?? safeHandoff(payload.handoff) });
     } catch (error) {

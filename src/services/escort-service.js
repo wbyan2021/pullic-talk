@@ -211,6 +211,7 @@ export function createEscortService({ credentialStore, provider, now = () => new
 
     async checkConnection({ signal } = {}) {
       acquire();
+      const stateBeforeCheck = state;
       try {
         const apiKey = await credentialStore.get();
         if (!apiKey) return resetUnconfigured();
@@ -225,6 +226,11 @@ export function createEscortService({ credentialStore, provider, now = () => new
         state = { availability: "available", lastCheckedAt: timestamp(), error: null };
         return publicStatus(true);
       } catch (error) {
+        // 用户取消不构成连通性证据：保持检测前的状态，不得把可用性打成不可用
+        if (signal?.aborted || error?.code === "request_aborted") {
+          state = stateBeforeCheck;
+          throw safeError(error);
+        }
         return setFailure(error, true).status;
       } finally {
         inFlight = false;
@@ -264,6 +270,10 @@ export function createEscortService({ credentialStore, provider, now = () => new
           status: publicStatus(true),
         };
       } catch (error) {
+        // 取消不代表服务不可用：不改写可用性状态，只做安全化后抛出
+        if (signal?.aborted || error?.code === "request_aborted") {
+          throw safeError(error);
+        }
         const { safe } = setFailure(error, error?.code !== "credential_missing");
         throw safe;
       } finally {

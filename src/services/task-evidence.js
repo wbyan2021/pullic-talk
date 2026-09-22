@@ -157,6 +157,7 @@ export function createTaskEvidence({
 
   let taskCounter = 0;
   let current = null;
+  let starting = false;
   let unsubscribePi = null;
   let eventQueue = Promise.resolve();
   const listeners = new Set();
@@ -258,7 +259,9 @@ export function createTaskEvidence({
   function appendEvent(type, data, { allowAfterTerminal = false } = {}) {
     if (!current || (current.closed && !allowAfterTerminal)) return Promise.resolve(null);
     const task = current;
-    eventQueue = eventQueue.then(async () => {
+    // 链上带 rejection 处理：一次失败的 append 不能让整条队列永久中毒
+    //（否则后续所有事件与收口静默丢失，status/overview 永久 500）
+    const run = async () => {
       const event = await blackboxStore.appendEvent({
         projectId: task.projectId,
         taskId: task.taskId,
@@ -267,7 +270,8 @@ export function createTaskEvidence({
         allowAfterTerminal,
       });
       return event;
-    });
+    };
+    eventQueue = eventQueue.then(run, run);
     return eventQueue;
   }
 
@@ -351,12 +355,22 @@ export function createTaskEvidence({
 
   async function start(rawTask, options = undefined) {
     if (!piExecutor) throw new TaskEvidenceError("internal_error", { retryable: true });
-    if (current && !current.closed && ["creating", "running", "stopping"].includes(current.state)) {
+    // 并发占位：busy 检查与 current 赋值之间隔着快照子进程，必须用同步标志位封住窗口
+    if (starting || (current && !current.closed && ["creating", "running", "stopping"].includes(current.state))) {
       throw new TaskEvidenceError("busy");
     }
     if (typeof rawTask !== "string" || !rawTask.trim() || rawTask.length > 4000 || rawTask.includes("\u0000")) {
       throw new TaskEvidenceError("invalid_task");
     }
+    starting = true;
+    try {
+      return await startClaimed(rawTask, options);
+    } finally {
+      starting = false;
+    }
+  }
+
+  async function startClaimed(rawTask, options = undefined) {
     const recovery = normalizeRecoveryOptions(options);
     const before = await captureSnapshot();
     const taskId = createTaskId();
@@ -463,7 +477,10 @@ export function createTaskEvidence({
     const clean = base ? safePayload(base) : {};
     return {
       ...clean,
-      state: current.closed ? current.state : (clean.state ?? current.state),
+      // piExecutor 的内部 starting 态不外泄：任务尚在 creating/running 语义内
+      state: current.closed
+        ? current.state
+        : (clean.state === "starting" ? current.state : (clean.state ?? current.state)),
       runId: current.runId ?? clean.runId ?? null,
       taskId: current.taskId,
       projectId: current.projectId,

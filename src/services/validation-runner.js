@@ -9,6 +9,7 @@ import { REDACTION_MARKER, redactText } from "./safe-redactor.js";
 const MAX_EXECUTABLE_LENGTH = 256;
 const MAX_ARGS = 64;
 const MAX_ARG_LENGTH = 1024;
+const KILL_GRACE_MS = 1500;
 
 export class ValidationRunnerError extends Error {
   constructor(code, { retryable = false } = {}) {
@@ -61,6 +62,7 @@ export function createValidationRunner({
   const boundedTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.floor(timeoutMs) : 120_000;
   const boundedOutput = Number.isFinite(outputLimit) && outputLimit > 0 ? Math.floor(outputLimit) : 64 * 1024;
   let current = null;
+  let starting = false;
 
   async function activeProject() {
     let status;
@@ -100,9 +102,20 @@ export function createValidationRunner({
   }
 
   async function run(input = {}) {
-    if (current) throw new ValidationRunnerError("busy");
+    // 并发占位：busy 检查与 current 赋值之间隔着项目解析，必须用同步标志位封住窗口，
+    // 否则并发调用会重复执行用户批准的命令
+    if (current || starting) throw new ValidationRunnerError("busy");
     if (input.approvedByUser !== true) throw new ValidationRunnerError("approval_required");
     validateCommand(input);
+    starting = true;
+    try {
+      return await runClaimed(input);
+    } finally {
+      starting = false;
+    }
+  }
+
+  async function runClaimed(input) {
     const active = await activeProject();
     const cwd = await resolveCwd(input.cwd, active.repoRoot);
     const startedAtMs = now();
@@ -137,6 +150,7 @@ export function createValidationRunner({
         if (task.settled) return;
         task.settled = true;
         clearTimeout(timer);
+        clearTimeout(task.killTimer);
         const finishedAtMs = now();
         const finalExcerpt = safeExcerpt(stdout, boundedOutput);
         withheld ||= finalExcerpt.withheld;
@@ -154,7 +168,7 @@ export function createValidationRunner({
           result: state,
           code: code ?? (task.timedOut ? "timeout" : null),
           durationMs: Math.max(0, finishedAtMs - startedAtMs),
-          output: stdout,
+          output: finalExcerpt.text,
           withheld,
           truncated,
         });
@@ -179,6 +193,10 @@ export function createValidationRunner({
         if (task.settled) return;
         task.timedOut = true;
         try { task.proc.kill("SIGTERM"); } catch { /* already exited */ }
+        // 忽略 SIGTERM 的命令必须有 SIGKILL 兜底，否则 runner 永久卡 busy
+        task.killTimer = setTimeout(() => {
+          try { if (!task.settled) task.proc.kill("SIGKILL"); } catch { /* already exited */ }
+        }, KILL_GRACE_MS);
       }, boundedTimeout);
     });
     current = null;
@@ -189,6 +207,10 @@ export function createValidationRunner({
     if (!current) return { state: "idle" };
     current.stopping = true;
     try { current.proc?.kill("SIGTERM"); } catch { /* already exited */ }
+    clearTimeout(current.killTimer);
+    current.killTimer = setTimeout(() => {
+      try { if (!current.settled) current.proc?.kill("SIGKILL"); } catch { /* already exited */ }
+    }, KILL_GRACE_MS);
     return { state: "stopping" };
   }
 
