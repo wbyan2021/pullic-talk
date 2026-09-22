@@ -5,6 +5,9 @@
    ========================================================================= */
 window.Secrets = (() => {
   let secretPath = "";
+  // S06/D1：服务端只返回掩码，页面不回显旧值。
+  // 已有条目 = 键名只读、值留空（留空 = 保持不变）；被移除的已有键在保存时以空值提交（删除）。
+  let removedExisting = new Set();
 
   const el = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
@@ -35,12 +38,11 @@ window.Secrets = (() => {
     }
   }
 
-  function rowHtml(key, value) {
+  function rowHtml(key) {
     return `<div class="secret-row" data-key="${esc(key)}">
-      <input class="secret-key" value="${esc(key)}" placeholder="变量名">
+      <input class="secret-key" value="${esc(key)}" readonly placeholder="变量名">
       <div class="secret-value-wrap">
-        <input class="secret-value" type="password" value="${esc(value)}" placeholder="值">
-        <button class="reveal-btn" data-act="reveal">显示</button>
+        <input class="secret-value" type="password" value="" placeholder="留空 = 保持不变">
       </div>
       <button class="remove-btn" data-act="remove">移除</button>
     </div>`;
@@ -48,22 +50,21 @@ window.Secrets = (() => {
 
   function render(vars) {
     const list = el("secrets-list");
+    removedExisting = new Set();
     if (Object.keys(vars).length === 0) {
       list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">还没有 Key，点下方「添加一行」。</div>';
       return;
     }
-    list.innerHTML = Object.entries(vars).map(([k, v]) => rowHtml(k, v)).join("");
+    list.innerHTML = Object.keys(vars).map((k) => rowHtml(k)).join("");
   }
 
   function addRow() {
     const list = el("secrets-list");
-    const empty = list.querySelector(".secret-row") ? false : true;
     const row = document.createElement("div");
     row.className = "secret-row";
     row.innerHTML = `<input class="secret-key" placeholder="变量名">
       <div class="secret-value-wrap">
         <input class="secret-value" type="password" placeholder="值">
-        <button class="reveal-btn" data-act="reveal">显示</button>
       </div>
       <button class="remove-btn" data-act="remove">移除</button>`;
     list.appendChild(row);
@@ -75,10 +76,14 @@ window.Secrets = (() => {
     const vars = {};
     const rows = el("secrets-list").querySelectorAll(".secret-row");
     for (const row of rows) {
-      const key = row.querySelector(".secret-key").value.trim();
-      const value = row.querySelector(".secret-value").value;
-      if (key) vars[key] = value;
+      const keyInput = row.querySelector(".secret-key");
+      const valueInput = row.querySelector(".secret-value");
+      if (keyInput.readOnly) continue; // 已有条目：值留空 = 保持不变，只有输入新值才提交覆盖
+      const key = keyInput.value.trim();
+      const value = valueInput.value;
+      if (key && value !== "") vars[key] = value;
     }
+    for (const key of removedExisting) vars[key] = ""; // 被移除的已有键 = 删除
     return vars;
   }
 
@@ -92,7 +97,7 @@ window.Secrets = (() => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || ("HTTP " + res.status));
       render(data.vars || {});
-      alert("已保存。新值在重新打开的终端中生效；当前服务会继承服务器启动时的 Key。");
+      alert("已保存并立即生效；重启服务后会自动加载（不覆盖启动时已设置的同名变量）。");
     } catch (e) {
       alert("保存失败：" + e.message);
     }
@@ -103,12 +108,9 @@ window.Secrets = (() => {
     if (!btn) return;
     const row = btn.closest(".secret-row");
     if (btn.dataset.act === "remove") {
+      const keyInput = row.querySelector(".secret-key");
+      if (keyInput.readOnly && keyInput.value) removedExisting.add(keyInput.value);
       row.remove();
-    } else if (btn.dataset.act === "reveal") {
-      const input = row.querySelector(".secret-value");
-      const isPassword = input.type === "password";
-      input.type = isPassword ? "text" : "password";
-      btn.textContent = isPassword ? "隐藏" : "显示";
     }
   });
 

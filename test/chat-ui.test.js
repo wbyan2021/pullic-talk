@@ -113,9 +113,20 @@ test("chat.html mounts the secrets manager and loads its assets", () => {
   assert.ok(CHAT_HTML.includes('src="/js/secrets.js"'), "secrets.js script missing");
 });
 
-test("secrets.js uses the authenticated OPS api and warns about restart semantics", () => {
+test("secrets.js uses the authenticated OPS api and masks existing values", () => {
   assert.ok(SECRETS_JS.includes("window.OPS.api"), "must use window.OPS.api for token-carrying requests");
   assert.ok(SECRETS_JS.includes('type="password"'), "secret values must default to password inputs");
   assert.ok(SECRETS_JS.includes("window.Secrets ="), "must expose window.Secrets");
   assert.ok(SECRETS_JS.includes("return { open, close, addRow, save };"), "save/addRow must be exposed");
+});
+
+test("secrets.js never echoes stored values and offers no plaintext reveal", () => {
+  assert.ok(!SECRETS_JS.includes("reveal"), "reveal button/logic must be removed (D1)");
+  assert.ok(SECRETS_JS.includes("留空 = 保持不变"), "existing entries must use leave-blank-to-keep semantics");
+  assert.ok(!/secret-value"\s+value="\$\{/.test(SECRETS_JS), "value inputs must not be rendered from stored values");
+});
+
+test("chat.html states the S06 key boundary and restart semantics", () => {
+  assert.ok(CHAT_HTML.includes("macOS 钥匙串"), "panel must state escort keys stay in the macOS Keychain (D3)");
+  assert.ok(CHAT_HTML.includes("重启服务后会自动加载"), "panel must state the startup auto-load behavior (D2)");
 });

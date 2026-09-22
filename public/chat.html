@@ -118,12 +118,13 @@
       <span>🔑 本地 API Key 管理</span>
       <button onclick="Secrets.close()">✕</button>
     </div>
+    <div class="secrets-desc">仅管理群聊成员 / 自定义 CLI 的本机 Key；DeepSeek 护航 Key 存于 macOS 钥匙串，不在此处。</div>
     <div class="secrets-path" id="secrets-path"></div>
     <div id="secrets-list"></div>
     <div class="secrets-actions">
       <button class="btn-primary" onclick="Secrets.save()">保存</button>
       <button class="toggle" onclick="Secrets.addRow()">+ 添加一行</button>
-      <span class="secrets-hint">保存后写入 <b>~/.secrets.env</b>；对之后新启动的终端/服务生效</span>
+      <span class="secrets-hint">保存后写入 <b>~/.secrets.env</b> 并立即生效；重启服务后会自动加载（不覆盖启动时已设置的同名变量）</span>
     </div>
   </div>
 </div>
