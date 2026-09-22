@@ -384,6 +384,7 @@
   // 机器状态保留在英文辅助标签中，中文是用户首先看到的解释。
   const STATUS_LABELS = Object.freeze({
     idle: ["空闲", "Idle"],
+    creating: ["准备中", "Creating"],
     running: ["执行中", "Running"],
     stopping: ["停止中", "Stopping"],
     stopped: ["已停止", "Stopped"],

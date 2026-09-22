@@ -75,15 +75,16 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
   let loadPromise = null;
 
   async function load() {
-    loaded = true;
     let raw;
     try {
       raw = await readFile(statePath, "utf8");
     } catch (error) {
-      if (error && error.code === "ENOENT") return; // 文件不存在 → 空状态
+      if (error && error.code === "ENOENT") {
+        loaded = true; // 文件不存在是确定的空状态
+        return;
+      }
       // 其他 IO 错误（权限/损坏目录等）不能当成“空状态”：
       // 否则下一次写操作会用内存里的空数据覆盖掉真实的状态文件
-      loaded = false;
       throw error;
     }
     let parsed;
@@ -91,6 +92,7 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
       parsed = JSON.parse(raw);
     } catch {
       console.warn("[project-boundary] state file unreadable; starting with no selection");
+      loaded = true;
       return;
     }
     if (parsed && parsed.version === 1 && isValidRecord(parsed.project)) {
@@ -99,6 +101,7 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
       const id = projectIdFor(record.repoRoot);
       projects.set(id, { id, ...record });
       activeProjectId = id;
+      loaded = true;
       try {
         await persist();
       } catch {
@@ -116,14 +119,17 @@ export function createProjectBoundary({ inspector, statePath, now = () => Date.n
         typeof parsed.activeProjectId === "string" && projects.has(parsed.activeProjectId)
           ? parsed.activeProjectId
           : null;
+      loaded = true;
       return;
     }
     console.warn("[project-boundary] state file has unknown shape; starting with no selection");
+    loaded = true;
   }
 
   function ensureLoaded() {
     if (loaded) return Promise.resolve();
-    // 备忘录化加载 promise：并发首调共享同一次读取，后来者不会在空状态上抢先写入
+    // 备忘录化加载 promise：并发首调共享同一次读取，后来者不会在空状态上抢先写入。
+    // loaded 只在加载真正完成后置位；IO 失败时清除 promise，下次调用重试。
     if (!loadPromise) loadPromise = load().finally(() => { loadPromise = null; });
     return loadPromise;
   }

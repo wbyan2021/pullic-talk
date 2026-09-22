@@ -509,8 +509,9 @@ async function main() {
     tools,
   };
 
-  // 原子写：先写临时文件再 rename，避免服务进程在写入中途读到半截 JSON 而显示空工具列表
-  const tmpPath = `${TOOLS_PATH}.tmp`;
+  // 原子写：先写临时文件再 rename，避免服务进程在写入中途读到半截 JSON 而显示空工具列表；
+  // 唯一临时名避免两次并发扫描互踩同一个 .tmp
+  const tmpPath = `${TOOLS_PATH}.tmp-${process.pid}-${Date.now()}`;
   writeFileSync(tmpPath, JSON.stringify(result, null, 2) + "\n", "utf-8");
   renameSync(tmpPath, TOOLS_PATH);
 

@@ -146,7 +146,13 @@ export function createPiExecutor({
     // busy 检查（检查与赋值之间隔着边界解析 + 可达 10s 的 auth 子进程），后者会覆盖
     // 前者的 run 并让两个 Pi 进程同时运行。失败时恢复先前的（终态）运行记录。
     const previousRun = run;
-    run = { state: "starting", proc: null, timeoutTimer: null, killTimer: null };
+    // 占位对象保持完整形状（subscribe/getStatus/stop 在窗口内被调用也不能炸）
+    run = {
+      runId: null, task: null, startedAt: null, startedAtMs: null,
+      state: "starting", stopping: false, timeoutHit: false, stopRequested: false,
+      output: "", truncated: false, closed: false, exitCode: null, durationMs: null,
+      lastError: null, events: [], proc: null, timeoutTimer: null, killTimer: null,
+    };
     let active;
     try {
       // D8：边界取活动项目
@@ -174,6 +180,7 @@ export function createPiExecutor({
       state: "running",
       stopping: false,
       timeoutHit: false,
+      stopRequested: run.stopRequested === true, // starting 窗口内的 stop 请求不丢失
       output: "",
       truncated: false,
       closed: false,
@@ -221,6 +228,13 @@ export function createPiExecutor({
     }
 
     activeProcs.add(proc);
+
+    // starting 窗口内用户已请求停止：启动即终止，不执行任务
+    if (myRun.stopRequested) {
+      myRun.stopping = true;
+      terminateForStop();
+      return myRun.runId;
+    }
 
     // D10：pi 文本模式会把输出全部缓存到结束才一次性吐出，无法流式；
     // 改用 --mode json（NDJSON）后逐条增量到达。只提取 assistant text_delta 的
@@ -323,7 +337,13 @@ export function createPiExecutor({
   }
 
   function stop() {
-    if (!run || run.state !== "running") return getStatus();
+    if (!run) return getStatus();
+    // starting 窗口（边界/auth 检查中）还没有进程可杀：记下请求，启动后立刻终止
+    if (run.state === "starting") {
+      run.stopRequested = true;
+      return getStatus();
+    }
+    if (run.state !== "running") return getStatus();
     run.stopping = true;
     terminateForStop();
     return getStatus();

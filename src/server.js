@@ -120,7 +120,10 @@ app.use(express.json({ limit: "2mb" }));
 // ===== 防 DNS 重新绑定：HTTP 请求 Host 必须是本机 =====
 // 页面 HTML 内嵌本机 token；若放任攻击者域名解析到 127.0.0.1（同源读取 token），
 // 仅靠 token 会被绕过。与终端 WS 的 Origin 校验互补。
+// HOST 显式绑到非回环地址（局域网部署）时跳过此检查——那是用户的明确选择。
+const LAN_EXPOSED = !["127.0.0.1", "localhost", "::1"].includes(HOST);
 app.use((req, res, next) => {
+  if (LAN_EXPOSED) return next();
   const host = String(req.headers.host || "");
   const hostname = (host.startsWith("[") ? host.slice(1, host.indexOf("]")) : host.split(":")[0]).toLowerCase();
   if (hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1") return next();

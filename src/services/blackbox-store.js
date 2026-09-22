@@ -251,12 +251,17 @@ export function createBlackboxStore({
         }
         const last = state.events.at(-1);
         if (!last || state.events.some((event) => TERMINAL_TYPES.has(event.type))) continue;
-        await appendEvent({
-          projectId: projectEntry.name,
-          taskId,
-          type: "interrupted",
-          data: { reason: "service_restart" },
-        });
+        try {
+          await appendEvent({
+            projectId: projectEntry.name,
+            taskId,
+            type: "interrupted",
+            data: { reason: "service_restart" },
+          });
+        } catch {
+          // 单个任务标记失败不中断其余任务的恢复
+          continue;
+        }
         recovered.push({ projectId: projectEntry.name, taskId, state: "interrupted" });
       }
     }

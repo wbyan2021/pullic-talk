@@ -57,10 +57,12 @@ window.Installer = (() => {
     let finished = false;
     // 新安装任务先清掉上一个轮询器，避免并发安装时旧定时器重复触发 onDone
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    pollTimer = setInterval(async () => {
+    const timer = setInterval(async () => {
       if (finished) return;
       try {
         const res = await api(`/api/install/job/${jobId}`);
+        // await 期间可能已有新安装接管了 pollTimer：本次回调不得再动共享定时器/界面
+        if (pollTimer !== timer) return;
         if (!res.ok) throw new Error("job fetch failed");
         const job = await res.json();
         fails = 0;
@@ -70,7 +72,7 @@ window.Installer = (() => {
           setState("run", `安装中…（${job.methodLabel}）`);
         } else {
           finished = true;
-          clearInterval(pollTimer); pollTimer = null;
+          clearInterval(timer); pollTimer = null;
           const ok = job.exitCode === 0;
           setState(ok ? "ok" : "err", ok ? "✓ 安装完成" : `✗ 安装失败（退出码 ${job.exitCode}）`);
           const btn = document.getElementById("inst-action");
@@ -79,7 +81,7 @@ window.Installer = (() => {
           if (ok && opts.onDone) opts.onDone();
         }
       } catch (e) {
-        if (++fails > 5) { finished = true; clearInterval(pollTimer); pollTimer = null; setState("err", "⚠️ 无法获取安装进度"); }
+        if (++fails > 5) { finished = true; clearInterval(timer); if (pollTimer === timer) pollTimer = null; setState("err", "⚠️ 无法获取安装进度"); }
       }
     }, 700);
   }

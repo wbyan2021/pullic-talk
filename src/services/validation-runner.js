@@ -63,6 +63,7 @@ export function createValidationRunner({
   const boundedOutput = Number.isFinite(outputLimit) && outputLimit > 0 ? Math.floor(outputLimit) : 64 * 1024;
   let current = null;
   let starting = false;
+  let stopRequested = false;
 
   async function activeProject() {
     let status;
@@ -116,6 +117,7 @@ export function createValidationRunner({
   }
 
   async function runClaimed(input) {
+    stopRequested = false;
     const active = await activeProject();
     const cwd = await resolveCwd(input.cwd, active.repoRoot);
     const startedAtMs = now();
@@ -184,6 +186,11 @@ export function createValidationRunner({
         return finish(null, null, "spawn_failed");
       }
       if (!task.proc || !task.proc.stdout || !task.proc.stderr) return finish(null, null, "spawn_failed");
+      // starting 窗口内用户已请求停止：刚启动即终止，命令不会真正跑完
+      if (stopRequested) {
+        task.stopping = true;
+        try { task.proc.kill("SIGTERM"); } catch { /* already exited */ }
+      }
       task.proc.stdout.on("data", appendOutput);
       // stderr is consumed but never retained or returned.
       task.proc.stderr.on("data", () => {});
@@ -204,7 +211,13 @@ export function createValidationRunner({
   }
 
   async function stop() {
-    if (!current) return { state: "idle" };
+    if (!current) {
+      if (starting) {
+        stopRequested = true; // 项目解析窗口内无法立刻杀：记下请求，spawn 后立即终止
+        return { state: "stopping" };
+      }
+      return { state: "idle" };
+    }
     current.stopping = true;
     try { current.proc?.kill("SIGTERM"); } catch { /* already exited */ }
     clearTimeout(current.killTimer);

@@ -22,14 +22,22 @@ function parseExportLine(line) {
 }
 
 // 从原始 RHS 提取“看起来易读”的值：
-// 带引号的值取首对引号内内容（引号后的手写注释忽略）；
+// 带引号的值取首对引号内内容（引号后的手写注释忽略；跳过 \" 转义）；
 // ${VAR:-} 这类回退写法视为“未设置字面量”；
 // 未加引号的值按 shell 规则去掉 " #" 之后的手写注释
 function prettyValue(raw) {
   if (!raw) return "";
   const first = raw[0];
   if (first === '"' || first === "'") {
-    const end = raw.indexOf(first, 1);
+    let end = -1;
+    if (first === "'") {
+      end = raw.indexOf("'", 1); // 单引号内无转义
+    } else {
+      for (let i = 1; i < raw.length; i++) {
+        if (raw[i] === "\\") { i++; continue; } // 跳过 \" 等转义
+        if (raw[i] === '"') { end = i; break; }
+      }
+    }
     if (end > 0) return raw.slice(1, end);
     return ""; // 引号未闭合：视为未设置字面量，不加载
   }

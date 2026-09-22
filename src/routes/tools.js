@@ -54,6 +54,7 @@ export default function toolsRoutes(app) {
     });
     proc.on("close", (code) => {
       clearTimeout(killer);
+      if (res.writableEnded) return; // spawn error 已响应过：close 随后到达，不得二次写入
       if (code === 0) res.json({ ok: true, output: out });
       else res.status(500).json({ ok: false, output: out, error: err || `扫描进程退出码 ${code}（可能超时）` });
     });

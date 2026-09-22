@@ -8,7 +8,7 @@ import { REDACTION_MARKER, redactText } from "../services/safe-redactor.js";
 
 const HANDOFF_SOURCE = "docs/ai-ops/NOW.md";
 const ACCEPTANCE_STATES = new Set(["pending", "accepted", "needs_review", "rejected"]);
-const EXECUTION_STATES = new Set(["idle", "running", "stopping", "stopped", "failed", "exited", "completed", "interrupted", "error", "unknown"]);
+const EXECUTION_STATES = new Set(["idle", "creating", "running", "stopping", "stopped", "failed", "exited", "completed", "interrupted", "error", "unknown"]);
 const EVIDENCE_STATES = new Set(["verified", "unknown", "pending", "not_run", "passed", "failed", "stopped"]);
 const HANDOFF_STATES = new Set(["not_enabled", "repair_required", "conflict", "ready", "unknown", "unavailable"]);
 const RECOVERY_STATES = new Set(["not_available", "previewable", "busy", "stale", "unknown"]);

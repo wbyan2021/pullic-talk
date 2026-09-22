@@ -148,7 +148,10 @@ function buildMemberPatch(body, { requireCli = false } = {}) {
 }
 
 function assertValidKey(key) {
-  if (!KEY_RE.test(key)) throw new Bad(400, "key 仅允许小写字母/数字/下划线/连字符（1–30 位）");
+  // 注意 KEY_RE.test(undefined) 会把 undefined 转成 "undefined" 并匹配通过，必须先查类型
+  if (typeof key !== "string" || !KEY_RE.test(key)) {
+    throw new Bad(400, "key 仅允许小写字母/数字/下划线/连字符（1–30 位）");
+  }
   if (RESERVED_KEYS.has(key)) throw new Bad(400, "key 非法");
 }
 
