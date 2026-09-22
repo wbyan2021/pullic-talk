@@ -4,14 +4,14 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: design
+stage: build
 current_slice: S06-web-key-management
-slice_status: candidate
-work_branch: 无（S06 设计确认并过 DoR 后创建）
-base_commit: a19f146
+slice_status: active
+work_branch: codex/v0.1-s06-web-key-management（2026-09-23 自 main 创建）
+base_commit: a48a2cf
 risk_level: high
 last_verified_commit: a19f146
-updated: 2026-08-28
+updated: 2026-09-23
 ---
 
 # 当前版本：v0.1 · 第一次可控任务
@@ -129,18 +129,19 @@ updated: 2026-08-28
 
 - 已确认（2026-08-28，用户）：网页 Key 管理纳入 v0.1。
 - 已确认（2026-08-28，用户逐项）：D1 浏览器不返回明文（统一掩码 + 覆盖式编辑）；D2 服务启动自动加载 `~/.secrets.env`（不覆盖启动时已显式设置的变量）；D3 仅管理群聊成员/自定义 CLI 的 Key，护航 Key 仍只走 S01 Keychain；D4 验收方式由 AI 决策（假 Key 全流程 + 浏览器/磁盘/日志/Git 四处无明文核对）。
-- 设计稿（draft，待用户批准）：[S06 设计](superpowers/specs/2026-08-28-s06-web-key-management-design.md)；架构决定：[ADR-004](decisions/ADR-004-masked-web-key-management.md)；实现计划已产出：[S06 实现计划](plans/2026-08-28-s06-web-key-management-implementation.md)。
+- 已确认（2026-09-23，用户）：批准 S06 设计稿，要求当晚完成全部实现与自动化验证，真实验收随后由用户执行；切片进入 build。
+- 设计稿（accepted，2026-09-23 用户批准）：[S06 设计](superpowers/specs/2026-08-28-s06-web-key-management-design.md)；架构决定：[ADR-004](decisions/ADR-004-masked-web-key-management.md)；实现计划已生效：[S06 实现计划](plans/2026-08-28-s06-web-key-management-implementation.md)。
 
 ### Definition of Ready
 
 - [x] D1–D4 设计决策已获用户逐项确认。
-- [ ] 设计稿产出并获用户批准（稿已产出，待批准）。
+- [x] 设计稿产出并获用户批准（2026-09-23 accepted）。
 - [x] 实现计划已产出（Task 1–6，测试先行）。
-- [ ] 工作分支名称已确定并自基线创建（拟定 `codex/v0.1-s06-web-key-management`，设计批准后创建）。
+- [x] 工作分支名称已确定并自基线创建（`codex/v0.1-s06-web-key-management`，自 main `a48a2cf`）。
 
 ### 唯一下一步
 
-用户批准 S06 设计稿（或要求修订）后过 DoR：创建工作分支，从 Task 1（secrets-env 掩码与启动加载，测试先行）开工；未过 DoR 前不修改产品代码。
+按实现计划从 Task 1（secrets-env 掩码与启动加载，测试先行）开工；全部实现与自动化验证完成后，由用户按设计稿 §7 完成假 Key 全流程验收，验收通过前不合并、不标记 done。
 
 ### S05 · 恢复与总览闭环（done，S05-A/S05-B 于 2026-08-28 用户页面验收通过）
 

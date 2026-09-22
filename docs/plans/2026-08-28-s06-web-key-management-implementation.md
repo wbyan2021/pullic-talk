@@ -1,7 +1,7 @@
 # S06 · 网页 Key 管理安全加固实现计划
 
-- 状态：`draft`（设计稿批准后生效）
-- 日期：2026-08-28
+- 状态：`active`（2026-09-23 随设计稿批准生效）
+- 日期：2026-08-28（2026-09-23 生效）
 - 设计稿：[2026-08-28-s06-web-key-management-design.md](../superpowers/specs/2026-08-28-s06-web-key-management-design.md)
 - 架构决定：[ADR-004](../decisions/ADR-004-masked-web-key-management.md)
 - 工作分支（待创建）：`codex/v0.1-s06-web-key-management`，自 `main` 基线创建
