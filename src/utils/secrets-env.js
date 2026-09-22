@@ -22,13 +22,20 @@ function parseExportLine(line) {
 }
 
 // 从原始 RHS 提取“看起来易读”的值：
-// 去掉单/双引号外壳；${VAR:-} 这类回退写法视为“未设置字面量”
+// 带引号的值取首对引号内内容（引号后的手写注释忽略）；
+// ${VAR:-} 这类回退写法视为“未设置字面量”；
+// 未加引号的值按 shell 规则去掉 " #" 之后的手写注释
 function prettyValue(raw) {
   if (!raw) return "";
   const first = raw[0];
-  if (first === '"' && raw.endsWith('"') && raw.length >= 2) return raw.slice(1, -1);
-  if (first === "'" && raw.endsWith("'") && raw.length >= 2) return raw.slice(1, -1);
+  if (first === '"' || first === "'") {
+    const end = raw.indexOf(first, 1);
+    if (end > 0) return raw.slice(1, end);
+    return ""; // 引号未闭合：视为未设置字面量，不加载
+  }
   if (raw.startsWith("${")) return ""; // 回退表达式交给运行时环境
+  const hashIdx = raw.indexOf(" #"); // 未加引号值：空格+# 开始为注释
+  if (hashIdx !== -1) return raw.slice(0, hashIdx).trim();
   return raw;
 }
 
@@ -63,7 +70,7 @@ export function getSecretsSnapshot() {
 }
 
 // S06/D1：固定掩码，不泄露字符与长度；空值不掩码（调用方据此跳过）
-const MASKED_VALUE = "••••••••";
+export const MASKED_VALUE = "••••••••";
 export function maskValue(value) {
   return value === undefined || value === null || String(value) === "" ? "" : MASKED_VALUE;
 }
@@ -137,7 +144,8 @@ export function writeSecretsFile(vars) {
   }
 
   const content = next.join("\n") + "\n";
-  const tmp = `${path}.tmp`;
+  // 唯一临时名：避免两个并发写回互踩同一个 .tmp（最后一个 rename 胜出，但不会写出混合内容）
+  const tmp = `${path}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   writeFileSync(tmp, content, { mode: 0o600 });
   renameSync(tmp, path);
   try {

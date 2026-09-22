@@ -121,6 +121,20 @@ test("loadSecretsIntoProcess fills missing keys, never overrides existing ones",
   assert.equal(skipped, 3);
 });
 
+test("loadSecretsIntoProcess strips hand-written comments on unquoted values", () => {
+  const file = join(tmp, "comment.env");
+  writeFileSync(
+    file,
+    ["export COMMENT_A=value-a # my comment", "export COMMENT_B='value-b' # kept quote", "export COMMENT_C=has#nospace"].join("\n") + "\n",
+    "utf-8",
+  );
+  const env = {};
+  loadSecretsIntoProcess(file, env);
+  assert.equal(env.COMMENT_A, "value-a");
+  assert.equal(env.COMMENT_B, "value-b");
+  assert.equal(env.COMMENT_C, "has#nospace", "no space before # means it is part of the value");
+});
+
 test("loadSecretsIntoProcess tolerates a missing file", () => {
   const env = {};
   const { loaded } = loadSecretsIntoProcess(join(tmp, "does-not-exist.env"), env);

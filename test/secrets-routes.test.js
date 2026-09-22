@@ -80,6 +80,14 @@ test("POST without a key keeps its original value (leave-blank-to-keep)", async 
   assert.ok(content.includes("export TEST_KEY_B='changed-b'"), "submitted key must be updated");
 });
 
+test("POST rejects the literal mask so a round-trip cannot destroy the real secret", async () => {
+  const before = readFileSync(process.env.SECRETS_ENV_PATH, "utf-8");
+  const { status, text } = await req("POST", "/api/secrets", { vars: { TEST_KEY_B: "••••••••" } });
+  assert.equal(status, 400);
+  assert.ok(text.includes("掩码"), "error must explain the mask placeholder");
+  assert.equal(readFileSync(process.env.SECRETS_ENV_PATH, "utf-8"), before, "file must be untouched");
+});
+
 test("POST with empty value deletes a key and rejects invalid names", async () => {
   const del = await req("POST", "/api/secrets", { vars: { TEST_KEY_A: "" } });
   assert.equal(del.status, 200);

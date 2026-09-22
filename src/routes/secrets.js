@@ -1,4 +1,4 @@
-import { getMaskedSnapshot, writeSecretsFile, SECRETS_ENV_PATH, KEY_RE } from "../utils/secrets-env.js";
+import { getMaskedSnapshot, writeSecretsFile, SECRETS_ENV_PATH, KEY_RE, MASKED_VALUE } from "../utils/secrets-env.js";
 
 // 网页端管理 ~/.secrets.env（S06/D1：浏览器永不接收明文值）：
 // GET /api/secrets   -> 掩码快照：键名可见，值一律 ••••••••
@@ -33,6 +33,10 @@ export default function secretsRoutes(app) {
       }
       if (typeof v !== "string" || v.length > 2000) {
         return res.status(400).json({ error: `${k} 的值必须是 ≤2000 的字符串` });
+      }
+      if (v === MASKED_VALUE) {
+        // 掩码值不是真实凭据：拒绝回传掩码，防止把真值覆盖成 "••••••••"
+        return res.status(400).json({ error: `${k} 的值是掩码占位符，请输入真实值（留空 = 保持不变）` });
       }
       clean[k] = v.trim(); // key/token 不应包含首尾空白
     }

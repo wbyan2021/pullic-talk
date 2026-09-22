@@ -78,12 +78,19 @@ window.Secrets = (() => {
     for (const row of rows) {
       const keyInput = row.querySelector(".secret-key");
       const valueInput = row.querySelector(".secret-value");
-      if (keyInput.readOnly) continue; // 已有条目：值留空 = 保持不变，只有输入新值才提交覆盖
-      const key = keyInput.value.trim();
       const value = valueInput.value;
-      if (key && value !== "") vars[key] = value;
+      if (keyInput.readOnly) {
+        // 已有条目：留空 = 保持不变；输入新值 = 覆盖
+        const key = keyInput.value;
+        if (key && value !== "" && !removedExisting.has(key)) vars[key] = value;
+        continue;
+      }
+      const key = keyInput.value.trim();
+      if (key && value !== "") vars[key] = value; // 新行：键值都非空才提交
     }
-    for (const key of removedExisting) vars[key] = ""; // 被移除的已有键 = 删除
+    for (const key of removedExisting) {
+      if (!(key in vars)) vars[key] = ""; // 被移除的已有键 = 删除；若同轮重新添加则保留新值
+    }
     return vars;
   }
 
