@@ -12,6 +12,7 @@ import { setupTerminal, getActivePtys } from "./terminal.js";
 import apiRoutes from "./routes/api.js";
 import membersRoutes from "./routes/members.js";
 import secretsRoutes from "./routes/secrets.js";
+import { loadSecretsIntoProcess } from "./utils/secrets-env.js";
 import toolsRoutes from "./routes/tools.js";
 import launchRoutes from "./routes/launch.js";
 import installRoutes from "./routes/install.js";
@@ -199,6 +200,9 @@ launchRoutes(app);
 installRoutes(app);
 
 // ===== 启动 & 优雅关闭 =====
+// S06/D2：启动时自动加载 ~/.secrets.env；启动命令已显式设置的同名变量不被覆盖
+loadSecretsIntoProcess();
+
 const server = app.listen(PORT, HOST, () => {
   console.log(`\n  🤖 AI 控制中心已启动（${Object.keys(AGENTS).length} 个 agent）`);
   console.log(`  ────────────────────────────`);
