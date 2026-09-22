@@ -62,6 +62,50 @@ export function getSecretsSnapshot() {
   return vars;
 }
 
+// S06/D1：固定掩码，不泄露字符与长度；空值不掩码（调用方据此跳过）
+const MASKED_VALUE = "••••••••";
+export function maskValue(value) {
+  return value === undefined || value === null || String(value) === "" ? "" : MASKED_VALUE;
+}
+
+// S06/D1：给浏览器的快照——键名可见，值一律掩码；有效值为空的键不进入快照
+export function getMaskedSnapshot() {
+  const vars = getSecretsSnapshot();
+  const masked = {};
+  for (const [key, value] of Object.entries(vars)) {
+    const m = maskValue(value);
+    if (m !== "") masked[key] = m;
+  }
+  return masked;
+}
+
+// S06/D2：服务启动时加载 secrets 文件到 process.env。
+// 只填充缺失键；启动命令已显式设置的同名变量不覆盖；空值与 ${VAR:-…} 回退写法跳过。
+// 返回 { loaded, skipped }，日志只报数量不报值。
+export function loadSecretsIntoProcess(path = SECRETS_ENV_PATH, env = process.env) {
+  const { lines, exists } = readSecretsFile(path);
+  if (!exists) return { loaded: 0, skipped: 0 };
+  let loaded = 0;
+  let skipped = 0;
+  for (const line of lines) {
+    const p = parseExportLine(line);
+    if (!p) continue;
+    const value = prettyValue(p.raw);
+    if (value === "") {
+      skipped++;
+      continue;
+    }
+    if (env[p.key] !== undefined && env[p.key] !== "") {
+      skipped++;
+      continue;
+    }
+    env[p.key] = value;
+    loaded++;
+  }
+  log(`✓ 已从 ${path} 加载 ${loaded} 个环境变量（跳过 ${skipped} 个已设置或空值条目）`);
+  return { loaded, skipped };
+}
+
 // 写回文件：替换或新增 vars 里的 key；值为空字符串表示删除该 key
 // 尽量保留原文件中的注释与非 export 行
 export function writeSecretsFile(vars) {
