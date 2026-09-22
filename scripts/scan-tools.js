@@ -11,7 +11,7 @@
  * 输出：覆写 tools.json，仅保留已安装工具 + 新发现的工具
  */
 
-import { readFileSync, writeFileSync, existsSync, readdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, renameSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { execSync } from "child_process";
@@ -509,7 +509,10 @@ async function main() {
     tools,
   };
 
-  writeFileSync(TOOLS_PATH, JSON.stringify(result, null, 2) + "\n", "utf-8");
+  // 原子写：先写临时文件再 rename，避免服务进程在写入中途读到半截 JSON 而显示空工具列表
+  const tmpPath = `${TOOLS_PATH}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(result, null, 2) + "\n", "utf-8");
+  renameSync(tmpPath, TOOLS_PATH);
 
   console.log(`\n✅ 扫描完成：发现 ${tools.length} 个已安装工具，${Object.keys(services).length} 个服务`);
   console.log(`   已写入 ${TOOLS_PATH}`);

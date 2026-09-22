@@ -115,3 +115,41 @@ test("validation rejects invalid key and malformed models", async () => {
   const badModels = await req("PUT", "/api/members/codex", { models: ["ok", 123] });
   assert.equal(badModels.status, 400);
 });
+test("disabled builtin keeps catalog metadata and can be re-enabled", async () => {
+  // codex 已在前面的用例中被 DELETE 软停用：列表不得退化为 key 名 + 空元数据
+  const { data } = await req("GET", "/api/members");
+  assert.equal(data.members.codex.enabled, false);
+  assert.equal(data.members.codex.name, "Codex", "disabled builtin must keep catalog name");
+  assert.equal(data.members.codex.cliCommand, "codex", "disabled builtin must keep cli metadata");
+
+  const re = await req("PUT", "/api/members/codex", { enabled: true });
+  assert.equal(re.status, 200, "soft-disabled builtin must be re-enableable via PUT");
+  assert.equal(re.data.member.enabled, true);
+  assert.equal(cfg.AGENTS.codex.cli.command, "codex");
+});
+
+test("custom member disabled via PUT can be re-enabled", async () => {
+  const add = await req("POST", "/api/members", {
+    key: "rean",
+    name: "Re-an",
+    cli: { command: "rean", args: ["-p", "{prompt}"], parseMode: "text" },
+  });
+  assert.equal(add.status, 200);
+
+  const off = await req("PUT", "/api/members/rean", { enabled: false });
+  assert.equal(off.status, 200);
+  assert.equal(cfg.AGENTS.rean, undefined, "disabled custom member leaves the active agent set");
+
+  const on = await req("PUT", "/api/members/rean", { enabled: true });
+  assert.equal(on.status, 200, "disabled custom member must be re-enableable, not 404");
+  assert.equal(on.data.member.enabled, true);
+
+  await req("DELETE", "/api/members/rean");
+});
+
+test("reserved prototype keys are rejected", async () => {
+  const proto = await req("PUT", "/api/members/__proto__", { enabled: true });
+  assert.equal(proto.status, 400);
+  const ctor = await req("POST", "/api/members", { key: "constructor", name: "x", cli: { command: "x" } });
+  assert.equal(ctor.status, 400);
+});

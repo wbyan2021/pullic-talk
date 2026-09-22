@@ -168,7 +168,14 @@ export default function evidenceRoutes(app, { taskEvidence, validationRunner, ai
         if (!handoff?.enabled) throw new TaskEvidenceError("handoff_not_enabled");
       }
       const input = handoffInput(status, requested, req.body?.nextAction);
-      const history = await aiHandoff.writeRecord(input);
+      let history;
+      try {
+        history = await aiHandoff.writeRecord(input);
+      } catch (error) {
+        // 上次尝试可能已写入记录但收口失败：record_exists 时继续补写当前交接并收口，避免死锁
+        if (error?.code !== "record_exists") throw error;
+        history = { path: `docs/ai-ops/records/${status.taskId}.md` };
+      }
       await aiHandoff.writeCurrent({ ...input, latestRecord: history.path });
       const closed = await taskEvidence.closeTask({ acceptanceStatus: requested, userConfirmed: req.body?.userConfirmed === true, handoffWritten: true });
       return res.json({ ok: true, evidence: safeEvidence(closed), handoff: { latestRecord: history.path } });

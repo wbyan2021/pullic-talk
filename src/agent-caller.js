@@ -187,7 +187,7 @@ export function sanitizeChatRequest(body) {
 
   let targets = Array.isArray(body.targets) ? body.targets : [];
   targets = [...new Set(targets)]
-    .filter((t) => typeof t === "string" && AGENTS[t])
+    .filter((t) => typeof t === "string" && Object.prototype.hasOwnProperty.call(AGENTS, t))
     .slice(0, LIMITS.maxTargets);
   if (targets.length === 0) targets = Object.keys(AGENTS);
   if (targets.length === 0) return { error: "当前没有可用的 agent" };

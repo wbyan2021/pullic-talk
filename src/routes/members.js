@@ -3,6 +3,9 @@ import { AGENT_CATALOG } from "../agent-catalog.js";
 import { log } from "../utils/log.js";
 
 const KEY_RE = /^[a-z0-9_-]{1,30}$/;
+// KEY_RE 允许 "__proto__"/"constructor" 这类名字，但它们会命中对象原型链属性，
+// 必须显式拒绝（否则 PUT/DELETE 会误判存在或污染原型）
+const RESERVED_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 const PARSE_MODES = new Set(["text", "ndjson", "json-envelope"]);
 const STDIO_MODES = new Set(["ignore", "pipe"]);
@@ -144,12 +147,18 @@ function buildMemberPatch(body, { requireCli = false } = {}) {
   return patch;
 }
 
+function assertValidKey(key) {
+  if (!KEY_RE.test(key)) throw new Bad(400, "key 仅允许小写字母/数字/下划线/连字符（1–30 位）");
+  if (RESERVED_KEYS.has(key)) throw new Bad(400, "key 非法");
+}
+
 function memberView(key) {
   const agent = AGENTS[key];
-  const builtin = !!AGENT_CATALOG[key];
+  const builtin = Object.prototype.hasOwnProperty.call(AGENT_CATALOG, key);
   const raw = getUserConfigRaw();
-  const rawEntry = raw[key] || {};
-  const base = agent || rawEntry || AGENT_CATALOG[key] || {};
+  const rawEntry = Object.prototype.hasOwnProperty.call(raw, key) ? raw[key] || {} : {};
+  // 停用内置成员时覆盖层只有 {enabled:false}：先铺目录定义再叠覆盖，避免列表元数据退化
+  const base = agent || { ...AGENT_CATALOG[key], ...rawEntry };
   const avail = agent ? getAvailability().get(key) : null;
   return {
     key,
@@ -182,9 +191,7 @@ export default function membersRoutes(app) {
     try {
       const body = req.body || {};
       const key = cleanStr(body.key, { max: 30, field: "key" });
-      if (!key || !KEY_RE.test(key)) {
-        throw new Bad(400, "key 仅允许小写字母/数字/下划线/连字符（1–30 位）");
-      }
+      assertValidKey(key);
       const raw = getUserConfigRaw();
       if (AGENT_CATALOG[key] || raw[key]) throw new Bad(409, "成员已存在");
 
@@ -206,8 +213,10 @@ export default function membersRoutes(app) {
   app.put("/api/members/:key", (req, res) => {
     try {
       const key = req.params.key;
-      if (!KEY_RE.test(key)) throw new Bad(400, "key 非法");
-      const spec = AGENT_CATALOG[key] || AGENTS[key];
+      assertValidKey(key);
+      // 已停用的自定义成员不在 AGENTS 里：从覆盖层补查，否则无法重新启用
+      const rawBefore = getUserConfigRaw();
+      const spec = AGENT_CATALOG[key] || AGENTS[key] || rawBefore[key];
       if (!spec) throw new Bad(404, "成员不存在");
 
       const raw = getUserConfigRaw();
@@ -233,8 +242,8 @@ export default function membersRoutes(app) {
   app.delete("/api/members/:key", (req, res) => {
     try {
       const key = req.params.key;
-      if (!KEY_RE.test(key)) throw new Bad(400, "key 非法");
-      const builtin = !!AGENT_CATALOG[key];
+      assertValidKey(key);
+      const builtin = Object.prototype.hasOwnProperty.call(AGENT_CATALOG, key);
       const raw = getUserConfigRaw();
       if (!builtin && !raw[key]) throw new Bad(404, "成员不存在");
 

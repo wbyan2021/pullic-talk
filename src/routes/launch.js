@@ -40,6 +40,11 @@ export default function launchRoutes(app) {
         const id = nextBgId();
         bgProcs.set(id, { id, command, pid: p.pid, startedAt: Date.now() });
         p.on("exit", () => bgProcs.delete(id));
+        // spawn 异步失败（如 SHELL 指向已卸载的二进制）若无人监听会崩溃整个服务
+        p.on("error", (e) => {
+          bgProcs.delete(id);
+          log(`⚠️ 后台命令启动失败 [${id}] ${command}: ${e.message}`);
+        });
         log(`🚀 后台启动 [${id}] ${command} (pid ${p.pid})`);
         return res.json({ ok: true, id, pid: p.pid });
       } catch (e) { return res.status(500).json({ error: e.message }); }

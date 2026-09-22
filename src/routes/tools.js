@@ -47,6 +47,11 @@ export default function toolsRoutes(app) {
     }, 90_000);
     proc.stdout.on("data", (d) => (out += d));
     proc.stderr.on("data", (d) => (err += d));
+    // spawn 异步失败（如 ENOENT/EAGAIN）若无人监听 error 事件会让整个服务进程崩溃
+    proc.on("error", (e) => {
+      clearTimeout(killer);
+      if (!res.writableEnded) res.status(500).json({ ok: false, output: out, error: e.message });
+    });
     proc.on("close", (code) => {
       clearTimeout(killer);
       if (code === 0) res.json({ ok: true, output: out });

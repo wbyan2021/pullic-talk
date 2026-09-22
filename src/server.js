@@ -117,6 +117,16 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: "2mb" }));
 
+// ===== 防 DNS 重新绑定：HTTP 请求 Host 必须是本机 =====
+// 页面 HTML 内嵌本机 token；若放任攻击者域名解析到 127.0.0.1（同源读取 token），
+// 仅靠 token 会被绕过。与终端 WS 的 Origin 校验互补。
+app.use((req, res, next) => {
+  const host = String(req.headers.host || "");
+  const hostname = (host.startsWith("[") ? host.slice(1, host.indexOf("]")) : host.split(":")[0]).toLowerCase();
+  if (hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1") return next();
+  res.status(403).json({ error: "仅允许本机主机名访问" });
+});
+
 // 静态文件：CSS / JS / 图片等
 // 本地开发面板，禁用浏览器缓存，保证改动后刷新即见最新
 // index: false —— 禁止 static 自动把 public/index.html 响应给 /，
@@ -145,7 +155,10 @@ function watchHtml(name) {
   const file = join(ROOT, "public", name);
   let cache = readFileSync(file, "utf-8");
   let reloadTimer = null;
-  const watcher = watch(file, () => {
+  // 监听目录而非单文件：macOS 上“写临时文件 + rename”的原子保存会让被 watch 的
+  // 单文件 inode 失联（此后永远不再收到事件）；目录监听在 rename 后仍然有效
+  const watcher = watch(join(ROOT, "public"), (_eventType, filename) => {
+    if (filename && filename !== name) return;
     // 防抖 + 空读保护：写入中途的变更事件可能读到空/半截文件，
     // 空内容不覆盖缓存，避免首页永久空白（2026-08-14 用户实测发现）
     clearTimeout(reloadTimer);
