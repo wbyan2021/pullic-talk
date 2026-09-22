@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -395,4 +395,37 @@ test("payload exposes only whitelisted keys", async (t) => {
   const payload = await service.select(repo);
   assert.deepEqual(Object.keys(payload).sort(), [...PAYLOAD_KEYS].sort());
   assert.deepEqual(Object.keys(payload.inspection).sort(), [...INSPECTION_KEYS].sort());
+});
+
+test("non-ENOENT state file read errors are not treated as empty state", async (t) => {
+  const dir = makeTmpDir(t);
+  const statePath = join(dir, "state");
+  mkdirSync(statePath); // EISDIR：状态路径是目录，读取必然失败
+  const boundary = createProjectBoundary({
+    inspector: createGitInspector(),
+    statePath,
+  });
+  // 关键契约：读不了就不能假装是“空状态”，否则下一次写操作会把真实状态文件覆盖掉
+  await assert.rejects(boundary.getStatus());
+});
+
+test("v2 file loads correctly (regression: ensureLoaded memoization)", async (t) => {
+  const dir = makeTmpDir(t);
+  const repo = makeRepo(t);
+  const statePath = join(dir, "state.json");
+  writeFileSync(statePath, JSON.stringify({
+    version: 2,
+    activeProjectId: "aaa",
+    projects: { aaa: {
+      id: "aaa", repoRoot: repo, inputPath: repo, resolvedPath: repo,
+      selectedAt: "2026-09-23T00:00:00.000Z",
+      selectionSnapshot: { inspectedAt: "2026-09-23T00:00:00.000Z" },
+      lastInspection: { inspectedAt: "2026-09-23T00:00:00.000Z" },
+    } },
+  }));
+  const boundary = createProjectBoundary({ inspector: createGitInspector(), statePath });
+  // 并发首调共享同一次加载，结果一致
+  const [a, b] = await Promise.all([boundary.getStatus(), boundary.getStatus()]);
+  assert.equal(a.active.repoRoot, repo);
+  assert.equal(b.active.repoRoot, repo);
 });

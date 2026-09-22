@@ -131,3 +131,36 @@ test("rejects stale or non-active cwd", async () => {
   assert.equal(await rejectCode(wrong.run({ executable: "npm", args: ["test"], cwd: "/tmp/other", approvedByUser: true })), "cwd_not_active_project");
 });
 
+
+test("concurrent run is rejected busy while the first command is resolving", async () => {
+  const { spawnImpl } = makeSpawn({ stdout: "ok\n", delayMs: 60 });
+  const runner = createValidationRunner({ projectBoundary: makeBoundary(), spawnImpl });
+  const first = runner.run({ executable: "npm", args: ["test"], approvedByUser: true });
+  const code = await rejectCode(runner.run({ executable: "npm", args: ["test"], approvedByUser: true }));
+  assert.equal(code, "busy");
+  const result = await first;
+  assert.equal(result.result, "passed");
+});
+
+test("a secret split across stdout chunks is redacted by the final pass", async () => {
+  const calls = [];
+  const spawnImpl = () => {
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.kill = () => true;
+    calls.push(child);
+    queueMicrotask(() => {
+      child.emit("spawn");
+      // 秘密被 chunk 边界劈成两半：逐块脱敏都识别不到
+      child.stdout.emit("data", Buffer.from("config token=super"));
+      child.stdout.emit("data", Buffer.from("secretvalue99 done\n"));
+      child.emit("close", 0, null);
+    });
+    return child;
+  };
+  const runner = createValidationRunner({ projectBoundary: makeBoundary(), spawnImpl });
+  const result = await runner.run({ executable: "npm", args: ["test"], approvedByUser: true });
+  assert.equal(result.withheld, true, "final whole-buffer pass must flag the straddled secret");
+  assert.ok(!result.output.includes("supersecretvalue99"), "raw secret must never survive into output");
+});

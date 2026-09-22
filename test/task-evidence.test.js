@@ -291,3 +291,44 @@ test("recovery marks an open blackbox task interrupted", async (t) => {
   });
   assert.deepEqual(await evidence.recoverIncomplete(), [{ projectId: "project_001", taskId: "task_001", state: "interrupted" }]);
 });
+
+test("event queue self-heals after a transient blackbox append failure", async (t) => {
+  const root = makeRoot(t);
+  const real = createBlackboxStore({ rootDir: root });
+  let injected = false;
+  const store = {
+    beginTask: (a) => real.beginTask(a),
+    appendEvent: async (a) => {
+      if (!injected && a.type === "before_snapshot") {
+        injected = true;
+        throw new Error("transient io");
+      }
+      return real.appendEvent(a);
+    },
+    closeTask: (a) => real.closeTask(a),
+    readTask: (a) => real.readTask(a),
+    listTasks: (a) => real.listTasks(a),
+  };
+  const evidence = createTaskEvidence({
+    projectBoundary: makeBoundary(),
+    gitInspector: { inspect: async () => inspection() },
+    blackboxStore: store,
+    piExecutor: makePiFake(),
+  });
+
+  // 第一次任务的 before_snapshot 写入失败：任务按失败收口，但队列不得永久中毒
+  const firstError = await evidence.start("任务一").then(
+    () => null,
+    (e) => e,
+  );
+  assert.ok(firstError, "first start must surface the storage error");
+
+  // 中毒的队列不能让 getStatus 永久 500，也不能吞掉后续任务的全部事件
+  await evidence.getStatus();
+  await evidence.start("任务二");
+  const status = await evidence.getStatus();
+  assert.equal(status.state, "exited");
+  const taskId = status.taskId;
+  const record = await real.readTask({ projectId: "project_001", taskId });
+  assert.equal(record.events.at(-1).type, "exited", "terminal close event must be persisted after self-heal");
+});

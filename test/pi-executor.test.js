@@ -430,3 +430,28 @@ test("idle status reports state idle with no run", () => {
   assert.equal(status.state, "idle");
   assert.equal(status.runId, null);
 });
+
+test("concurrent start is rejected busy while the first start is still initializing", async (t) => {
+  const repoRoot = makeTmpDir(t, "repo");
+  const pi = makeFakePi(t, SLOW_PI);
+  const base = makeBoundary({ repoRoot });
+  // 拉长 busy 检查与槽位占位之间的窗口，暴露 TOCTOU
+  const slowBoundary = {
+    async getStatus() {
+      await new Promise((r) => setTimeout(r, 150));
+      return base.getStatus();
+    },
+  };
+  const executor = createPiExecutor({ projectBoundary: slowBoundary, piBinary: pi, authProvider: "test-provider" });
+  const { events } = collect(executor);
+
+  const first = executor.start("task-one");
+  await new Promise((r) => setTimeout(r, 20)); // first 已进入 starting 窗口
+  const secondCode = await rejectCode(executor.start("task-two"));
+  assert.equal(secondCode, "busy", "second start during initialization must be rejected");
+
+  await first;
+  await executor.stop();
+  const done = await waitDone(events);
+  assert.equal(done.data.state, "stopped");
+});
