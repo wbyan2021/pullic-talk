@@ -459,11 +459,13 @@
   function appendOutput(text) {
     const out = panel.querySelector(".exec-output");
     if (!out) return;
+    // 只在用户本就贴近底部时自动滚动，避免输出流把用户强行拽离正在阅读的位置
+    const nearBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 40;
     out.textContent += text;
     if (out.textContent.length > OUTPUT_DISPLAY_CAP) {
       out.textContent = out.textContent.slice(-OUTPUT_DISPLAY_CAP);
     }
-    out.scrollTop = out.scrollHeight;
+    if (nearBottom) out.scrollTop = out.scrollHeight;
   }
 
   function render() {
@@ -767,9 +769,10 @@
 
   function startPolling() {
     clearTimeout(pollTimer);
-    // 非流式状态下低频拉取服务端状态，保证与服务端一致
+    // 非流式状态下低频拉取服务端状态，保证与服务端一致；
+    // refreshExecution 内部自吞错误，无论结果如何都续链，避免轮询在第一次空变化后断掉
     if (!state.streaming) {
-      pollTimer = setTimeout(() => { refreshExecution(); }, 5000);
+      pollTimer = setTimeout(() => { refreshExecution().finally(startPolling); }, 5000);
     }
   }
 

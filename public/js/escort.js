@@ -206,7 +206,7 @@
         method: "POST",
         json: { message, history: requestHistory },
       });
-      history.push({ role: "assistant", content: payload.reply.text });
+      history.push({ role: "assistant", content: payload.reply?.text ?? "(空回复)" });
       history = history.slice(-12);
       status = payload.status;
     });

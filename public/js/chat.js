@@ -11,11 +11,11 @@
   };
   marked.use({ renderer });
 
-  // markdown 渲染 + XSS 消毒（DOMPurify 加载失败时降级为直接渲染）
+  // markdown 渲染 + XSS 消毒（DOMPurify 缺失时按纯文本转义渲染，绝不直接注入 marked 输出）
   function renderMarkdown(text) {
     let html = marked.parse(text || "");
-    if (window.DOMPurify) html = DOMPurify.sanitize(html);
-    return html;
+    if (window.DOMPurify) return DOMPurify.sanitize(html);
+    return escapeHtml(text || "");
   }
 
   // ===== 全局状态 =====
@@ -176,7 +176,13 @@
   }
 
   // ===== 会话管理 =====
-  let sessions = JSON.parse(localStorage.getItem("tri-sessions") || "[]");
+  // localStorage 可能被截断/损坏：解析失败回退为空，不让整页脚本挂掉
+  let sessions = (() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("tri-sessions") || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  })();
   let currentSessionId = null;
 
   function saveSessions() {
@@ -727,7 +733,12 @@
       }
     } finally {
       stopUI();
-      for (const agent of Object.keys(streamBuffers)) finalizeStream(agent, "");
+      for (const agent of Object.keys(streamBuffers)) {
+        const buf = streamBuffers[agent];
+        // 切换/新建会话会 abort 流并先替换 history：已脱离文档的流块不能再写进当前会话
+        if (buf && !buf.bodyEl.isConnected) { delete streamBuffers[agent]; continue; }
+        finalizeStream(agent, "");
+      }
       saveCurrentSession();
     }
     return true;

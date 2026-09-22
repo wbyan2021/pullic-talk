@@ -11,7 +11,8 @@ applyTheme(localStorage.getItem("ops-theme") || "dark");
 
 /* ---------- 终端配色（与控制台一致） ---------- */
 const BASE_FONT = 13;
-let fontSize = parseInt(localStorage.getItem("term-font") || BASE_FONT, 10);
+function clampFont(n){ n = parseInt(n, 10); return Number.isFinite(n) ? Math.min(24, Math.max(10, n)) : BASE_FONT; }
+let fontSize = clampFont(localStorage.getItem("term-font") || BASE_FONT);
 
 function termTheme(){
   return {

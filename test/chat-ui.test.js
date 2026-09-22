@@ -130,3 +130,16 @@ test("chat.html states the S06 key boundary and restart semantics", () => {
   assert.ok(CHAT_HTML.includes("macOS 钥匙串"), "panel must state escort keys stay in the macOS Keychain (D3)");
   assert.ok(CHAT_HTML.includes("重启服务后会自动加载"), "panel must state the startup auto-load behavior (D2)");
 });
+
+test("markdown rendering fails closed when DOMPurify is missing", () => {
+  assert.ok(
+    /if \(window\.DOMPurify\) return DOMPurify\.sanitize\(html\);\s*return escapeHtml\(text \|\| ""\);/.test(CHAT_JS),
+    "renderMarkdown must fall back to escaped text, never raw marked HTML",
+  );
+  assert.ok(!CHAT_JS.includes("降级为直接渲染"), "fail-open comment must be gone");
+});
+
+test("session storage and stream finalization tolerate corruption and aborts", () => {
+  assert.ok(CHAT_JS.includes("bodyEl.isConnected"), "detached stream buffers must not write into a switched session");
+  assert.ok(CHAT_JS.includes("tri-sessions") && CHAT_JS.includes("catch { return []; }"), "corrupted localStorage must not kill the page");
+});
