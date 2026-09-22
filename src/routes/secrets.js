@@ -1,14 +1,15 @@
-import { getSecretsSnapshot, writeSecretsFile, SECRETS_ENV_PATH, KEY_RE } from "../utils/secrets-env.js";
+import { getMaskedSnapshot, writeSecretsFile, SECRETS_ENV_PATH, KEY_RE } from "../utils/secrets-env.js";
 
-// 网页端管理 ~/.secrets.env：
-// GET /api/secrets   -> 快照（运行时值优先）
-// POST /api/secrets  -> 合并写入；value 为空字符串表示删除该 key
+// 网页端管理 ~/.secrets.env（S06/D1：浏览器永不接收明文值）：
+// GET /api/secrets   -> 掩码快照：键名可见，值一律 ••••••••
+// POST /api/secrets  -> 覆盖式写入：只提交用户实际改动的键；
+//                       非空值 = 覆盖，空字符串 = 删除，未提交的键保持原值
 export default function secretsRoutes(app) {
   app.get("/api/secrets", (req, res) => {
     res.json({
       ok: true,
       path: SECRETS_ENV_PATH,
-      vars: getSecretsSnapshot(),
+      vars: getMaskedSnapshot(),
     });
   });
 
@@ -48,6 +49,6 @@ export default function secretsRoutes(app) {
       else process.env[k] = v;
     }
 
-    res.json({ ok: true, path: SECRETS_ENV_PATH, vars: getSecretsSnapshot() });
+    res.json({ ok: true, path: SECRETS_ENV_PATH, vars: getMaskedSnapshot() });
   });
 }
