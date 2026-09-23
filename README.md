@@ -7,7 +7,7 @@
 ## ✨ 特性
 
 - 🎛 **工具控制台**：自动扫描本机装了哪些 AI CLI（codex / grok / pi / opencode…）和桌面 App，一键启动
-- ⬇ **快捷安装**：AI 基础环境（Node / Git / Python / uv）、最热编码 Agent（Claude Code / Codex / Gemini CLI / Qwen Code…）与热门 AI 应用一键装，附大模型官网导航（官方渠道，Homebrew / npm / 官网下载）
+- ⬇ **快捷安装**：AI 基础环境（Node / Git / Python / uv）、最热编码 Agent（Claude Code / Codex / Gemini CLI / Qwen Code…）与热门 AI 应用一键装，已安装工具自动扫描版本与更新（一键升级），附大模型官网导航（官方渠道，Homebrew / npm / 官网下载）
 - 💻 **内嵌终端**：全屏 xterm.js 终端，直接执行任意 shell 命令
 - 👥 **AI 群聊**：多个 agent 同屏对话，**自动识别本机装了哪些 CLI**，没装的灰显并可一键安装；支持 @定向、并行/协作、多轮讨论、消息头显示实际模型、一键重新生成最后一轮
 - 🔑 **本地 Key 管理**：群聊页可直接管理 `~/.secrets.env`（增删改 API Key），保存后立即写入文件并热更新到当前服务进程；浏览器只见掩码不回显明文，重启服务自动加载

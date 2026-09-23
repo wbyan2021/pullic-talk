@@ -77,3 +77,36 @@ test("目录事实与源码常量一致（防止路由另建第二套数据）",
   const { data } = await req("GET", "/api/install/catalog");
   assert.equal(data.entries.length, INSTALL_CATALOG.length);
 });
+
+test("GET /api/install/updates 返回版本与更新状态（pi 已安装且带版本）", async () => {
+  const { status, data } = await req("GET", "/api/install/updates");
+  assert.equal(status, 200);
+  assert.equal(typeof data.scannedAt, "number");
+  assert.ok(Array.isArray(data.entries) && data.entries.length === INSTALL_CATALOG.length);
+  const byId = new Map(data.entries.map((e) => [e.id, e]));
+  for (const row of data.entries) {
+    assert.equal(typeof row.updateAvailable, "boolean", `${row.id}: updateAvailable must be boolean`);
+    if (!row.installed) continue;
+    assert.equal(row.updateAvailable && row.latest === null, false, `${row.id}: update must carry latest when available`);
+  }
+  const pi = byId.get("pi-agent");
+  assert.equal(pi.installed, true, "pi agent is installed on this machine");
+  assert.match(pi.version || "", /^\d+\.\d+/, `pi version should be detected, got ${pi.version}`);
+  const node = byId.get("node");
+  assert.equal(node.installed, true);
+  assert.match(node.version || "", /^\d+\./, "node version should be detected");
+});
+
+test("POST /api/install 的 update 动作有闸门：未安装/导航条目一律拒绝", async () => {
+  // qwen-code 在本机未安装：更新必须被拒，且绝不启动任务
+  const notInstalled = await req("POST", "/api/install", { id: "qwen-code", action: "update" });
+  assert.equal(notInstalled.status, 400);
+  assert.ok(notInstalled.data.error.includes("尚未安装"));
+
+  const link = await req("POST", "/api/install", { id: "site-openai", action: "update" });
+  assert.equal(link.status, 400);
+
+  // 未安装条目不带 action 的正常安装分支保持原语义（这里只验证拒绝逻辑，不真装）
+  const installLink = await req("POST", "/api/install", { id: "site-deepseek" });
+  assert.equal(installLink.status, 400);
+});

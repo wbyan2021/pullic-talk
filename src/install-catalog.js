@@ -12,6 +12,7 @@
 //   brew        brew install <x>
 //   npm         npm install -g <x>
 //   dmg         { url, file } 下载后打开镜像（兜底，需用户拖拽安装）
+//   versionFlag 版本探测参数，默认 "--version"；ffmpeg 用 "-version"
 //   linkOnly    true = 仅官网导航卡片，不参与安装
 //   agentKey    对应的群聊 agent（安装后群聊里自动亮起）
 
@@ -70,6 +71,7 @@ export const INSTALL_CATALOG = [
     description: "音视频处理 — AI 视频 / 语音工作流的瑞士军刀",
     homepage: "https://ffmpeg.org/",
     detect: { commands: ["ffmpeg"] },
+    versionFlag: "-version",
     brew: "ffmpeg",
   },
 

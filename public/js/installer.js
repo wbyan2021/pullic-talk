@@ -88,17 +88,18 @@ window.Installer = (() => {
 
   async function install(id, opts) {
     opts = opts || {};
+    const verb = opts.action === "update" ? "更新" : "安装";
     buildDom();
     overlay.classList.add("show");
     document.getElementById("inst-icon").textContent = opts.icon || "📦";
-    document.getElementById("inst-name").textContent = `安装 ${opts.name || id}`;
-    document.getElementById("inst-cmd").textContent = "正在提交安装任务…";
+    document.getElementById("inst-name").textContent = `${verb} ${opts.name || id}`;
+    document.getElementById("inst-cmd").textContent = `正在提交${verb}任务…`;
     document.getElementById("inst-action").style.display = "none";
     renderLog([]);
     setState("run", "提交中…");
 
     try {
-      const res = await api("/api/install", { method: "POST", json: { id } });
+      const res = await api("/api/install", { method: "POST", json: { id, action: opts.action } });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       poll(data.jobId, opts);

@@ -68,6 +68,13 @@ test("安装目录：官方脚本只允许已知 https 来源", () => {
   }
 });
 
+test("安装目录：versionFlag 只能是命令行旗标形式", () => {
+  for (const e of INSTALL_CATALOG) {
+    if (e.versionFlag === undefined) continue;
+    assert.match(e.versionFlag, /^-{1,2}[A-Za-z][A-Za-z-]*$/, `${e.id}: versionFlag must look like a CLI flag`);
+  }
+});
+
 test("安装目录：dmg 条目必须是 https 官方镜像且文件名合法", () => {
   for (const e of INSTALL_CATALOG) {
     if (!e.dmg) continue;
@@ -118,7 +125,13 @@ test("安装页 UI：新手推荐横条、官网链接卡片与新分组静态�
   assert.ok(js.includes("function renderStarter"), "index.js must render the starter strip");
   assert.ok(js.includes('models:"🌐 热门大模型官网"'), "index.js must declare the models group");
   assert.ok(js.includes('e.method === "link"'), "index.js must render link entries as homepage buttons");
+  assert.ok(js.includes("api/install/updates"), "index.js must fetch the updates scan");
+  assert.ok(js.includes('data-update'), "index.js must render update buttons on outdated cards");
+
+  const installer = readFileSync(join(ROOT, "public/js/installer.js"), "utf-8");
+  assert.ok(installer.includes("action: opts.action"), "installer modal must pass the update action through");
 
   const css = readFileSync(join(ROOT, "public/css/index.css"), "utf-8");
   assert.ok(css.includes("#inst-starter") && css.includes(".schip"), "index.css must style the starter strip");
+  assert.ok(css.includes(".inst-up"), "index.css must style the update button");
 });

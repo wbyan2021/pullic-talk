@@ -68,7 +68,7 @@ updated: 2026-09-23
 | Pi CLI | 登录、模型配置、输出格式和停止行为可能变化 | 当前代码能发现 CLI，但未形成受控任务契约 | S03 前固定版本并做最小真实调用 |
 | 本机 Shell 与子进程 | 继承当前用户权限，不是真正沙箱 | 当前已有 node-pty 和命令启动能力 | 明确工作目录、子进程归属、暂停与终止语义 |
 | Git 工作区 | 用户可能已有分支、未提交改动和未跟踪文件 | 当前仓库本身已有未知改动 | S02 先验证只读识别和保护策略 |
-| 自动化验证 | 暂无 CI 和 lint，外部服务不能由 Mock 代替 | 当前候选实现 `node --test` 336/336 通过；逐文件语法、`git diff --check` 与 strict 结构校验通过；含失败/服务重启中断恢复、来源关联、敏感字段排除、无 Git 回退、2026-09-23 缺陷修复回归测试与快捷安装目录/路由回归 | S05-A/S05-B 用户页面验收已通过（2026-08-28）；后续版本再评估 CI |
+| 自动化验证 | 暂无 CI 和 lint，外部服务不能由 Mock 代替 | 当前候选实现 `node --test` 339/339 通过；逐文件语法、`git diff --check` 与 strict 结构校验通过；含失败/服务重启中断恢复、来源关联、敏感字段排除、无 Git 回退、2026-09-23 缺陷修复回归测试与快捷安装目录/路由回归 | S05-A/S05-B 用户页面验收已通过（2026-08-28）；后续版本再评估 CI |
 | S04 项目交接写入与验收命令 | high | 已实现显式启用、脱敏原子写入、追加黑匣子、Git 前后快照、Pi 生命周期、argv-only 验收命令、失败/恢复和安全路由；用户已于 2026-08-26 确认功能验收通过 | 切片已 done；后续只处理发现的缺陷，不重新扩大 S04 范围 |
 | S05 恢复与总览闭环 | high | 总览只读聚合、恢复资格/预览/二次确认、新批次来源关联、脱敏和稳定错误码已实现；299/299 自动化通过；用户已于 2026-08-28 完成页面验收 | 切片已 done；后续只处理发现的缺陷，不重新扩大 S05 范围 |
 | 网页 Key 管理（S06） | high | 掩码快照 + 覆盖式编辑 + 启动自动加载已实现；`npm test` 308/308 含响应无明文与 UI 静态断言；隔离端口健康 200、未授权 401、启动加载日志只报数量（2026-09-23） | 用户按设计稿 §7 完成假 Key 全流程验收；不能与 S01 Keychain 证据混用 |
@@ -587,14 +587,16 @@ v0.1 版本收尾：在合并后的 `main` 基线上，用户用活动项目真�
 
 ### 2026-09-23 · 快捷安装模块优化插播（用户直接要求）
 
-- 需求：用户要求优化快捷安装——补齐 AI 常见环境的一键安装、市面最热 Agent 工具的安装入口、新手建议（先装 Node.js），以及热门大模型官网导航。
+- 需求：用户要求优化快捷安装——补齐 AI 常见环境的一键安装、市面最热 Agent 工具的安装入口、新手建议（先装 Node.js），以及热门大模型官网导航；随后用户在本机安装了 pi agent（nvm npm 全局，16:59），要求对已安装工具扫描是否需要更新。
 - 完成（在 S06 工作分支上，未扩大 v0.1 版本范围）：
-  - `src/install-catalog.js`：新增基础环境 5 项（Node.js、Git、Python 3、uv、FFmpeg；Homebrew 移入环境组）；新增热门 Agent 3 项（Qwen Code `@qwen-code/qwen-code`、Kimi Code `@moonshot-ai/kimi-code`、OpenClaw 官方脚本，包名/脚本均经官方渠道核实）；新增「热门大模型官网」导航 13 项（OpenAI/Anthropic/Gemini/DeepSeek/通义/Kimi/智谱/豆包/MiniMax/Grok/Llama/Mistral/OpenRouter，linkOnly 仅导航）；新增 `STARTER_PATH` 新手推荐顺序（Homebrew → Node → Git → Claude Code → Codex → Gemini CLI → Qwen Code）。
+  - `src/install-catalog.js`：新增基础环境 5 项（Node.js、Git、Python 3、uv、FFmpeg；Homebrew 移入环境组）；新增热门 Agent 3 项（Qwen Code `@qwen-code/qwen-code`、Kimi Code `@moonshot-ai/kimi-code`、OpenClaw 官方脚本，包名/脚本均经官方渠道核实）；新增「热门大模型官网」导航 13 项（OpenAI/Anthropic/Gemini/DeepSeek/通义/Kimi/智谱/豆包/MiniMax/Grok/Llama/Mistral/OpenRouter，linkOnly 仅导航）；新增 `STARTER_PATH` 新手推荐顺序（Homebrew → Node → Git → Claude Code → Codex → Gemini CLI → Qwen Code）；新增 `versionFlag` 字段（FFmpeg 用 `-version`）。
   - `src/routes/install.js`：目录接口返回 `starter` 列表；linkOnly 条目 `method=link`；POST 对 linkOnly 条目直接拒绝，不产生安装任务。
-  - 前端 `index.html`/`index.js`/`index.css`：安装页顶部新手推荐横条（逐个点亮，点击即装）；分组重排为 基础环境 → 编码/Agent CLI → 编辑器 → 对话应用 → 本地运行时 → 大模型官网；官网链接卡片走「官网 ↗」按钮。
-  - 安全边界不变：命令仍全部来自目录常量白名单；新增测试锁定 brew/npm token 无 shell 元字符、script 仅允许已知 https 前缀、starter 全部可安装。
-- 证据：新增 `test/install-catalog.test.js`（10 项不变量 + UI 静态合约）与 `test/install-routes.test.js`（4 项 API 契约：starter 返回、link 条目、未知/导航 id 拒绝且绝不启动真实安装）；全量 `node --test` 336/336；逐文件语法、`git diff --check` 通过；隔离端口 `43211` 实测首页 200、`/api/health` 200、未带 Token `/api/install/catalog` 401、静态资源 200。
-- 明确不做（保持范围）：不实现版本管理/自动更新、失败自动重试；不把大模型官网做成可安装条目。
+  - 版本/更新扫描（第二轮，用户要求）：新增只读 `GET /api/install/updates`——对已安装条目并行探测 `<cmd> --version` 真实版本，并用 `brew outdated --json=v2` + `npm outdated -g --json` 判定可更新项与最新版本；结果缓存 60 秒，安装/更新任务成功后自动失效。新增 `POST /api/install { action: "update" }` 一键更新：brew upgrade / npm 重装 @latest / 官方脚本重跑，命令仍只来自目录常量；未安装条目与官网导航条目一律 400。`isInstalled` 增加 npm -g / brew bin 前缀兜底（修复 nvm 用户 CLI 不在服务 PATH 时被误判未安装）。任务日志/完成文案区分「安装/更新」。
+  - 前端 `index.html`/`index.js`/`installer.js`/`index.css`：安装页顶部新手推荐横条（逐个点亮，点击即装）；分组重排为 基础环境 → 编码/Agent CLI → 编辑器 → 对话应用 → 本地运行时 → 大模型官网；官网链接卡片走「官网 ↗」按钮；已安装卡片显示真实版本号，扫出更新时变为「↑ 更新 → v最新」按钮；安装弹窗支持更新模式。
+  - 安全边界不变：命令仍全部来自目录常量白名单；测试锁定 brew/npm token 无 shell 元字符、script 仅允许已知 https 前缀、starter 全部可安装、versionFlag 必须是旗标形式。
+- 证据：新增 `test/install-catalog.test.js`（11 项不变量 + UI 静态合约）与 `test/install-routes.test.js`（6 项 API 契约：starter 返回、link 条目、未知/导航 id 拒绝且绝不启动真实安装、更新扫描真机返回 pi 已安装 v0.87.1、update 动作闸门）；全量 `node --test` 339/339；逐文件语法、`git diff --check` 通过；隔离端口 `43211` 实测首页 200、`/api/health` 200、未带 Token `/api/install/catalog` 与 `/api/install/updates` 均 401、静态资源 200。
+- 真机扫描输出（2026-09-23）：14 项已安装；pi-agent v0.87.1 最新；可更新 4 项——FFmpeg 8.1→9.0.2、Claude Code 2.1.220→2.1.280、Gemini CLI 0.56.0→0.60.0、OpenCode 1.18.9→1.18.32。
+- 明确不做（保持范围）：不实现自动后台更新、失败自动重试/回滚、版本降级；不把大模型官网做成可安装条目。
 
 ### 2026-09-23 · 全项目缺陷排查与修复插播（用户直接要求的多轮检查）
 

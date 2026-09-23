@@ -181,6 +181,7 @@ function switchView(v){
 
 /* ---------- 快捷安装 ---------- */
 let installEntries = [];
+let updateMap = new Map(); // id -> { installed, version, updateAvailable, latest }
 
 async function loadInstallCatalog(){
   try {
@@ -190,7 +191,17 @@ async function loadInstallCatalog(){
     $("#brew-warn").style.display = d.brewAvailable ? "none" : "block";
     renderStarter(d.starter);
     renderInstallGrid();
+    loadUpdates();
   } catch(e){ toast("加载安装目录失败: "+e.message, true); }
+}
+
+async function loadUpdates(){
+  try {
+    const r = await OPS.api("/api/install/updates");
+    const d = await r.json();
+    updateMap = new Map((d.entries || []).map(e => [e.id, e]));
+    renderInstallGrid();
+  } catch(e){ /* 扫描失败不阻塞安装页，卡片退回「已安装」态 */ }
 }
 
 const INST_GROUPS = { env:"🧱 基础环境（新手从这里开始）", cli:"⌨️ 编码 / Agent CLI（装完自动进群聊）", editor:"📝 AI 编辑器 / 终端", chat:"💬 AI 对话应用", runtime:"🧰 本地模型运行时", models:"🌐 热门大模型官网" };
@@ -236,8 +247,12 @@ function installCard(e){
   el.className = "inst-card-item" + (e.installed ? " installed" : "");
   el.style.setProperty("--ic", e.color || "#8a93a3");
   const isLink = e.method === "manual" || e.method === "link";
+  const u = updateMap.get(e.id);
+  const verText = u && u.version ? ` · v${u.version}` : "";
   const btn = e.installed
-    ? `<span class="inst-done">✓ 已安装</span>`
+    ? (u && u.updateAvailable
+        ? `<button class="inst-go inst-up" data-update="1" title="${u.latest ? `当前 v${u.version || "?"}，最新 v${u.latest}` : "有可用更新"}">↑ 更新${u.latest ? ` → v${u.latest}` : ""}</button>`
+        : `<span class="inst-done">✓ 已安装${verText}</span>`)
     : (isLink
         ? `<button class="inst-go" data-home="1">官网 ↗</button>`
         : `<button class="inst-go" data-install="1">⬇ 安装</button>`);
@@ -246,23 +261,25 @@ function installCard(e){
     <div class="ici-meta">
       <div class="ici-name">${esc(e.name)}${e.agentKey?` <span class="ici-chat" title="安装后可加入 AI 群聊">◧</span>`:""}</div>
       <div class="ici-desc">${esc(e.description||"")}</div>
-      <div class="ici-method">${e.installed ? "" : esc(e.methodLabel||"")}</div>
+      <div class="ici-method">${e.installed ? (u && u.version ? esc("v"+u.version) : "") : esc(e.methodLabel||"")}</div>
     </div>
     ${btn}`;
   const go = $(".inst-go", el);
   if (go){
     go.onclick = () => {
       if (go.dataset.home) { window.open(e.homepage, "_blank"); return; }
-      installEntry(e);
+      installEntry(e, go.dataset.update ? "update" : undefined);
     };
   }
   return el;
 }
 
-function installEntry(e){
+function installEntry(e, action){
+  const updating = action === "update";
   Installer.install(e.id, {
+    action: updating ? "update" : undefined,
     name: e.name, icon: e.icon,
-    onDone: () => { loadInstallCatalog(); loadTools(); toast(`${e.name} 安装完成，工具列表已刷新`); },
+    onDone: () => { loadInstallCatalog(); loadUpdates(); loadTools(); toast(`${e.name} ${updating ? "更新" : "安装"}完成，工具列表已刷新`); },
   });
 }
 
