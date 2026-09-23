@@ -2,7 +2,7 @@ import { spawn, spawnSync } from "child_process";
 import { existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { INSTALL_CATALOG, getInstallEntry } from "../install-catalog.js";
+import { INSTALL_CATALOG, STARTER_PATH, getInstallEntry } from "../install-catalog.js";
 import { refreshAvailability } from "../config.js";
 import { activeProcs } from "../utils/process-registry.js";
 import { log } from "../utils/log.js";
@@ -141,7 +141,7 @@ function startJob(entry) {
 }
 
 export default function installRoutes(app) {
-  // 安装目录（含已安装状态 + 推荐安装方式）
+  // 安装目录（含已安装状态 + 推荐安装方式 + 新手推荐顺序）
   app.get("/api/install/catalog", (req, res) => {
     const entries = INSTALL_CATALOG.map((e) => {
       const installed = isInstalled(e);
@@ -151,11 +151,11 @@ export default function installRoutes(app) {
         icon: e.icon, color: e.color, description: e.description, homepage: e.homepage,
         agentKey: e.agentKey || null,
         installed,
-        method: installed ? null : (picked ? picked.method : "manual"),
-        methodLabel: installed ? null : (picked ? picked.label : "手动"),
+        method: e.linkOnly ? "link" : (installed ? null : (picked ? picked.method : "manual")),
+        methodLabel: e.linkOnly ? "官网" : (installed ? null : (picked ? picked.label : "手动")),
       };
     });
-    res.json({ brewAvailable: brewAvailable(), entries });
+    res.json({ brewAvailable: brewAvailable(), starter: STARTER_PATH, entries });
   });
 
   // 发起安装（白名单 id，命令只来自目录常量，不接受任意用户输入）
@@ -163,6 +163,7 @@ export default function installRoutes(app) {
     const { id } = req.body || {};
     const entry = getInstallEntry(id);
     if (!entry) return res.status(400).json({ error: `未知安装条目: ${id}` });
+    if (entry.linkOnly) return res.status(400).json({ error: `${entry.name} 仅提供官网导航，请从官网获取` });
     if (isInstalled(entry)) return res.status(400).json({ error: `${entry.name} 已经安装` });
     const result = startJob(entry);
     if (result.error) return res.status(400).json(result);

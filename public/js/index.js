@@ -188,11 +188,33 @@ async function loadInstallCatalog(){
     const d = await r.json();
     installEntries = d.entries || [];
     $("#brew-warn").style.display = d.brewAvailable ? "none" : "block";
+    renderStarter(d.starter);
     renderInstallGrid();
   } catch(e){ toast("加载安装目录失败: "+e.message, true); }
 }
 
-const INST_GROUPS = { chat:"💬 AI 对话应用", editor:"📝 编辑器 / 终端", cli:"⌨️ 编码 CLI（装完自动进群聊）", runtime:"🧰 运行环境" };
+const INST_GROUPS = { env:"🧱 基础环境（新手从这里开始）", cli:"⌨️ 编码 / Agent CLI（装完自动进群聊）", editor:"📝 AI 编辑器 / 终端", chat:"💬 AI 对话应用", runtime:"🧰 本地模型运行时", models:"🌐 热门大模型官网" };
+
+function renderStarter(ids){
+  const wrap = $("#inst-starter");
+  wrap.innerHTML = "";
+  const items = (ids || []).map(id => installEntries.find(e => e.id === id)).filter(Boolean);
+  if (!items.length) { wrap.style.display = "none"; return; }
+  const tt = document.createElement("span");
+  tt.className = "schip-tt";
+  tt.textContent = "🚀 新手推荐顺序";
+  wrap.appendChild(tt);
+  for (const e of items){
+    const chip = document.createElement("button");
+    chip.className = "schip" + (e.installed ? " done" : "");
+    chip.style.setProperty("--ic", e.color || "#8a93a3");
+    chip.title = e.installed ? `${e.name} 已安装` : `安装 ${e.name}`;
+    chip.textContent = e.installed ? `✓ ${e.name}` : `${e.icon || "◆"} ${e.name}`;
+    chip.onclick = () => { if (e.installed) toast(`${e.name} 已经安装`, false); else installEntry(e); };
+    wrap.appendChild(chip);
+  }
+  wrap.style.display = "flex";
+}
 
 function renderInstallGrid(){
   const wrap = $("#install-grid");
@@ -213,9 +235,10 @@ function installCard(e){
   const el = document.createElement("div");
   el.className = "inst-card-item" + (e.installed ? " installed" : "");
   el.style.setProperty("--ic", e.color || "#8a93a3");
+  const isLink = e.method === "manual" || e.method === "link";
   const btn = e.installed
     ? `<span class="inst-done">✓ 已安装</span>`
-    : (e.method === "manual"
+    : (isLink
         ? `<button class="inst-go" data-home="1">官网 ↗</button>`
         : `<button class="inst-go" data-install="1">⬇ 安装</button>`);
   el.innerHTML = `

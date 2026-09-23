@@ -237,8 +237,10 @@ S05-A 总览保持只读，只显示“可恢复 / Recoverable”摘要并跳转
 
 | 状态 | 功能 | 当前行为 |
 |---|---|---|
-| ✅ | 白名单安装目录 | 当前包含桌面 AI、编辑器、主流编码 CLI 和基础环境 |
-| ✅ | 安装方式择优 | 优先 Homebrew，其次 npm 或官方 DMG / 页面 |
+| ✅ | 白名单安装目录 | 覆盖 AI 基础环境（Homebrew / Node / Git / Python / uv / FFmpeg）、最热编码与 Agent CLI（Claude Code / Codex / Gemini CLI / Qwen Code / Kimi Code / OpenCode / OpenClaw / Aider / Pi）、桌面 AI 应用、编辑器与本地模型运行时 |
+| ✅ | 新手推荐路径 | 安装页顶部横条按推荐顺序展示 Homebrew → Node → Git → 三大编码 Agent 等，逐个点亮，点击即装 |
+| ✅ | 大模型官网导航 | OpenAI / Anthropic / Gemini / DeepSeek / 通义 / Kimi / 智谱 / 豆包 / MiniMax / Grok / Llama / Mistral / OpenRouter 官网直达卡片（仅导航，不参与安装） |
+| ✅ | 安装方式择优 | 官方脚本 > Homebrew（cask/formula）> npm -g > 官方 DMG / 页面 |
 | ✅ | 实时安装日志 | 安装作为后台任务运行，前端轮询显示日志 |
 | ✅ | 重复任务复用 | 同一安装任务运行时不会重复启动 |
 | ✅ | 安装后刷新 | 自动刷新 Agent 可用性并重新扫描工具 |
