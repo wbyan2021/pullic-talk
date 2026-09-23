@@ -122,20 +122,32 @@ export function reloadConfig() {
 }
 
 let _reloadTimer = null;
-try {
-  const watcher = watch(CONFIG_PATH, () => {
-    if (_reloadTimer) clearTimeout(_reloadTimer);
-    _reloadTimer = setTimeout(() => {
+const scheduleReload = () => {
+  if (_reloadTimer) clearTimeout(_reloadTimer);
+  _reloadTimer = setTimeout(() => {
     reloadConfig();
     _reloadTimer = null;
   }, 300);
-  });
+};
+try {
+  const watcher = watch(CONFIG_PATH, scheduleReload);
   watcher.on("error", (e) => log(`⚠️ config watcher 错误: ${e.message}`));
   // unref：不让 watcher 独自撑住事件循环（服务器由 HTTP 监听保活，热加载不受影响；
   // 测试进程 import 本模块后也能正常退出）
   watcher.unref();
 } catch (e) {
-  log(`⚠️ 无法监听 agents.config.json: ${e.message}`);
+  // 配置文件尚不存在（首次运行）：监听父目录的创建/改名事件，
+  // 之后手工创建 agents.config.json 也能触发热加载
+  try {
+    const dirWatcher = watch(dirname(CONFIG_PATH), (event, filename) => {
+      if (filename === "agents.config.json") scheduleReload();
+    });
+    dirWatcher.on("error", () => {});
+    dirWatcher.unref();
+    log("ℹ️ agents.config.json 尚不存在，已监听其目录等待创建");
+  } catch {
+    log(`⚠️ 无法监听 agents.config.json: ${e.message}`);
+  }
 }
 
 // 启动时探测一次

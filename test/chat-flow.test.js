@@ -153,7 +153,7 @@ async function loadChatUi(models, chatReplays) {
     addEventListener() {},
   };
 
-  const windowStub = { OPS: { api }, innerWidth: 1280 };
+  const windowStub = { OPS: { api }, innerWidth: 1280, addEventListener() {} };
   const context = {
     window: windowStub,
     OPS: windowStub.OPS,

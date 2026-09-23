@@ -143,3 +143,57 @@ test("session storage and stream finalization tolerate corruption and aborts", (
   assert.ok(CHAT_JS.includes("bodyEl.isConnected"), "detached stream buffers must not write into a switched session");
   assert.ok(CHAT_JS.includes("tri-sessions") && CHAT_JS.includes("catch { return []; }"), "corrupted localStorage must not kill the page");
 });
+
+// ── 2026-09-24 对话页多轮审查修复的静态合约 ──
+
+test("config 来源字段（name/role/avatar/model）全部经 escapeHtml 后才进 innerHTML", () => {
+  const mustEscape = [
+    "${escapeHtml(info.avatar)}",
+    "${escapeHtml(info.name)}",
+    "${escapeHtml(info.role)}",
+    "escapeHtml(shortModel(model))",
+    "${escapeHtml(key)}",
+    "${escapeHtml(a.name || key)}",
+  ];
+  for (const frag of mustEscape) {
+    assert.ok(CHAT_JS.includes(frag), `missing escaped interpolation: ${frag}`);
+  }
+  // innerHTML 上下文中的裸插值不得再出现（title 属性 / textContent 赋值不属于注入面）
+  assert.ok(!CHAT_JS.includes("${info.avatar}</div>"));
+  assert.ok(!CHAT_JS.includes('${info.name}</span>'));  assert.ok(!CHAT_JS.includes('<span class="msg-role">${info.role}</span>'));
+  assert.ok(!CHAT_JS.includes('<span class="msg-model">${model}</span>'));
+});
+
+test("Enter 发送尊重中文输入法组词状态（isComposing / keyCode 229）", () => {
+  assert.ok(CHAT_JS.includes("e.isComposing || e.keyCode === 229"), "IME 组词期不得触发发送/弹窗操作");
+});
+
+test("mention 解析有左边界且不再折叠换行/缩进", () => {
+  assert.ok(CHAT_JS.includes("(?<![a-z0-9_@])"), "需要左边界防止 a@pi.example 被误解析");
+  assert.ok(!CHAT_JS.includes('replace(/\\s{2,}/g, " ")'), "不得无条件折叠空白（多段消息会被压扁）");
+});
+
+test("多轮分隔条持久化：轮次写入 history 并在回放/导出时重建", () => {
+  assert.ok(CHAT_JS.includes("entry.round = currentRound"), "agent 消息须记录轮次");
+  assert.ok(CHAT_JS.includes("addRoundDivider(msg.round"), "回放时按轮次重建分隔条");
+  assert.ok(CHAT_JS.includes("msg.round"), "导出与回放须读取轮次字段");
+});
+
+test("停止/断开路径的清理：状态点熄灭、空回复不入历史、删除会话先停止", () => {
+  assert.ok(/setStatus\(agent, false\); \/\/ abort/.test(CHAT_JS), "finally 里必须熄灭状态点");
+  assert.ok(CHAT_JS.includes("if (!buf.text && !fullText && stoppedByUser)"), "停止且无文本时移除气泡不入历史");
+  assert.ok(/deleteSession[\s\S]{0,200}if \(isStreaming\) stopGeneration\(\)/.test(CHAT_JS), "流式中删除当前会话须先停止");
+});
+
+test("关页兜底与存储溢出提示", () => {
+  assert.ok(CHAT_JS.includes('window.addEventListener("pagehide"'), "关页前须把未完成回复落盘");
+  assert.ok(CHAT_JS.includes("本地存储已满"), "存储两次失败须提示用户");
+});
+
+test("流式渲染节流：限制全量重渲染频率", () => {
+  assert.ok(CHAT_JS.includes("STREAM_FLUSH_MS"), "须有时间节流常量");
+});
+
+test("Escape 关闭 mention 弹窗后点击输入框不再强行重开", () => {
+  assert.ok(CHAT_JS.includes("mentionSuppressed"), "需要主动关闭抑制标记");
+});

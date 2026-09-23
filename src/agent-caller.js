@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { StringDecoder } from "string_decoder";
 import { AGENTS } from "./config.js";
 import { LIMITS, VALID_THINKING, VALID_MODES, MAX_OUTPUT_BYTES } from "./limits.js";
 import { activeProcs } from "./utils/process-registry.js";
@@ -19,9 +20,17 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
   const stdioMode = cli.stdio === "ignore" ? ["ignore", "pipe", "pipe"] : ["pipe", "pipe", "pipe"];
 
   const modelValue = modelOverride || agent.model || "";
+  // {prompt} 在模板中是否为位置参数（前一元素不是选项）：位置参数且 prompt 以 - 开头时
+  // 插入 "--" 终止符，防止用户消息被 CLI 当作选项解析（如 "-h"、"--verbose 你好"）
+  const promptIdx = cli.args.indexOf("{prompt}");
+  const promptIsPositional = promptIdx <= 0 || !cli.args[promptIdx - 1].startsWith("-");
   const args = [];
   for (const a of cli.args) {
-    if (a === "{prompt}") { args.push(prompt); continue; }
+    if (a === "{prompt}") {
+      if (promptIsPositional && typeof prompt === "string" && prompt.startsWith("-")) args.push("--");
+      args.push(prompt);
+      continue;
+    }
     if (a === "{model}") {
       if (modelValue) args.push(modelValue);
       // 无模型值时删掉配套的 flag：仅当前一个是选项（以 - 开头）才 pop，避免误删位置参数
@@ -61,16 +70,9 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
     let stderrText = "";
     let timedOut = false;
     let outputExceeded = false;
+    let settled = false; // spawn 失败会先 error 后 close，只允许结算一次
+    let rawBytes = 0;   // 原始输出字节：ndjson 被过滤的行也计数，防失控进程绕过输出上限
     let killTimer = null; // SIGTERM 后补 SIGKILL 的定时器（需随进程退出清理）
-
-    // 输出超过上限时截断，并杀进程防内存爆炸
-    const trackOutput = (s) => {
-      if (fullText.length + buffer.length > MAX_OUTPUT_BYTES && !outputExceeded) {
-        outputExceeded = true;
-        log(`⚠️ ${agentKey} 输出超过 ${MAX_OUTPUT_BYTES / 1024}KB，已截断并终止`);
-        try { proc.kill("SIGTERM"); } catch {}
-      }
-    };
 
     const timeoutMs = cli.timeoutMs || LIMITS.procTimeoutMs;
     const killer = setTimeout(() => {
@@ -79,6 +81,20 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
       try { proc.kill("SIGTERM"); } catch {}
       killTimer = setTimeout(() => { try { proc.kill("SIGKILL"); } catch {} }, 3000);
     }, timeoutMs);
+
+    const settle = (v) => { if (!settled) { settled = true; resolve(v); } };
+    const clearTimers = () => { clearTimeout(killer); if (killTimer) clearTimeout(killTimer); };
+
+    // 输出超过上限时截断并杀进程（按原始字节计，先计数再判断，避免滞后一个 chunk）
+    const trackOutput = (n) => {
+      rawBytes += n;
+      if (rawBytes > MAX_OUTPUT_BYTES && !outputExceeded) {
+        outputExceeded = true;
+        log(`⚠️ ${agentKey} 输出超过 ${MAX_OUTPUT_BYTES / 1024}KB，已截断并终止`);
+        try { proc.kill("SIGTERM"); } catch {}
+        killTimer = setTimeout(() => { try { proc.kill("SIGKILL"); } catch {} }, 3000);
+      }
+    };
 
     // textType / textField(s) 均支持字符串或数组（数组按序尝试）
     const textTypes = cli.textType ? [cli.textType].flat() : null;
@@ -92,16 +108,23 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
         let text = "";
         for (const f of textFields) { text = getNestedValue(evt, f); if (text) break; }
         text = text || evt.text || evt.data || "";
-        if (text) { fullText += text; onChunk(text); }
+        if (text) {
+          if (typeof text !== "string") text = JSON.stringify(text); // 结构化值转 JSON，不产出 [object Object]
+          fullText += text;
+          onChunk(text);
+        }
       } catch {
         fullText += trimmed;
         onChunk(trimmed + "\n");
       }
     };
 
+    // 增量解码：中文等多字节字符跨 chunk 边界时不会产生替换符
+    const outDecoder = new StringDecoder("utf8");
     proc.stdout.on("data", (data) => {
-      const raw = data.toString();
-      trackOutput(raw);
+      const raw = outDecoder.write(data);
+      trackOutput(data.length);
+      if (!raw) return;
       switch (cli.parseMode) {
         case "ndjson":
           buffer += raw;
@@ -125,41 +148,46 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
     });
 
     proc.on("close", () => {
-      clearTimeout(killer);
-      if (killTimer) clearTimeout(killTimer);
+      clearTimers();
       if (cli.parseMode === "ndjson" && buffer.trim()) {
         consumeNdjsonLine(buffer);
         buffer = "";
       }
+      if (settled) return; // error 事件已结算（如 ENOENT），close 不再重复输出
       if (cli.parseMode === "json-envelope") {
+        // 超时/超限截断出的半截 JSON 不能当答案返回
+        if (outputExceeded) { onChunk(`\n⚠️ 输出过长，已截断\n`); return settle(""); }
+        if (timedOut) { onChunk(`\n⚠️ ${agent.name} 响应超时（${timeoutMs / 1000}s），已截断\n`); return settle(""); }
         try {
           const evt = JSON.parse(buffer.trim());
           const text = getNestedValue(evt, cli.jsonTextField) || evt.text || "";
-          if (text) { onChunk(text); resolve(text); }
-          else { onChunk("⚠️ 未返回文本\n"); resolve(""); }
+          if (text) { onChunk(text); settle(text); }
+          else { onChunk("⚠️ 未返回文本\n"); settle(""); }
         } catch {
-          if (buffer.trim()) { onChunk(buffer); resolve(buffer); }
-          else { onChunk(`⚠️ ${agent.name} 错误: ${stderrText.slice(0, 200)}\n`); resolve(""); }
+          if (buffer.trim()) { onChunk(buffer); settle(buffer); }
+          else { onChunk(`⚠️ ${agent.name} 错误: ${stderrText.slice(0, 200)}\n`); settle(""); }
         }
       } else {
         if (outputExceeded) {
           onChunk(`\n⚠️ 输出过长，已截断\n`);
           fullText += "\n\n（输出过长已截断）";
+        } else if (timedOut && fullText) {
+          onChunk(`\n⏰ ${agent.name} 超时（${timeoutMs / 1000}s），以上为部分输出\n`);
+          fullText += "\n\n（超时截断）";
         } else if (timedOut && !fullText) {
           onChunk(`⚠️ ${agent.name} 响应超时（${timeoutMs / 1000}s）\n`);
         } else if (!fullText && stderrText) {
           onChunk(`⚠️ ${agent.name} 错误: ${stderrText.slice(0, 200)}\n`);
         }
-        resolve(fullText);
+        settle(fullText);
       }
     });
 
     proc.on("error", (err) => {
-      clearTimeout(killer);
-      if (killTimer) clearTimeout(killTimer);
+      clearTimers();
       const reason = err.code === "ENOENT" ? "CLI 未安装或不在 PATH" : err.message;
       onChunk(`⚠️ ${agent.name} 不可用（${reason}）\n`);
-      resolve("");
+      settle("");
     });
   });
 }
@@ -212,7 +240,7 @@ export function sanitizeChatRequest(body) {
   return { data: { message, targets, history, thinking, mode, models, rounds } };
 }
 
-// ===== 构建带上下文的 prompt（带长度保护） =====
+// ===== 构建带上下文的 prompt（带长度保护）=====
 export function buildPrompt(agentKey, { message, history, mode, rounds }, priorResponses) {
   const parts = [];
 
@@ -239,21 +267,33 @@ export function buildPrompt(agentKey, { message, history, mode, rounds }, priorR
     if (lines.length > 0) parts.push("以下是群聊上下文：\n\n" + lines.join("\n\n"));
   }
 
+  // 用户消息永远单独放最后：兜底截断时优先保住 persona 和用户问题
+  const messageLine = priorResponses.length > 0
+    ? `请基于以上回复，给出补充、回应或不同意见。用户消息: ${message}`
+    : `用户消息: ${message}`;
+
   if (priorResponses.length > 0) {
-    let respText = "其他 AI 已经给出了以下回复：\n\n";
-    for (const resp of priorResponses) {
+    // 从最新往回填配额：多轮×多目标时旧回复先被丢弃，而不是把用户消息截掉
+    const respLines = [];
+    let total = 0;
+    for (let i = priorResponses.length - 1; i >= 0; i--) {
+      const resp = priorResponses[i];
       const name = AGENTS[resp.agent]?.name || resp.agent;
-      respText += `[${name}]: ${resp.text.slice(0, LIMITS.historyItemMaxLen)}\n\n`;
+      const line = `[${name}]: ${resp.text.slice(0, LIMITS.historyItemMaxLen)}`;
+      if (total + line.length > LIMITS.historyTotalMaxLen) break;
+      respLines.unshift(line);
+      total += line.length;
     }
-    respText += `请基于以上回复，给出补充、回应或不同意见。用户消息: ${message}`;
-    parts.push(respText);
-  } else {
-    parts.push(`用户消息: ${message}`);
+    parts.push("其他 AI 已经给出了以下回复：\n\n" + respLines.join("\n\n"));
   }
 
-  let prompt = parts.join("\n\n");
+  let prompt = parts.length > 0 ? parts.join("\n\n") + "\n\n" + messageLine : messageLine;
   if (prompt.length > LIMITS.promptMaxLen) {
-    prompt = prompt.slice(0, LIMITS.promptMaxLen) + "\n\n（注：上下文过长已截断）";
+    // 头部超限时压缩中间节（历史/回复），仍保不住再截头，用户消息始终在尾部完整保留
+    const overflow = prompt.length - LIMITS.promptMaxLen;
+    const head = parts.length > 0 ? parts.join("\n\n") : "";
+    const trimmedHead = head.length > overflow ? head.slice(0, Math.max(0, head.length - overflow)) : head;
+    prompt = trimmedHead + "\n\n（注：上下文过长已截断）\n\n" + messageLine;
   }
   return prompt;
 }

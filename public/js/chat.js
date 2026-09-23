@@ -24,6 +24,8 @@
   let history = [];
   let isStreaming = false;
   let stoppedByUser = false;
+  let currentRound = 1;        // 多轮讨论当前轮（round 事件更新，写进 history 供恢复）
+  let currentRoundTotal = 1;   // 本轮讨论总轮数
   let thinkingMode = localStorage.getItem("tri-thinking") || "medium";
   let chatMode = localStorage.getItem("tri-mode") || "parallel";
   let rounds = Number(localStorage.getItem("tri-rounds")) || 1;
@@ -61,7 +63,7 @@
           el.onclick = () => toggleAgent(key);
           el.innerHTML = `
             <div class="agent-toggle-row">
-              <span class="agent-dot" style="background:${info.color}"></span> ${info.avatar}
+              <span class="agent-dot" style="background:${info.color}"></span> ${escapeHtml(info.avatar)}
             </div>
           `;
           el.appendChild(buildModelControl(key, info));
@@ -74,7 +76,7 @@
           el.title = `本机未安装 ${info.name} 的 CLI，点击安装`;
           el.innerHTML = `
             <div class="agent-toggle-row">
-              <span class="agent-dot"></span> ${info.avatar}
+              <span class="agent-dot"></span> ${escapeHtml(info.avatar)}
             </div>
             <div class="model-badge missing">未安装 ⬇</div>
           `;
@@ -97,7 +99,7 @@
           const item = document.createElement("div");
           item.className = "status-item";
           item.id = `status-${key}`;
-          item.innerHTML = `<span class="dot" style="background:${info.color};"></span> ${info.name}`;
+          item.innerHTML = `<span class="dot" style="background:${info.color};"></span> ${escapeHtml(info.name)}`;
           statusBar.appendChild(item);
         }
       }
@@ -184,14 +186,23 @@
     } catch { return []; }
   })();
   let currentSessionId = null;
+  let storageWarned = false;
 
   function saveSessions() {
     try {
       localStorage.setItem("tri-sessions", JSON.stringify(sessions));
+      storageWarned = false;
     } catch (e) {
       // localStorage 满了：淘汰最旧的一半再试一次
       sessions = sessions.slice(0, Math.ceil(sessions.length / 2));
-      try { localStorage.setItem("tri-sessions", JSON.stringify(sessions)); } catch {}
+      try { localStorage.setItem("tri-sessions", JSON.stringify(sessions)); }
+      catch {
+        // 两次都失败：提示一次（flag 防刷屏），不再静默吞掉
+        if (!storageWarned) {
+          storageWarned = true;
+          addSystemMessage("⚠️ 本地存储已满，最早的会话可能无法保存；建议导出或删除旧会话");
+        }
+      }
     }
   }
 
@@ -223,12 +234,19 @@
   }
 
   // 按当前 history 重绘整个消息区（加载会话 / 重新生成共用；markdown 正常渲染）
+  // agent 消息带 round 字段时重建「第 n / t 轮」分隔条（旧会话无该字段则不显示）
   function renderHistoryMessages() {
     document.getElementById("messages").innerHTML = "";
+    let lastRound = 1;
     for (const msg of history) {
       if (!msg.agent || msg.agent === "user") {
+        lastRound = 1; // 新一轮用户提问，轮次重新从 1 计
         addMessage("user", escapeHtml(msg.text), null, false);
       } else {
+        if (msg.round && msg.round !== lastRound) {
+          addRoundDivider(msg.round, msg.roundsTotal || msg.round);
+          lastRound = msg.round;
+        }
         const bodyEl = addMessage(msg.agent, "", null, false);
         bodyEl.innerHTML = renderMarkdown(msg.text);
         highlightBlocks(bodyEl);
@@ -254,6 +272,8 @@
   function deleteSession(id) {
     sessions = sessions.filter(s => s.id !== id);
     if (currentSessionId === id) {
+      // 流式中删除当前会话：先停止，避免后续回复凭空生成孤儿会话
+      if (isStreaming) stopGeneration();
       currentSessionId = null;
       history = [];
       document.getElementById("messages").innerHTML = "";
@@ -279,11 +299,18 @@
     `).join("");
   }
 
-  // 导出当前会话为 Markdown 文件
+  // 导出当前会话为 Markdown 文件（agent 消息带轮次时输出轮次标题）
   function exportSession() {
     if (history.length === 0) { addSystemMessage("暂无对话内容可导出"); return; }
     const lines = ["# AI 群聊记录", "", `导出时间：${new Date().toLocaleString("zh-CN")}`, ""];
+    let lastRound = 1;
     for (const msg of history) {
+      if (!msg.agent || msg.agent === "user") {
+        lastRound = 1;
+      } else if (msg.round && msg.round !== lastRound) {
+        lines.push(`### 第 ${msg.round} / ${msg.roundsTotal || msg.round} 轮`, "");
+        lastRound = msg.round;
+      }
       lines.push(`## ${msg.sender}`, "", msg.text || "", "");
     }
     const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
@@ -331,21 +358,29 @@
   function changeRounds(v) { rounds = Number(v) || 1; localStorage.setItem("tri-rounds", String(rounds)); }
   function autoResize(t) { t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 100) + "px"; }
   function formatTime() { return new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }); }
-  function escapeHtml(text) { const div = document.createElement("div"); div.textContent = text; return div.innerHTML; }
+  function escapeHtml(text) { const div = document.createElement("div"); div.textContent = text; return div.innerHTML.replace(/"/g, "&quot;"); }
 
-  // ===== @mention 解析（负向预测：支持中英文标点/换行/结尾） =====
+  // ===== @mention 解析（左边界防 a@pi.example 误匹配；保留换行/缩进原文）=====
   function parseMentions(text) {
     const mentions = [];
     // 按长度降序，避免短 key 优先误匹配（如 open vs opencode）
     const agentKeys = Object.keys(AGENT_INFO).filter(k => k !== "user").sort((a, b) => b.length - a.length);
     if (agentKeys.length === 0) return { cleaned: text.trim(), targets: [] };
-    // key 需转义后再拼正则，避免含特殊字符（如 . + ）时匹配错乱
+    // key 需转义后再拼正则，避免含特殊字符（如 . + ）时匹配错乱；
+    // 左侧 lookbehind 排除紧贴字母/数字/下划线/@ 的 @（邮箱、代码）；
+    // 右侧只吞一个空格，其余空白（空行、缩进）原样保留给 AI
     const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const pattern = new RegExp(`@(${agentKeys.map(escRe).join("|")}|all)(?![a-z0-9_-])`, "gi");
+    let pattern;
+    try {
+      pattern = new RegExp(`(?<![a-z0-9_@])@(${agentKeys.map(escRe).join("|")}|all)(?![a-z0-9_-])[ \\t]?`, "gi");
+    } catch {
+      // 老引擎不支持 lookbehind：退化为无左边界的版本（仍不折叠空白）
+      pattern = new RegExp(`@(${agentKeys.map(escRe).join("|")}|all)(?![a-z0-9_-])[ \\t]?`, "gi");
+    }
     const cleaned = text.replace(pattern, (m, name) => {
       mentions.push(name.toLowerCase());
       return "";
-    }).replace(/\s{2,}/g, " ").trim();
+    }).trim();
     let targets;
     if (mentions.length === 0 || mentions.includes("all")) {
       targets = Array.from(selectedAgents);
@@ -359,8 +394,10 @@
   // ===== @mention 自动补全 =====
   const mentionPopup = document.getElementById("mention-popup");
   let mentionState = { open: false, items: [], index: 0, start: 0 };
+  let mentionSuppressed = false; // 用户按 Escape 主动关闭后，点击输入框不再强行重开
 
   function updateMentionPopup() {
+    if (mentionSuppressed) return; // 重新键入（input 事件）才会解除抑制
     const ta = document.getElementById("input");
     const pos = ta.selectionStart;
     const before = ta.value.slice(0, pos);
@@ -382,13 +419,14 @@
   function renderMentionPopup() {
     mentionPopup.innerHTML = mentionState.items.map((key, i) => {
       const info = key === "all"
-        ? { color: "var(--text-dim)", name: "all", role: "发给全部" }
+        ? { color: "var(--text-dim)", name: "all", role: "发给全部已启用" }
         : AGENT_INFO[key];
       const color = key === "all" ? "#71717a" : (info.color || "#71717a");
-      return `<div class="mention-item ${i === mentionState.index ? "selected" : ""}" data-key="${key}">
+      const missing = key !== "all" && info.available === false;
+      return `<div class="mention-item ${i === mentionState.index ? "selected" : ""}${missing ? " missing" : ""}" data-key="${escapeHtml(key)}">
         <span class="m-dot" style="background:${color}"></span>
-        <span class="m-name">@${key}</span>
-        <span class="m-role">${info.role || ""}</span>
+        <span class="m-name">@${escapeHtml(key)}</span>
+        <span class="m-role">${escapeHtml(info.role || "")}${missing ? " · 未安装" : ""}</span>
       </div>`;
     }).join("");
     mentionPopup.querySelectorAll(".mention-item").forEach(el => {
@@ -415,12 +453,14 @@
   }
 
   function handleKey(e) {
+    // 中文输入法组词期（Enter 上屏/方向键选词）不触发发送与弹窗操作
+    if (e.isComposing || e.keyCode === 229) return;
     // mention 弹窗优先处理按键
     if (mentionState.open) {
       if (e.key === "ArrowDown") { e.preventDefault(); mentionState.index = (mentionState.index + 1) % mentionState.items.length; renderMentionPopup(); return; }
       if (e.key === "ArrowUp") { e.preventDefault(); mentionState.index = (mentionState.index - 1 + mentionState.items.length) % mentionState.items.length; renderMentionPopup(); return; }
       if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); applyMention(mentionState.items[mentionState.index]); return; }
-      if (e.key === "Escape") { e.preventDefault(); closeMention(); return; }
+      if (e.key === "Escape") { e.preventDefault(); closeMention(); mentionSuppressed = true; return; }
     }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   }
@@ -436,18 +476,18 @@
       const color = a.color || "var(--text-dim)";
       const missing = a.available === false;
       return `<div class="agent-card${missing ? " missing" : ""}">
-        <div class="agent-icon" style="background:${hexToRgba(color, 0.08)};color:${color};border:1px solid ${color};">${a.avatar || "?"}</div>
-        <span class="agent-name">${a.name || key}${missing ? " · 未安装" : ""}</span>
-        <span class="agent-role">${a.role || ""}</span>
+        <div class="agent-icon" style="background:${hexToRgba(color, 0.08)};color:${color};border:1px solid ${color};">${escapeHtml(a.avatar || "?")}</div>
+        <span class="agent-name">${escapeHtml(a.name || key)}${missing ? " · 未安装" : ""}</span>
+        <span class="agent-role">${escapeHtml(a.role || "")}</span>
       </div>`;
     }).join("");
-    const mentionHint = availableKeys.map(k => `<code>@${k}</code>`).join(" ") || "<code>（暂无可用）</code>";
+    const mentionHint = availableKeys.map(k => `<code>@${escapeHtml(k)}</code>`).join(" ") || "<code>（暂无可用）</code>";
     const noAgentHint = availableKeys.length === 0
       ? `<div class="welcome-warn">⚠️ 本机未检测到任何可用的 AI CLI。<br>去控制台 <a href="/">「快捷安装」</a> 一键装上 Codex / Claude Code / Gemini 等 CLI 后再来。</div>`
       : "";
     m.innerHTML = `<div id="welcome">
       <h2>AI 群聊</h2>
-      <p>输入消息，所有 AI 会在同一个聊天里回复。<br>用 ${mentionHint} 定向发言，<code>@all</code> 发给全部。</p>
+      <p>输入消息，所有 AI 会在同一个聊天里回复。<br>用 ${mentionHint} 定向发言，<code>@all</code> 发给全部已启用的 AI。</p>
       ${noAgentHint}
       <div class="agents">${cards}</div>
     </div>`;
@@ -462,13 +502,14 @@
     const messagesEl = document.getElementById("messages");
     const msgEl = document.createElement("div");
     msgEl.className = `msg ${agent}`;
-    const modelTag = model ? `<span class="msg-model">${model}</span>` : "";
+    // name/role/avatar/model 均来自 agents.config.json（成员面板可自由编辑），必须转义防存储型 XSS
+    const modelTag = model ? `<span class="msg-model">${escapeHtml(shortModel(model))}</span>` : "";
     msgEl.innerHTML = `
-      <div class="msg-avatar" style="background:${bgColor};color:${color};border:1px solid ${color};">${info.avatar}</div>
+      <div class="msg-avatar" style="background:${bgColor};color:${color};border:1px solid ${color};">${escapeHtml(info.avatar)}</div>
       <div class="msg-content">
         <div class="msg-header">
-          <span class="msg-name" style="color:${color};">${info.name}</span>
-          ${info.role ? `<span class="msg-role">${info.role}</span>` : ""}
+          <span class="msg-name" style="color:${color};">${escapeHtml(info.name)}</span>
+          ${info.role ? `<span class="msg-role">${escapeHtml(info.role)}</span>` : ""}
           ${modelTag}
           <span class="msg-time">${formatTime()}</span>
         </div>
@@ -514,11 +555,16 @@
     });
   }
 
-  // ===== rAF 节流渲染 =====
+  // ===== 流式渲染节流 =====
+  // 整体重设 innerHTML 会丢失已高亮状态，长回复下每帧全量 marked+hljs 会卡顿；
+  // 限制重渲染频率为最低 120ms 一次，流畅度不受影响
+  const STREAM_FLUSH_MS = 120;
+
   function flushRender(agent) {
     const buf = streamBuffers[agent];
     if (!buf || !buf.dirty) return;
     buf.dirty = false;
+    buf.lastFlush = Date.now();
     buf.bodyEl.innerHTML = renderMarkdown(buf.text || "") + '<span class="cursor"></span>';
     // 高亮已闭合的代码块
     const fenceCount = (buf.text.match(/```/g) || []).length;
@@ -538,7 +584,7 @@
   function getOrCreateStreamBody(agent, model) {
     if (streamBuffers[agent]?.bodyEl) return streamBuffers[agent].bodyEl;
     const bodyEl = addMessage(agent, "", model, false);
-    streamBuffers[agent] = { bodyEl, text: "", thinking: true, dirty: false, rafId: null, startTime: Date.now() };
+    streamBuffers[agent] = { bodyEl, text: "", thinking: true, dirty: false, rafId: null, lastFlush: 0, startTime: Date.now() };
     bodyEl.innerHTML = '<div class="thinking-dots"><span></span><span></span><span></span></div>';
     return bodyEl;
   }
@@ -550,13 +596,21 @@
     buf.text += chunk;
     buf.dirty = true;
     if (buf.rafId) return;
-    buf.rafId = requestAnimationFrame(() => { buf.rafId = null; flushRender(agent); });
+    // rafId 持有的是节流定时器：距上次渲染不足 120ms 时延迟补齐
+    const wait = buf.lastFlush ? Math.max(0, buf.lastFlush + STREAM_FLUSH_MS - Date.now()) : 0;
+    buf.rafId = setTimeout(() => { buf.rafId = null; flushRender(agent); }, wait);
   }
 
   function finalizeStream(agent, fullText) {
     const buf = streamBuffers[agent];
     if (!buf) return;
-    if (buf.rafId) { cancelAnimationFrame(buf.rafId); buf.rafId = null; }
+    if (buf.rafId) { clearTimeout(buf.rafId); buf.rafId = null; }
+    // 停止时一个字都没吐出的 agent：移除气泡、不入历史，不伪装成「无回复」
+    if (!buf.text && !fullText && stoppedByUser) {
+      buf.bodyEl.closest(".msg")?.remove();
+      delete streamBuffers[agent];
+      return;
+    }
     let finalText = buf.text || fullText || "(无回复)";
     if (stoppedByUser && buf.text) finalText += "\n\n*(已停止)*";
     buf.bodyEl.innerHTML = renderMarkdown(finalText);
@@ -575,7 +629,10 @@
     }
 
     const info = AGENT_INFO[agent] || {};
-    history.push({ sender: info.name || agent, text: finalText, agent });
+    // 记录轮次（多轮讨论重载/导出时可重建分隔条；单轮时 round=1 不落字段，兼容旧会话）
+    const entry = { sender: info.name || agent, text: finalText, agent };
+    if (currentRound > 1) { entry.round = currentRound; entry.roundsTotal = currentRoundTotal; }
+    history.push(entry);
     delete streamBuffers[agent];
     // 每个 agent 完成即保存一次会话，防止中途关页面丢失
     saveCurrentSession();
@@ -676,6 +733,8 @@
 
     isStreaming = true;
     stoppedByUser = false;
+    currentRound = 1;
+    currentRoundTotal = rounds;
     document.getElementById("send").disabled = true;
     document.getElementById("stop").classList.add("visible");
     updateRegenButton();
@@ -737,6 +796,7 @@
         const buf = streamBuffers[agent];
         // 切换/新建会话会 abort 流并先替换 history：已脱离文档的流块不能再写进当前会话
         if (buf && !buf.bodyEl.isConnected) { delete streamBuffers[agent]; continue; }
+        setStatus(agent, false); // abort 后 done 不会到达，状态点在此统一熄灭
         finalizeStream(agent, "");
       }
       saveCurrentSession();
@@ -758,6 +818,8 @@
         setStatus(data.agent, false);
         break;
       case "round":
+        currentRound = data.round;
+        currentRoundTotal = data.total;
         addRoundDivider(data.round, data.total);
         break;
       case "error":
@@ -767,10 +829,22 @@
     }
   }
 
+  // 关页/刷新前把未完成的流式回复落盘（标记「已停止」），防止中途关页全丢
+  window.addEventListener("pagehide", () => {
+    if (!isStreaming) return;
+    stoppedByUser = true;
+    for (const agent of Object.keys(streamBuffers)) {
+      const buf = streamBuffers[agent];
+      if (!buf || !buf.bodyEl.isConnected) { if (buf) delete streamBuffers[agent]; continue; }
+      finalizeStream(agent, "");
+    }
+    saveCurrentSession();
+  });
+
   // ===== 初始化 =====
   const inputEl = document.getElementById("input");
   inputEl.addEventListener("keydown", handleKey);
-  inputEl.addEventListener("input", () => { autoResize(inputEl); updateMentionPopup(); });
+  inputEl.addEventListener("input", () => { autoResize(inputEl); mentionSuppressed = false; updateMentionPopup(); });
   inputEl.addEventListener("click", updateMentionPopup);
   document.addEventListener("click", (e) => {
     if (!mentionPopup.contains(e.target) && e.target !== inputEl) closeMention();

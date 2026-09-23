@@ -68,7 +68,12 @@ export default function apiRoutes(app) {
     const cleanup = () => {
       clientClosed = true;
       clearInterval(heartbeat);
-      procs.forEach((p) => { try { p.kill("SIGTERM"); } catch {} });
+      for (const p of procs) {
+        try { p.kill("SIGTERM"); } catch {}
+        // 忽略 SIGTERM 的 CLI 3 秒后升级 SIGKILL，别让 handler 挂到原始超时
+        const t = setTimeout(() => { try { p.kill("SIGKILL"); } catch {} }, 3000);
+        t.unref?.();
+      }
       log("🔌 客户端断开，已终止本次请求的子进程");
     };
     res.on("close", cleanup);
@@ -95,8 +100,11 @@ export default function apiRoutes(app) {
               flush("chunk", { agent: target, chunk });
             }, thinking, procs, models[target]);
             flush("done", { agent: target, text: fullText });
-            priorResponses.push({ agent: target, text: fullText });
-            allResponses.push({ agent: target, text: fullText });
+            // 空回复/错误提示（⚠️ 开头）不进入后续轮次的讨论上下文
+            if (fullText && fullText.trim() && !fullText.trim().startsWith("⚠️")) {
+              priorResponses.push({ agent: target, text: fullText });
+              allResponses.push({ agent: target, text: fullText });
+            }
           } catch (err) {
             flush("error", { agent: target, error: err.message });
           }
@@ -111,7 +119,9 @@ export default function apiRoutes(app) {
               flush("chunk", { agent: target, chunk });
             }, thinking, procs, models[target]);
             flush("done", { agent: target, text: fullText });
-            allResponses.push({ agent: target, text: fullText });
+            if (fullText && fullText.trim() && !fullText.trim().startsWith("⚠️")) {
+              allResponses.push({ agent: target, text: fullText });
+            }
           } catch (err) {
             flush("error", { agent: target, error: err.message });
           }
