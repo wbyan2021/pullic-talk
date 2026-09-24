@@ -175,3 +175,16 @@ test("控制台↔快捷安装目录对齐：扫描器已知工具都有安装�
   }
   assert.deepEqual(missing, [], `控制台有但快捷安装缺失的条目: ${missing.join(", ")}`);
 });
+
+test("集中管理筛选条：已安装/可更新视图与空态提示的静态合约", () => {
+  const html = readFileSync(join(ROOT, "public/index.html"), "utf8");
+  assert.ok(html.includes('id="inst-filter"'), "index.html 须挂载筛选条容器");
+  const js = readFileSync(join(ROOT, "public/js/index.js"), "utf8");
+  assert.ok(js.includes("function visibleInstallEntry"), "须有筛选可见性判断");
+  assert.ok(js.includes('"installed"') && js.includes('"updates"') && js.includes('"missing"'), "筛选须覆盖已安装/可更新/未安装");
+  assert.ok(js.includes("renderInstallFilter"), "须渲染筛选条");
+  assert.ok(js.includes("没有需要更新的工具"), "可更新为空时给明确反馈");
+  assert.ok(/renderInstallGrid[\s\S]{0,400}visibleInstallEntry/.test(js), "分组渲染必须走筛选");
+  const css = readFileSync(join(ROOT, "public/css/index.css"), "utf8");
+  assert.ok(css.includes(".ifchip") && css.includes(".ifchip.active"), "筛选 chips 样式存在");
+});

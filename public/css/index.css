@@ -316,6 +316,17 @@ button { font-family: inherit; cursor:pointer; border:none; background:none; col
   background:var(--bg-2); border:1px solid var(--line);
   border-radius:12px; padding:12px 16px; margin-bottom:18px;
 }
+
+/* 集中管理筛选条：全部 / 已安装 / 可更新 / 未安装 */
+#inst-filter { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.ifchip {
+  font-size:12.5px; font-weight:600; color:var(--dim);
+  background:var(--bg-2); border:1px solid var(--line);
+  padding:6px 14px; border-radius:999px;
+}
+.ifchip:hover { color:var(--text); border-color:var(--line-2); }
+.ifchip.active { color:#0a0c10; background:var(--accent); border-color:var(--accent); }
+.inst-empty { padding:40px 0; text-align:center; color:var(--faint); font-size:13px; }
 .schip-tt { font-size:12.5px; font-weight:600; color:var(--dim); margin-right:6px; letter-spacing:.03em; }
 .schip {
   display:inline-flex; align-items:center; gap:6px;

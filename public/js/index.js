@@ -182,6 +182,36 @@ function switchView(v){
 /* ---------- 快捷安装 ---------- */
 let installEntries = [];
 let updateMap = new Map(); // id -> { installed, version, updateAvailable, latest }
+let installFilter = "all"; // all | installed | updates | missing
+
+// 当前筛选下条目是否可见（「已安装」即集中管理视图：更新/卸载都在一个列表）
+function visibleInstallEntry(e){
+  if (installFilter === "installed") return e.installed;
+  if (installFilter === "updates") return e.installed && !!(updateMap.get(e.id) && updateMap.get(e.id).updateAvailable);
+  if (installFilter === "missing") return !e.installed;
+  return true;
+}
+
+function renderInstallFilter(){
+  const wrap = $("#inst-filter");
+  if (!wrap) return;
+  const installed = installEntries.filter(e=>e.installed);
+  const updates = installed.filter(e=>updateMap.get(e.id) && updateMap.get(e.id).updateAvailable);
+  const chips = [
+    ["all", "全部", installEntries.length],
+    ["installed", "已安装", installed.length],
+    ["updates", "可更新", updates.length],
+    ["missing", "未安装", installEntries.length - installed.length],
+  ];
+  wrap.innerHTML = "";
+  for (const [key, label, count] of chips){
+    const c = document.createElement("button");
+    c.className = "ifchip" + (installFilter === key ? " active" : "");
+    c.textContent = `${label} ${count}`;
+    c.onclick = () => { installFilter = key; renderInstallFilter(); renderInstallGrid(); };
+    wrap.appendChild(c);
+  }
+}
 
 async function loadInstallCatalog(){
   try {
@@ -190,6 +220,7 @@ async function loadInstallCatalog(){
     installEntries = d.entries || [];
     $("#brew-warn").style.display = d.brewAvailable ? "none" : "block";
     renderStarter(d.starter);
+    renderInstallFilter();
     renderInstallGrid();
     loadUpdates();
   } catch(e){ toast("加载安装目录失败: "+e.message, true); }
@@ -200,6 +231,7 @@ async function loadUpdates(){
     const r = await OPS.api("/api/install/updates");
     const d = await r.json();
     updateMap = new Map((d.entries || []).map(e => [e.id, e]));
+    renderInstallFilter();
     renderInstallGrid();
   } catch(e){ /* 扫描失败不阻塞安装页，卡片退回「已安装」态 */ }
 }
@@ -230,15 +262,23 @@ function renderStarter(ids){
 function renderInstallGrid(){
   const wrap = $("#install-grid");
   wrap.innerHTML = "";
+  let shown = 0;
   for (const [group, title] of Object.entries(INST_GROUPS)){
-    const items = installEntries.filter(e=>e.group===group);
+    const items = installEntries.filter(e=>e.group===group && visibleInstallEntry(e));
     if (!items.length) continue;
+    shown += items.length;
     const sec = document.createElement("div");
     sec.className = "inst-section";
     sec.innerHTML = `<div class="inst-sec-tt">${title}</div><div class="inst-cards"></div>`;
     const cards = $(".inst-cards", sec);
     for (const e of items) cards.appendChild(installCard(e));
     wrap.appendChild(sec);
+  }
+  if (!shown){
+    const empty = document.createElement("div");
+    empty.className = "inst-empty";
+    empty.textContent = installFilter === "updates" ? "✓ 没有需要更新的工具" : "该筛选下暂无条目";
+    wrap.appendChild(empty);
   }
 }
 
