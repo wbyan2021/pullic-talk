@@ -21,6 +21,8 @@
   // ===== 全局状态 =====
   const AGENT_INFO = { user: { name: "你", role: "", avatar: "你" } };
   const selectedAgents = new Set();
+  // 固定发言顺序（协作模式按此顺序依次发言；拖动顶栏成员卡片调整，localStorage 持久化）
+  let agentOrder = [];
   let history = [];
   let isStreaming = false;
   let stoppedByUser = false;
@@ -43,59 +45,30 @@
     try {
       const res = await OPS.api("/api/models");
       const agents = await res.json();
-      const container = document.getElementById("agent-toggles");
-      container.innerHTML = "";
-      selectedAgents.clear();
 
+      // 注册 agent 信息（含可用性：换电脑后本机没装的 CLI 会 available=false）
       for (const [key, info] of Object.entries(agents)) {
-        const bgColor = hexToRgba(info.color, 0.08);
-
-        // 注册 agent 信息（含可用性：换电脑后本机没装的 CLI 会 available=false）
         AGENT_INFO[key] = { name: info.name, role: info.role, avatar: info.avatar, model: info.model, color: info.color, available: info.available, installId: info.installId };
-
-        // 创建 toggle 按钮
-        const el = document.createElement("div");
-        el.dataset.agent = key;
-
-        if (info.available) {
-          selectedAgents.add(key);
-          el.className = "agent-toggle active";
-          el.onclick = () => toggleAgent(key);
-          el.innerHTML = `
-            <div class="agent-toggle-row">
-              <span class="agent-dot" style="background:${info.color}"></span> ${escapeHtml(info.avatar)}
-            </div>
-          `;
-          el.appendChild(buildModelControl(key, info));
-          el.style.borderColor = info.color;
-          el.style.color = info.color;
-          el.style.background = bgColor;
-        } else {
-          // 未安装：灰显 + 点击一键安装（或提示手动安装）
-          el.className = "agent-toggle unavailable";
-          el.title = `本机未安装 ${info.name} 的 CLI，点击安装`;
-          el.innerHTML = `
-            <div class="agent-toggle-row">
-              <span class="agent-dot"></span> ${escapeHtml(info.avatar)}
-            </div>
-            <div class="model-badge missing">未安装 ⬇</div>
-          `;
-          el.onclick = () => installAgent(key, info);
-        }
-        container.appendChild(el);
       }
+      normalizeAgentOrder();
+      selectedAgents.clear();
+      for (const key of agentOrder) {
+        if (AGENT_INFO[key] && AGENT_INFO[key].available !== false) selectedAgents.add(key);
+      }
+      renderAgentToggles();
 
       // logo 显示可用 agent 数量
       const n = [...Object.values(AGENT_INFO)].filter(a => a.available !== false && a.name !== "你").length;
       document.getElementById("logo-text").textContent = `🤖 AI 群聊 × ${n}`;
       document.title = `AI 群聊 × ${n}`;
 
-      // 状态栏只列可用 agent
+      // 状态栏按发言顺序只列可用 agent
       const statusBar = document.getElementById("status-bar");
       if (statusBar) {
         statusBar.innerHTML = "";
-        for (const [key, info] of Object.entries(agents)) {
-          if (!info.available) continue;
+        for (const key of agentOrder) {
+          const info = AGENT_INFO[key];
+          if (!info || info.available === false) continue;
           const item = document.createElement("div");
           item.className = "status-item";
           item.id = `status-${key}`;
@@ -110,6 +83,95 @@
       console.error("加载 agent 失败:", e);
       addSystemMessage("⚠️ 无法连接服务器，请确认 npm start 已启动后刷新页面");
     }
+  }
+
+  // 固定发言顺序：读取本地保存的顺序，过滤失效成员，新成员按配置顺序追加到末尾
+  function normalizeAgentOrder() {
+    const keys = Object.keys(AGENT_INFO).filter(k => k !== "user");
+    let saved = [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem("tri-agent-order") || "[]");
+      if (Array.isArray(parsed)) saved = parsed.filter(k => typeof k === "string" && keys.includes(k));
+    } catch {}
+    for (const k of keys) if (!saved.includes(k)) saved.push(k);
+    agentOrder = saved;
+    try { localStorage.setItem("tri-agent-order", JSON.stringify(agentOrder)); } catch {}
+  }
+
+  // 顶栏成员卡片：可用成员按 agentOrder 渲染（可拖拽排序），未安装的灰显排在后面
+  function renderAgentToggles() {
+    const container = document.getElementById("agent-toggles");
+    container.innerHTML = "";
+    const avail = agentOrder.filter(k => AGENT_INFO[k] && AGENT_INFO[k].available !== false);
+    const unavail = Object.keys(AGENT_INFO).filter(k => k !== "user" && !avail.includes(k));
+
+    // 选中成员的发言序号（协作模式下显示）
+    const positions = new Map();
+    let pos = 0;
+    for (const k of avail) if (selectedAgents.has(k)) positions.set(k, ++pos);
+
+    for (const key of avail) {
+      const info = AGENT_INFO[key];
+      const el = document.createElement("div");
+      el.dataset.agent = key;
+      el.className = "agent-toggle active";
+      el.title = "点击启用/停用；拖动调整发言顺序（协作模式按序发言）";
+      el.onclick = () => toggleAgent(key);
+      el.innerHTML = `
+        <div class="agent-toggle-row">
+          <span class="agent-dot" style="background:${info.color}"></span> ${escapeHtml(info.avatar)}
+        </div>
+      `;
+      el.appendChild(buildModelControl(key, info));
+      if (positions.has(key)) {
+        const badge = document.createElement("span");
+        badge.className = "agent-order-badge";
+        badge.textContent = String(positions.get(key));
+        el.appendChild(badge);
+      }
+      el.style.borderColor = info.color;
+      el.style.color = info.color;
+      el.style.background = hexToRgba(info.color, 0.08);
+      el.draggable = true;
+      el.addEventListener("dragstart", (e) => {
+        el.classList.add("dragging");
+        try { e.dataTransfer.setData("text/plain", key); } catch {}
+      });
+      el.addEventListener("dragend", () => {
+        el.classList.remove("dragging");
+        persistDomOrder();
+        renderAgentToggles();
+      });
+      container.appendChild(el);
+    }
+
+    for (const key of unavail) {
+      const info = AGENT_INFO[key];
+      const el = document.createElement("div");
+      el.dataset.agent = key;
+      // 未安装：灰显 + 点击一键安装（或提示手动安装）
+      el.className = "agent-toggle unavailable";
+      el.title = `本机未安装 ${info.name} 的 CLI，点击安装`;
+      el.innerHTML = `
+        <div class="agent-toggle-row">
+          <span class="agent-dot"></span> ${escapeHtml(info.avatar)}
+        </div>
+        <div class="model-badge missing">未安装 ⬇</div>
+      `;
+      el.onclick = () => installAgent(key, info);
+      container.appendChild(el);
+    }
+
+    container.classList.toggle("show-order", chatMode === "collaborate");
+  }
+
+  // 拖拽结束后按 DOM 顺序固化 agentOrder（未安装成员保持在末尾）
+  function persistDomOrder() {
+    const keys = [...document.querySelectorAll("#agent-toggles .agent-toggle[data-agent]")].map(el => el.dataset.agent);
+    const avail = keys.filter(k => AGENT_INFO[k] && AGENT_INFO[k].available !== false);
+    const rest = agentOrder.filter(k => !avail.includes(k));
+    agentOrder = [...avail, ...rest];
+    try { localStorage.setItem("tri-agent-order", JSON.stringify(agentOrder)); } catch {}
   }
 
   // 未安装 agent 的一键安装入口
@@ -157,24 +219,10 @@
   }
 
   function toggleAgent(agent) {
-    const el = document.querySelector(`.agent-toggle[data-agent="${agent}"]`);
-    if (!el) return;
-    if (selectedAgents.has(agent)) {
-      selectedAgents.delete(agent);
-      el.classList.remove("active");
-      el.style.borderColor = "";
-      el.style.color = "";
-      el.style.background = "";
-    } else {
-      selectedAgents.add(agent);
-      el.classList.add("active");
-      const info = AGENT_INFO[agent];
-      if (info) {
-        el.style.borderColor = info.color;
-        el.style.color = info.color;
-        el.style.background = hexToRgba(info.color, 0.08);
-      }
-    }
+    if (selectedAgents.has(agent)) selectedAgents.delete(agent);
+    else selectedAgents.add(agent);
+    // 重绘以更新发言序号徽标与选中样式
+    renderAgentToggles();
   }
 
   // ===== 会话管理 =====
@@ -354,7 +402,12 @@
   }
 
   function changeThinking(mode) { thinkingMode = mode; localStorage.setItem("tri-thinking", mode); }
-  function changeMode(mode) { chatMode = mode; localStorage.setItem("tri-mode", mode); }
+  function changeMode(mode) {
+    chatMode = mode; localStorage.setItem("tri-mode", mode);
+    // 协作模式显示发言序号徽标
+    const container = document.getElementById("agent-toggles");
+    if (container) container.classList.toggle("show-order", chatMode === "collaborate");
+  }
   function changeRounds(v) { rounds = Number(v) || 1; localStorage.setItem("tri-rounds", String(rounds)); }
   function autoResize(t) { t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 100) + "px"; }
   function formatTime() { return new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }); }
@@ -381,12 +434,14 @@
       mentions.push(name.toLowerCase());
       return "";
     }).trim();
+    // 目标一律按固定发言顺序输出：协作模式下即实际发言顺序，与 @ 书写顺序无关
+    const order = agentOrder.length ? agentOrder : Object.keys(AGENT_INFO).filter(k => k !== "user");
     let targets;
     if (mentions.length === 0 || mentions.includes("all")) {
-      targets = Array.from(selectedAgents);
+      targets = order.filter(k => selectedAgents.has(k));
     } else {
-      // 只保留本机可用的 agent（@了未安装的直接忽略）
-      targets = [...new Set(mentions)].filter(m => AGENT_INFO[m] && AGENT_INFO[m].available !== false);
+      const mentioned = [...new Set(mentions)].filter(m => AGENT_INFO[m] && AGENT_INFO[m].available !== false);
+      targets = order.filter(k => mentioned.includes(k));
     }
     return { cleaned, targets };
   }
@@ -404,7 +459,7 @@
     const m = before.match(/@([a-z0-9_-]*)$/i);
     if (!m) { closeMention(); return; }
     const partial = m[1].toLowerCase();
-    const all = ["all", ...Object.keys(AGENT_INFO).filter(k => k !== "user")];
+    const all = ["all", ...(agentOrder.length ? agentOrder : Object.keys(AGENT_INFO).filter(k => k !== "user"))];
     const items = all.filter(k => k.toLowerCase().startsWith(partial) && k.toLowerCase() !== partial);
     if (items.length === 0) { closeMention(); return; }
     mentionState = { open: true, items, index: 0, start: pos - m[0].length };
@@ -846,6 +901,23 @@
   inputEl.addEventListener("keydown", handleKey);
   inputEl.addEventListener("input", () => { autoResize(inputEl); mentionSuppressed = false; updateMentionPopup(); });
   inputEl.addEventListener("click", updateMentionPopup);
+
+  // 顶栏成员卡片拖拽排序：dragover 时直接移动 DOM 节点，dragend 固化顺序
+  const togglesEl = document.getElementById("agent-toggles");
+  togglesEl.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    const dragged = togglesEl.querySelector(".agent-toggle.dragging");
+    if (!dragged) return;
+    const chips = [...togglesEl.querySelectorAll(".agent-toggle:not(.dragging)")];
+    const after = chips.find(chip => {
+      const r = chip.getBoundingClientRect();
+      return e.clientX < r.left + r.width / 2;
+    });
+    const firstUnavailable = togglesEl.querySelector(".agent-toggle.unavailable");
+    if (after) togglesEl.insertBefore(dragged, after);
+    else if (firstUnavailable) togglesEl.insertBefore(dragged, firstUnavailable);
+    else togglesEl.appendChild(dragged);
+  });
   document.addEventListener("click", (e) => {
     if (!mentionPopup.contains(e.target) && e.target !== inputEl) closeMention();
   });

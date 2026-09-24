@@ -97,11 +97,13 @@ async function flush(rounds = 25) {
   }
 }
 
-// 加载 chat.js：models 控制 /api/models 返回；chatReplays 依次提供每次 /api/chat 的 SSE 事件
-async function loadChatUi(models, chatReplays) {
+// 加载 chat.js：models 控制 /api/models 返回；chatReplays 依次提供每次 /api/chat 的 SSE 事件；
+// initialStorage 可预置 localStorage 键值（如固定发言顺序 tri-agent-order）
+async function loadChatUi(models, chatReplays, initialStorage) {
   const source = await readFile(SCRIPT_PATH, "utf8");
   const elements = Object.fromEntries(ELEMENT_IDS.map((id) => [id, makeElement()]));
   const storage = makeStorage();
+  for (const [k, v] of Object.entries(initialStorage || {})) storage.setItem(k, v);
   const requests = []; // { json, regenVisibleDuringCall }
   let replayIndex = 0;
 
@@ -187,6 +189,33 @@ async function loadChatUi(models, chatReplays) {
 }
 
 // ── 用例 ──
+
+test("固定发言顺序：targets 按拖拽保存的顺序输出，与 @ 书写顺序无关", async () => {
+  const models = {
+    alpha: { ...MODELS_AVAILABLE.echoai, name: "Alpha" },
+    beta: { ...MODELS_AVAILABLE.echoai, name: "Beta" },
+    gamma: { ...MODELS_AVAILABLE.echoai, name: "Gamma" },
+  };
+  // 用户拖拽后的固定顺序：gamma → alpha → beta
+  const { context, elements, requests, storage } = await loadChatUi(models, [], {
+    "tri-agent-order": JSON.stringify(["gamma", "alpha", "beta"]),
+  });
+
+  // 不带 @ 的普通消息：按固定顺序发给全部选中成员
+  elements["input"].value = "讨论一下";
+  await context.sendMessage();
+  await flush();
+  assert.deepEqual([...requests[0].json.targets], ["gamma", "alpha", "beta"]);
+
+  // @ 书写顺序与固定顺序相反时，仍按固定顺序执行（协作模式即发言顺序）
+  elements["input"].value = "@beta @alpha 先说说";
+  await context.sendMessage();
+  await flush();
+  assert.deepEqual([...requests[1].json.targets], ["alpha", "beta"]);
+
+  // 顺序被持久化回 localStorage，刷新后不丢
+  assert.deepEqual(JSON.parse(storage.getItem("tri-agent-order")), ["gamma", "alpha", "beta"]);
+});
 
 test("sending a message excludes the current message from the history payload", async () => {
   const { context, elements, requests, storage } = await loadChatUi(MODELS_AVAILABLE, []);

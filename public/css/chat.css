@@ -115,10 +115,21 @@
       display: flex; flex-direction: column; gap: 1px; padding: 4px 9px;
       border-radius: 16px; border: 1px solid var(--border); background: transparent;
       color: var(--text-dim); font-size: 11.5px; font-weight: 500; cursor: pointer;
-      transition: all 0.2s; user-select: none;
+      transition: all 0.2s; user-select: none; position: relative;
     }
     .agent-toggle:hover { background: var(--bg-hover); }
     .agent-toggle.active { color: var(--text); }
+    /* 固定发言顺序：协作模式显示序号徽标；可用卡片可拖拽排序 */
+    .agent-toggle[draggable="true"] { cursor: grab; }
+    .agent-toggle.dragging { opacity: .45; border-style: dashed; }
+    .agent-order-badge {
+      display: none; position: absolute; top: -6px; left: -6px;
+      min-width: 15px; height: 15px; border-radius: 8px; padding: 0 3px;
+      background: var(--user); color: #06251a;
+      font-size: 9.5px; font-weight: 700; line-height: 15px; text-align: center;
+      z-index: 2; font-family: "SF Mono", monospace;
+    }
+    #agent-toggles.show-order .agent-toggle.active .agent-order-badge { display: block; }
     .agent-toggle-row { display: flex; align-items: center; gap: 5px; }
     .agent-dot { width: 6px; height: 6px; border-radius: 50%; }
     .model-badge { font-size: 9px; color: var(--text-muted); font-family: "SF Mono", monospace; }

@@ -197,3 +197,17 @@ test("流式渲染节流：限制全量重渲染频率", () => {
 test("Escape 关闭 mention 弹窗后点击输入框不再强行重开", () => {
   assert.ok(CHAT_JS.includes("mentionSuppressed"), "需要主动关闭抑制标记");
 });
+
+// ── 固定发言顺序（协作模式核心编排）──
+
+test("发言顺序：拖拽排序、序号徽标与持久化的静态合约", () => {
+  assert.ok(CHAT_JS.includes('"tri-agent-order"'), "顺序须持久化到 localStorage");
+  assert.ok(CHAT_JS.includes("normalizeAgentOrder"), "加载后须归一化顺序（新成员追加、失效成员剔除）");
+  assert.ok(CHAT_JS.includes('el.draggable = true'), "顶栏成员卡片须可拖拽");
+  assert.ok(CHAT_JS.includes('persistDomOrder'), "拖拽结束须固化 DOM 顺序");
+  assert.ok(CHAT_JS.includes("agent-order-badge"), "选中成员须有发言序号徽标");
+  assert.ok(CHAT_JS.includes('classList.toggle("show-order", chatMode === "collaborate")'), "序号仅在协作模式显示");
+  assert.ok(CHAT_JS.includes("目标一律按固定发言顺序输出"), "@ 目标须按固定顺序排序（与书写顺序无关）");
+  assert.ok(CHAT_CSS.includes(".agent-order-badge"), "徽标样式存在");
+  assert.ok(CHAT_CSS.includes("#agent-toggles.show-order"), "协作模式下徽标可见性由容器类控制");
+});
