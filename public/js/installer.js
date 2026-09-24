@@ -55,6 +55,7 @@ window.Installer = (() => {
   async function poll(jobId, opts) {
     let fails = 0;
     let finished = false;
+    const verb = opts.action === "update" ? "更新" : "安装";
     // 新安装任务先清掉上一个轮询器，避免并发安装时旧定时器重复触发 onDone
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     const timer = setInterval(async () => {
@@ -69,12 +70,12 @@ window.Installer = (() => {
         document.getElementById("inst-cmd").textContent = job.command;
         renderLog(job.lines);
         if (job.running) {
-          setState("run", `安装中…（${job.methodLabel}）`);
+          setState("run", `${verb}中…（${job.methodLabel}）`);
         } else {
           finished = true;
           clearInterval(timer); pollTimer = null;
           const ok = job.exitCode === 0;
-          setState(ok ? "ok" : "err", ok ? "✓ 安装完成" : `✗ 安装失败（退出码 ${job.exitCode}）`);
+          setState(ok ? "ok" : "err", ok ? `✓ ${verb}完成` : `✗ ${verb}失败（退出码 ${job.exitCode}）`);
           const btn = document.getElementById("inst-action");
           btn.style.display = "inline-block";
           btn.textContent = ok ? "完 成" : "关 闭";
@@ -84,6 +85,8 @@ window.Installer = (() => {
         if (++fails > 5) { finished = true; clearInterval(timer); if (pollTimer === timer) pollTimer = null; setState("err", "⚠️ 无法获取安装进度"); }
       }
     }, 700);
+    // 登记当前轮询器：缺失这一句会让归属检查恒假，弹窗永远停在「提交中…」
+    pollTimer = timer;
   }
 
   async function install(id, opts) {

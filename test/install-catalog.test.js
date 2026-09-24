@@ -135,3 +135,11 @@ test("安装页 UI：新手推荐横条、官网链接卡片与新分组静态�
   assert.ok(css.includes("#inst-starter") && css.includes(".schip"), "index.css must style the starter strip");
   assert.ok(css.includes(".inst-up"), "index.css must style the update button");
 });
+
+test("安装弹窗轮询器：归属检查必须有配套登记，否则弹窗卡死在「提交中…」", () => {
+  const src = readFileSync(join(ROOT, "public/js/installer.js"), "utf8");
+  // 2026-09-24 修复的回归：guard 存在但从未登记 timer，导致每次轮询回调空转
+  assert.ok(src.includes("pollTimer = timer;"), "setInterval 后必须把 timer 登记到 pollTimer");
+  assert.ok(src.includes("if (pollTimer !== timer) return;"), "await 归属检查应保留");
+  assert.ok(src.includes('opts.action === "update" ? "更新" : "安装"'), "更新模式下状态文案应区分动词");
+});
