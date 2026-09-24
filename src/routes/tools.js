@@ -3,12 +3,13 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 import net from "net";
+import { findInstallIdForScannerId } from "../install-catalog.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT = join(__dirname, "..", "..");
 
-const TOOLS_PATH = join(ROOT, "tools.json");
+const TOOLS_PATH = process.env.TOOLS_JSON_PATH || join(ROOT, "tools.json");
 
 function probePort(port, host = "127.0.0.1", timeout = 600) {
   return new Promise((resolve) => {
@@ -27,14 +28,18 @@ function loadTools() {
 }
 
 export default function toolsRoutes(app) {
-  // 返回工具清单 + 实时服务端口状态
+  // 返回工具清单 + 实时服务端口状态；每个工具附 installId（控制台卸载入口据此调用安装目录）
   app.get("/api/tools", async (req, res) => {
     const data = loadTools();
     const services = {};
     for (const [name, info] of Object.entries(data.services || {})) {
       services[name] = { ...info, online: await probePort(info.port) };
     }
-    res.json({ ...data, services });
+    const tools = (data.tools || []).map((t) => ({
+      ...t,
+      installId: t.id ? findInstallIdForScannerId(t.id) : null,
+    }));
+    res.json({ ...data, tools, services });
   });
 
   // 重新扫描本机工具

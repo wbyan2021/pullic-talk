@@ -377,3 +377,14 @@ button { font-family: inherit; cursor:pointer; border:none; background:none; col
   background:rgba(255,95,87,.14); color:#ff5f57;
   border-color:rgba(255,95,87,.55); font-weight:600;
 }
+/* 控制台工具卡卸载按钮 */
+.card-del {
+  background:transparent; color:var(--dim);
+  border:1px solid var(--line); border-radius:7px;
+  font-size:11px; padding:4px 8px; line-height:1;
+}
+.card-del:hover { color:#ff5f57; border-color:rgba(255,95,87,.5); }
+.card-del.armed {
+  background:rgba(255,95,87,.14); color:#ff5f57;
+  border-color:rgba(255,95,87,.55); font-weight:600;
+}

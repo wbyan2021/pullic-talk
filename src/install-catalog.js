@@ -456,6 +456,20 @@ export function getInstallEntry(id) {
   return INSTALL_CATALOG.find((e) => e.id === id) || null;
 }
 
+// 扫描器（scripts/scan-tools.js）id → 安装目录 id：命名不一致的显式映射，其余要求同名。
+// 供 /api/tools 给控制台工具卡注入 installId（控制台卸载入口用）。
+export const SCANNER_ID_TO_INSTALL_ID = {
+  pi: "pi-agent",
+  brew: "homebrew",
+  lmstudio: "lm-studio",
+  gemini: "gemini-cli",
+};
+
+export function findInstallIdForScannerId(scannerId) {
+  const iid = SCANNER_ID_TO_INSTALL_ID[scannerId] ?? scannerId;
+  return getInstallEntry(iid) ? iid : null;
+}
+
 // 群聊 agent → 安装条目 反查（用于 chat 页「未安装 → 去安装」）
 export function findInstallIdForAgent(agentKey, command) {
   const byKey = INSTALL_CATALOG.find((e) => e.agentKey === agentKey);

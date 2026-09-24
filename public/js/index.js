@@ -80,6 +80,13 @@ function renderGrid(){
   $("#empty").style.display = shown ? "none":"block";
 }
 
+// 控制台卡片是否可卸载：需要后端注入的 installId 且安装目录标记 canUninstall
+function uninstallableTool(t){
+  if (!t.installed || !t.installId) return false;
+  const e = installEntries.find(x => x.id === t.installId);
+  return !!(e && e.canUninstall);
+}
+
 function card(t, idx){
   const el = document.createElement("div");
   el.className = "card" + (t.installed?"":" missing");
@@ -89,6 +96,8 @@ function card(t, idx){
     : `<span class="stat"><span class="d"></span>未安装</span>`;
   const qas = (t.quickActions||[]).map((a,i)=>
     `<button class="qa" data-qa="${i}">${esc(a.label)}</button>`).join("");
+  const canDel = uninstallableTool(t);
+  const delArmed = canDel && uninstallArmed === t.installId;
   el.innerHTML = `
     <div class="top"><span class="idx">${String(idx).padStart(2,"0")}</span>${stat}</div>
     <div class="idrow">
@@ -100,9 +109,12 @@ function card(t, idx){
     <div class="actions">
       <button class="launch">▶ 启动</button>
       ${qas}
+      ${canDel?`<button class="card-del${delArmed?" armed":""}" title="${delArmed?"再点一次确认卸载":"卸载"}">${delArmed?"确认卸载?":"🗑"}</button>`:""}
     </div>`;
   $(".launch", el).onclick = () => runAction(t.launch, t);
   $$(".qa", el).forEach(b => b.onclick = () => runAction(t.quickActions[+b.dataset.qa], t));
+  const del = $(".card-del", el);
+  if (del) del.onclick = () => requestUninstall(t.installId, t.name, t.icon, renderGrid);
   return el;
 }
 
@@ -282,25 +294,33 @@ function renderInstallGrid(){
   }
 }
 
-  // 卸载确认状态：首击变「确认卸载?」，3 秒内未确认自动回退（防误触，与项目移除同款交互）
+  // 统一卸载入口（安装页卡片 / 控制台卡片共用）：双击确认，3 秒未确认自动回退
   let uninstallArmed = null;
   let uninstallTimer = null;
 
-  function uninstallEntry(e){
-    if (uninstallArmed !== e.id) {
-      uninstallArmed = e.id;
-      renderInstallGrid();
+  function requestUninstall(id, name, icon, rerender){
+    if (uninstallArmed !== id) {
+      uninstallArmed = id;
+      rerender();
       clearTimeout(uninstallTimer);
-      uninstallTimer = setTimeout(() => { if (uninstallArmed === e.id) { uninstallArmed = null; renderInstallGrid(); } }, 3000);
+      uninstallTimer = setTimeout(() => { if (uninstallArmed === id) { uninstallArmed = null; rerender(); } }, 3000);
       return;
     }
     uninstallArmed = null;
     clearTimeout(uninstallTimer);
-    Installer.install(e.id, {
+    Installer.install(id, {
       action: "uninstall",
-      name: e.name, icon: e.icon,
-      onDone: () => { loadInstallCatalog(); loadUpdates(); loadTools(); toast(`${e.name} 已卸载`); },
+      name, icon,
+      onDone: () => {
+        loadInstallCatalog(); loadUpdates(); loadTools();
+        setTimeout(loadTools, 2500); // 卸载成功后后台重扫 tools.json 需几秒，延迟再刷一次
+        toast(`${name} 已卸载`);
+      },
     });
+  }
+
+  function uninstallEntry(e){
+    requestUninstall(e.id, e.name, e.icon, renderInstallGrid);
   }
 
   function installCard(e){
@@ -411,6 +431,7 @@ document.addEventListener("keydown", e=>{
 
 /* ---------- 启动 ---------- */
 loadTools();
+loadInstallCatalog(); // 控制台卡片卸载按钮需要安装目录的 canUninstall 信息
 refreshProcs();
 setInterval(refreshProcs, 8000);
 setInterval(()=>{ if(state.view==="console") loadTools(); }, 30000); // 定期刷新服务状态

@@ -188,3 +188,12 @@ test("集中管理筛选条：已安装/可更新视图与空态提示的静态�
   const css = readFileSync(join(ROOT, "public/css/index.css"), "utf8");
   assert.ok(css.includes(".ifchip") && css.includes(".ifchip.active"), "筛选 chips 样式存在");
 });
+
+test("控制台卡片卸载入口：共用双击确认 + installId 联动的静态合约", () => {
+  const js = readFileSync(join(ROOT, "public/js/index.js"), "utf8");
+  assert.ok(js.includes("function requestUninstall"), "卸载须有共用入口（安装页/控制台共享确认状态）");
+  assert.ok(js.includes("function uninstallableTool"), "控制台卡片须按 installId+canUninstall 判断");
+  assert.ok(js.includes("card-del") && js.includes('requestUninstall(t.installId'), "控制台卡片须挂卸载按钮并联动");
+  const css = readFileSync(join(ROOT, "public/css/index.css"), "utf8");
+  assert.ok(css.includes(".card-del") && css.includes(".card-del.armed"), "控制台卸载按钮样式存在");
+});
