@@ -42,8 +42,8 @@ test("安装目录：可安装条目必须有探测方式和至少一种安装�
     if (e.linkOnly) continue;
     const hasDetect = (e.detect?.commands?.length || 0) + (e.detect?.apps?.length || 0) > 0;
     assert.ok(hasDetect, `${e.id}: detect required for installable entries`);
-    const hasMethod = e.script || e.brewCask || e.brew || e.npm || e.dmg;
-    assert.ok(hasMethod, `${e.id}: at least one install method required`);
+    const hasMethod = e.script || e.brewCask || e.brew || e.npm || e.dmg || e.manual;
+    assert.ok(hasMethod, `${e.id}: at least one install method (or manual:true) required`);
   }
 });
 
@@ -153,4 +153,25 @@ test("卸载功能 UI：双击确认 + 卸载动词 + 样式的静态合约", ()
   assert.ok(installer.includes('opts.action === "uninstall" ? "卸载"'), "弹窗状态须区分卸载动词");
   const css = readFileSync(join(ROOT, "public/css/index.css"), "utf8");
   assert.ok(css.includes(".inst-del") && css.includes(".inst-del.armed"), "卸载按钮及确认态样式存在");
+});
+
+test("控制台↔快捷安装目录对齐：扫描器已知工具都有安装入口", () => {
+  // 扫描器 CATALOG 不导出（import 会触发真扫描），从源码提取 id
+  const scannerSrc = readFileSync(join(ROOT, "scripts/scan-tools.js"), "utf8");
+  const catalogBlock = scannerSrc.slice(scannerSrc.indexOf("const CATALOG = ["), scannerSrc.indexOf("];", scannerSrc.indexOf("const CATALOG = [")));
+  const scannerIds = [...catalogBlock.matchAll(/id: "([a-z0-9-]+)"/g)].map((m) => m[1]);
+  assert.ok(scannerIds.length >= 25, `扫描器目录应有不少于 25 个条目，实际 ${scannerIds.length}`);
+
+  // 扫描器 id → 安装目录 id（命名不同的显式映射，其余要求同名）
+  const MAPPING = {
+    pi: "pi-agent", brew: "homebrew", lmstudio: "lm-studio", gemini: "gemini-cli",
+    qwen: null, // 扫描器未收录 qwen-code，反向不要求
+  };
+  const missing = [];
+  for (const sid of scannerIds) {
+    const iid = MAPPING[sid] !== undefined ? MAPPING[sid] : sid;
+    if (iid === null) continue;
+    if (!getInstallEntry(iid)) missing.push(`${sid}→${iid}`);
+  }
+  assert.deepEqual(missing, [], `控制台有但快捷安装缺失的条目: ${missing.join(", ")}`);
 });

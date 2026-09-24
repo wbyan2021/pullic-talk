@@ -237,7 +237,7 @@ S05-A 总览保持只读，只显示“可恢复 / Recoverable”摘要并跳转
 
 | 状态 | 功能 | 当前行为 |
 |---|---|---|
-| ✅ | 白名单安装目录 | 覆盖 AI 基础环境（Homebrew / Node / Git / Python / uv / FFmpeg）、最热编码与 Agent CLI（Claude Code / Codex / Gemini CLI / Qwen Code / Kimi Code / OpenCode / OpenClaw / Aider / Pi）、桌面 AI 应用、编辑器与本地模型运行时 |
+| ✅ | 白名单安装目录 | 与控制台扫描器目录完全对齐（54 项）：AI 基础环境、最热编码与 Agent CLI（Claude Code / Codex / Gemini / Qwen / Kimi / Grok Build / Amp / Goose / OpenClaw / OpenCode / Aider / Pi）、AI 编辑器（Cursor / Windsurf / Trae / Qoder / Zed / Obsidian / HBuilderX…）、对话应用（豆包 / 通义 / Chatbox / Copilot / Marvis / WorkBuddy…）与本地模型运行时；无统一自动渠道的应用提供官网直达 |
 | ✅ | 新手推荐路径 | 安装页顶部横条按推荐顺序展示 Homebrew → Node → Git → 三大编码 Agent 等，逐个点亮，点击即装 |
 | ✅ | 大模型官网导航 | OpenAI / Anthropic / Gemini / DeepSeek / 通义 / Kimi / 智谱 / 豆包 / MiniMax / Grok / Llama / Mistral / OpenRouter 官网直达卡片（仅导航，不参与安装） |
 | ✅ | 安装方式择优 | 官方脚本 > Homebrew（cask/formula）> npm -g > 官方 DMG / 页面 |

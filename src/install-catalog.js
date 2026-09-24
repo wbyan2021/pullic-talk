@@ -14,6 +14,7 @@
 //   dmg         { url, file } 下载后打开镜像（兜底，需用户拖拽安装）
 //   versionFlag 版本探测参数，默认 "--version"；ffmpeg 用 "-version"
 //   linkOnly    true = 仅官网导航卡片，不参与安装
+//   manual      true = 无统一自动安装渠道，只显示「官网 ↗」按钮（如仅官网分发 .dmg 的应用）
 //   agentKey    对应的群聊 agent（安装后群聊里自动亮起）
 
 // 新手推荐安装顺序（前端在安装页顶部以横条展示，逐个点亮）
@@ -64,6 +65,14 @@ export const INSTALL_CATALOG = [
     homepage: "https://docs.astral.sh/uv/",
     detect: { commands: ["uv"] },
     script: "curl -LsSf https://astral.sh/uv/install.sh | sh",
+  },
+  {
+    id: "gh", name: "GitHub CLI", kind: "cli", group: "env",
+    icon: "🐙", color: "#8b949e",
+    description: "GitHub 官方命令行（含 gh copilot）",
+    homepage: "https://cli.github.com/",
+    detect: { commands: ["gh"] },
+    brew: "gh",
   },
   {
     id: "ffmpeg", name: "FFmpeg", kind: "cli", group: "env",
@@ -146,6 +155,31 @@ export const INSTALL_CATALOG = [
     brew: "aider",
   },
   {
+    id: "grok", name: "Grok Build", kind: "cli", group: "cli",
+    icon: "G", color: "#1d9bf0",
+    description: "xAI 官方终端编码代理（可派子代理）",
+    homepage: "https://x.ai",
+    detect: { commands: ["grok"] },
+    script: "curl -fsSL https://x.ai/cli/install.sh | bash",
+    agentKey: "grok",
+  },
+  {
+    id: "amp", name: "Amp", kind: "cli", group: "cli",
+    icon: "⚡", color: "#f97316",
+    description: "Sourcegraph Amp 编码代理",
+    homepage: "https://ampcode.com",
+    detect: { commands: ["amp"] },
+    npm: "@sourcegraph/amp-cli",
+  },
+  {
+    id: "goose", name: "Goose", kind: "cli", group: "cli",
+    icon: "🪿", color: "#84cc16",
+    description: "Block 出品的开源 agent",
+    homepage: "https://block.github.io/goose/",
+    detect: { commands: ["goose"] },
+    brew: "block-goose-cli",
+  },
+  {
     id: "pi-agent", name: "Pi Agent", kind: "cli", group: "cli",
     icon: "π", color: "#a855f7",
     description: "极简编码代理（本项目的老朋友）",
@@ -171,6 +205,46 @@ export const INSTALL_CATALOG = [
     homepage: "https://windsurf.com/",
     detect: { apps: ["Windsurf.app"] },
     brewCask: "windsurf",
+  },
+  {
+    id: "trae", name: "Trae", kind: "app", group: "editor",
+    icon: "△", color: "#22d3ee",
+    description: "字节跳动 AI IDE",
+    homepage: "https://www.trae.cn/",
+    detect: { apps: ["Trae CN.app", "TRAE SOLO CN.app", "Trae.app"], commands: ["trae"] },
+    brewCask: "trae",
+  },
+  {
+    id: "qoder", name: "Qoder", kind: "app", group: "editor",
+    icon: "Q", color: "#6366f1",
+    description: "阿里 AI 编码 IDE（官网下载安装）",
+    homepage: "https://qoder.com/",
+    detect: { apps: ["Qoder.app"], commands: ["qoder"] },
+    manual: true,
+  },
+  {
+    id: "obsidian", name: "Obsidian", kind: "app", group: "editor",
+    icon: "◆", color: "#7c3aed",
+    description: "本地知识库 / 笔记",
+    homepage: "https://obsidian.md/",
+    detect: { apps: ["Obsidian.app"] },
+    brewCask: "obsidian",
+  },
+  {
+    id: "zed", name: "Zed", kind: "app", group: "editor",
+    icon: "Z", color: "#0870ff",
+    description: "高性能协作编辑器",
+    homepage: "https://zed.dev/",
+    detect: { apps: ["Zed.app"], commands: ["zed"] },
+    brewCask: "zed",
+  },
+  {
+    id: "hbuilderx", name: "HBuilderX", kind: "app", group: "editor",
+    icon: "H", color: "#2b9939",
+    description: "DCloud 前端开发工具",
+    homepage: "https://www.dcloud.io/hbuilderx.html",
+    detect: { apps: ["HBuilderX.app"] },
+    brewCask: "hbuilderx",
   },
   {
     id: "vscode", name: "VS Code", kind: "app", group: "editor",
@@ -213,6 +287,62 @@ export const INSTALL_CATALOG = [
     homepage: "https://jan.ai/",
     detect: { apps: ["Jan.app"] },
     brewCask: "jan",
+  },
+  {
+    id: "copilot-app", name: "GitHub Copilot", kind: "app", group: "chat",
+    icon: "⌥", color: "#6e7681",
+    description: "GitHub Copilot 桌面版（官网获取）",
+    homepage: "https://github.com/features/copilot",
+    detect: { apps: ["GitHub Copilot.app"] },
+    manual: true,
+  },
+  {
+    id: "chatbox", name: "Chatbox", kind: "app", group: "chat",
+    icon: "💬", color: "#f59e0b",
+    description: "多模型桌面 AI 客户端",
+    homepage: "https://chatboxai.app/",
+    detect: { apps: ["Chatbox.app"] },
+    brewCask: "chatbox",
+  },
+  {
+    id: "doubao", name: "豆包", kind: "app", group: "chat",
+    icon: "🫘", color: "#3b82f6",
+    description: "字节跳动 AI 助手桌面版",
+    homepage: "https://www.doubao.com/",
+    detect: { apps: ["Doubao.app"] },
+    brewCask: "doubao",
+  },
+  {
+    id: "qianwen", name: "通义千问", kind: "app", group: "chat",
+    icon: "🔮", color: "#6366f1",
+    description: "阿里通义千问桌面版",
+    homepage: "https://tongyi.aliyun.com/",
+    detect: { apps: ["Qianwen.app"] },
+    brewCask: "qianwen",
+  },
+  {
+    id: "minimax", name: "MiniMax Hub", kind: "app", group: "chat",
+    icon: "🌀", color: "#ec4899",
+    description: "MiniMax 大模型平台桌面版（官网获取）",
+    homepage: "https://www.minimaxi.com/",
+    detect: { apps: ["MiniMax Hub.app"] },
+    manual: true,
+  },
+  {
+    id: "marvis", name: "Marvis", kind: "app", group: "chat",
+    icon: "🎙", color: "#f43f5e",
+    description: "腾讯操作系统级 AI 助手（官网获取）",
+    homepage: "https://marvis.qq.com/",
+    detect: { apps: ["Marvis.app"] },
+    manual: true,
+  },
+  {
+    id: "workbuddy", name: "WorkBuddy", kind: "app", group: "chat",
+    icon: "🤝", color: "#0ea5e9",
+    description: "腾讯云 AI 办公助手（官网获取）",
+    homepage: "https://www.workbuddy.ai/",
+    detect: { apps: ["WorkBuddy.app"] },
+    manual: true,
   },
 
   // ── 本地模型运行时 ──
