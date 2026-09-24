@@ -144,15 +144,18 @@ test("安装弹窗轮询器：归属检查必须有配套登记，否则弹窗�
   assert.ok(src.includes('opts.action === "uninstall" ? "卸载" : "安装"'), "状态文案应区分更新/卸载/安装动词");
 });
 
-test("卸载功能 UI：双击确认 + 卸载动词 + 样式的静态合约", () => {
+test("卸载入口只在控制台：安装页卡片不再渲染删除按钮（2026-09-24 用户决定）", () => {
   const js = readFileSync(join(ROOT, "public/js/index.js"), "utf8");
-  assert.ok(js.includes("uninstallArmed"), "卸载须有确认状态（防误触）");
-  assert.ok(js.includes('action: "uninstall"'), "卸载动作须传给安装弹窗");
-  assert.ok(js.includes("确认卸载?"), "首击显示确认文案");
+  assert.ok(js.includes("function requestUninstall"), "共用双击确认入口保留（控制台使用）");
+  assert.ok(js.includes('action: "uninstall"'), "卸载动作链路保留（控制台使用）");
+  assert.ok(js.includes("确认卸载?"), "确认文案保留（控制台卡片）");
+  assert.ok(!js.includes("data-uninstall"), "安装页卡片不得再有卸载按钮");
+  assert.ok(!js.includes("uninstallEntry"), "安装页专用卸载入口应移除");
   const installer = readFileSync(join(ROOT, "public/js/installer.js"), "utf8");
-  assert.ok(installer.includes('opts.action === "uninstall" ? "卸载"'), "弹窗状态须区分卸载动词");
+  assert.ok(installer.includes('opts.action === "uninstall" ? "卸载"'), "弹窗仍支持卸载动词（控制台链路）");
   const css = readFileSync(join(ROOT, "public/css/index.css"), "utf8");
-  assert.ok(css.includes(".inst-del") && css.includes(".inst-del.armed"), "卸载按钮及确认态样式存在");
+  assert.ok(!css.includes(".inst-del"), "安装页卸载按钮样式应移除");
+  assert.ok(css.includes(".card-del") && css.includes(".card-del.armed"), "控制台卸载按钮样式保留");
 });
 
 test("控制台↔快捷安装目录对齐：扫描器已知工具都有安装入口", () => {

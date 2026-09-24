@@ -319,10 +319,6 @@ function renderInstallGrid(){
     });
   }
 
-  function uninstallEntry(e){
-    requestUninstall(e.id, e.name, e.icon, renderInstallGrid);
-  }
-
   function installCard(e){
     const el = document.createElement("div");
     el.className = "inst-card-item" + (e.installed ? " installed" : "");
@@ -330,14 +326,10 @@ function renderInstallGrid(){
     const isLink = e.method === "manual" || e.method === "link";
     const u = updateMap.get(e.id);
     const verText = u && u.version ? ` · v${u.version}` : "";
-    const armed = uninstallArmed === e.id;
     const right = e.installed
-      ? `<div class="inst-side">
-          ${u && u.updateAvailable
-            ? `<button class="inst-go inst-up" data-update="1" title="${u.latest ? `当前 v${u.version || "?"}，最新 v${u.latest}` : "有可用更新"}">↑ 更新${u.latest ? ` → v${u.latest}` : ""}</button>`
-            : `<span class="inst-done">✓ 已安装${verText}</span>`}
-          ${e.canUninstall ? `<button class="inst-del${armed ? " armed" : ""}" data-uninstall="1" title="${armed ? "再点一次确认卸载" : "卸载"}">${armed ? "确认卸载?" : "🗑"}</button>` : ""}
-        </div>`
+      ? (u && u.updateAvailable
+        ? `<button class="inst-go inst-up" data-update="1" title="${u.latest ? `当前 v${u.version || "?"}，最新 v${u.latest}` : "有可用更新"}">↑ 更新${u.latest ? ` → v${u.latest}` : ""}</button>`
+        : `<span class="inst-done">✓ 已安装${verText}</span>`)
       : (isLink
           ? `<button class="inst-go" data-home="1">官网 ↗</button>`
           : `<button class="inst-go" data-install="1">⬇ 安装</button>`);
@@ -356,8 +348,6 @@ function renderInstallGrid(){
         installEntry(e, go.dataset.update ? "update" : undefined);
       };
     }
-    const del = $(".inst-del", el);
-    if (del) del.onclick = () => uninstallEntry(e);
     return el;
   }
 
