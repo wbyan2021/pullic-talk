@@ -141,5 +141,16 @@ test("安装弹窗轮询器：归属检查必须有配套登记，否则弹窗�
   // 2026-09-24 修复的回归：guard 存在但从未登记 timer，导致每次轮询回调空转
   assert.ok(src.includes("pollTimer = timer;"), "setInterval 后必须把 timer 登记到 pollTimer");
   assert.ok(src.includes("if (pollTimer !== timer) return;"), "await 归属检查应保留");
-  assert.ok(src.includes('opts.action === "update" ? "更新" : "安装"'), "更新模式下状态文案应区分动词");
+  assert.ok(src.includes('opts.action === "uninstall" ? "卸载" : "安装"'), "状态文案应区分更新/卸载/安装动词");
+});
+
+test("卸载功能 UI：双击确认 + 卸载动词 + 样式的静态合约", () => {
+  const js = readFileSync(join(ROOT, "public/js/index.js"), "utf8");
+  assert.ok(js.includes("uninstallArmed"), "卸载须有确认状态（防误触）");
+  assert.ok(js.includes('action: "uninstall"'), "卸载动作须传给安装弹窗");
+  assert.ok(js.includes("确认卸载?"), "首击显示确认文案");
+  const installer = readFileSync(join(ROOT, "public/js/installer.js"), "utf8");
+  assert.ok(installer.includes('opts.action === "uninstall" ? "卸载"'), "弹窗状态须区分卸载动词");
+  const css = readFileSync(join(ROOT, "public/css/index.css"), "utf8");
+  assert.ok(css.includes(".inst-del") && css.includes(".inst-del.armed"), "卸载按钮及确认态样式存在");
 });

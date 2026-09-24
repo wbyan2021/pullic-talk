@@ -242,37 +242,64 @@ function renderInstallGrid(){
   }
 }
 
-function installCard(e){
-  const el = document.createElement("div");
-  el.className = "inst-card-item" + (e.installed ? " installed" : "");
-  el.style.setProperty("--ic", e.color || "#8a93a3");
-  const isLink = e.method === "manual" || e.method === "link";
-  const u = updateMap.get(e.id);
-  const verText = u && u.version ? ` · v${u.version}` : "";
-  const btn = e.installed
-    ? (u && u.updateAvailable
-        ? `<button class="inst-go inst-up" data-update="1" title="${u.latest ? `当前 v${u.version || "?"}，最新 v${u.latest}` : "有可用更新"}">↑ 更新${u.latest ? ` → v${u.latest}` : ""}</button>`
-        : `<span class="inst-done">✓ 已安装${verText}</span>`)
-    : (isLink
-        ? `<button class="inst-go" data-home="1">官网 ↗</button>`
-        : `<button class="inst-go" data-install="1">⬇ 安装</button>`);
-  el.innerHTML = `
-    <span class="ici-icon">${esc(e.icon||"◆")}</span>
-    <div class="ici-meta">
-      <div class="ici-name">${esc(e.name)}${e.agentKey?` <span class="ici-chat" title="安装后可加入 AI 群聊">◧</span>`:""}</div>
-      <div class="ici-desc">${esc(e.description||"")}</div>
-      <div class="ici-method">${e.installed ? (u && u.version ? esc("v"+u.version) : "") : esc(e.methodLabel||"")}</div>
-    </div>
-    ${btn}`;
-  const go = $(".inst-go", el);
-  if (go){
-    go.onclick = () => {
-      if (go.dataset.home) { window.open(e.homepage, "_blank"); return; }
-      installEntry(e, go.dataset.update ? "update" : undefined);
-    };
+  // 卸载确认状态：首击变「确认卸载?」，3 秒内未确认自动回退（防误触，与项目移除同款交互）
+  let uninstallArmed = null;
+  let uninstallTimer = null;
+
+  function uninstallEntry(e){
+    if (uninstallArmed !== e.id) {
+      uninstallArmed = e.id;
+      renderInstallGrid();
+      clearTimeout(uninstallTimer);
+      uninstallTimer = setTimeout(() => { if (uninstallArmed === e.id) { uninstallArmed = null; renderInstallGrid(); } }, 3000);
+      return;
+    }
+    uninstallArmed = null;
+    clearTimeout(uninstallTimer);
+    Installer.install(e.id, {
+      action: "uninstall",
+      name: e.name, icon: e.icon,
+      onDone: () => { loadInstallCatalog(); loadUpdates(); loadTools(); toast(`${e.name} 已卸载`); },
+    });
   }
-  return el;
-}
+
+  function installCard(e){
+    const el = document.createElement("div");
+    el.className = "inst-card-item" + (e.installed ? " installed" : "");
+    el.style.setProperty("--ic", e.color || "#8a93a3");
+    const isLink = e.method === "manual" || e.method === "link";
+    const u = updateMap.get(e.id);
+    const verText = u && u.version ? ` · v${u.version}` : "";
+    const armed = uninstallArmed === e.id;
+    const right = e.installed
+      ? `<div class="inst-side">
+          ${u && u.updateAvailable
+            ? `<button class="inst-go inst-up" data-update="1" title="${u.latest ? `当前 v${u.version || "?"}，最新 v${u.latest}` : "有可用更新"}">↑ 更新${u.latest ? ` → v${u.latest}` : ""}</button>`
+            : `<span class="inst-done">✓ 已安装${verText}</span>`}
+          ${e.canUninstall ? `<button class="inst-del${armed ? " armed" : ""}" data-uninstall="1" title="${armed ? "再点一次确认卸载" : "卸载"}">${armed ? "确认卸载?" : "🗑"}</button>` : ""}
+        </div>`
+      : (isLink
+          ? `<button class="inst-go" data-home="1">官网 ↗</button>`
+          : `<button class="inst-go" data-install="1">⬇ 安装</button>`);
+    el.innerHTML = `
+      <span class="ici-icon">${esc(e.icon||"◆")}</span>
+      <div class="ici-meta">
+        <div class="ici-name">${esc(e.name)}${e.agentKey?` <span class="ici-chat" title="安装后可加入 AI 群聊">◧</span>`:""}</div>
+        <div class="ici-desc">${esc(e.description||"")}</div>
+        <div class="ici-method">${e.installed ? (u && u.version ? esc("v"+u.version) : "") : esc(e.methodLabel||"")}</div>
+      </div>
+      ${right}`;
+    const go = $(".inst-go", el);
+    if (go){
+      go.onclick = () => {
+        if (go.dataset.home) { window.open(e.homepage, "_blank"); return; }
+        installEntry(e, go.dataset.update ? "update" : undefined);
+      };
+    }
+    const del = $(".inst-del", el);
+    if (del) del.onclick = () => uninstallEntry(e);
+    return el;
+  }
 
 function installEntry(e, action){
   const updating = action === "update";

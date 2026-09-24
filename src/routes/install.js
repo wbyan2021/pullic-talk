@@ -107,18 +107,47 @@ function pickUpdateMethod(entry) {
   return null;
 }
 
+// 卸载方式：CLI 按实际所属包管理器（npm 装的走 npm，brew 装的走 brew，避免卸错报错）；
+// 桌面应用走 cask。脚本安装的（brew/uv/openclaw 等）没有统一卸载渠道，返回 null 由前端隐藏按钮。
+function pickUninstallMethod(entry) {
+  const cmd = (entry.detect?.commands || [])[0];
+  if (cmd) {
+    const npmDir = npmBinDir();
+    if (entry.npm && npmDir && existsSync(join(npmDir, cmd))) {
+      return { method: "npm", label: "npm -g", command: `npm uninstall -g ${entry.npm}` };
+    }
+    const brewDir = brewBinDir();
+    if (brewDir && existsSync(join(brewDir, cmd))) {
+      if (entry.brewCask) return { method: "brew", label: "brew cask", command: `brew uninstall --cask ${entry.brewCask}` };
+      if (entry.brew) return { method: "brew", label: "brew", command: `brew uninstall ${entry.brew}` };
+    }
+  }
+  if (entry.brewCask && brewAvailable()) return { method: "brew", label: "brew cask", command: `brew uninstall --cask ${entry.brewCask}` };
+  if (entry.brew && brewAvailable()) return { method: "brew", label: "brew", command: `brew uninstall ${entry.brew}` };
+  if (entry.npm) return { method: "npm", label: "npm -g", command: `npm uninstall -g ${entry.npm}` };
+  return null;
+}
+
+// 驾驶舱自身运行的基础环境：禁止卸载（服务跑在 node 上、项目识别依赖 git、安装链路依赖 brew）
+const PROTECTED_UNINSTALL = new Set(["node", "homebrew", "git"]);
+
 // ===== 任务注册表 =====
 const jobs = new Map(); // jobId -> job
 let jobSeq = 1;
 
 function startJob(entry, opts = {}) {
-  const picked = opts.update ? pickUpdateMethod(entry) : pickMethod(entry);
+  const action = opts.action || (opts.update ? "update" : "install");
+  const picked = action === "update" ? pickUpdateMethod(entry)
+    : action === "uninstall" ? pickUninstallMethod(entry)
+    : pickMethod(entry);
   if (!picked) {
-    return { error: opts.update
+    return { error: action === "update"
       ? "该条目没有可用的自动更新方式，请到官网手动更新"
+      : action === "uninstall"
+      ? "该条目没有可用的自动卸载方式，请手动卸载"
       : "该条目没有可用的自动安装方式，请访问官网手动下载" };
   }
-  const verb = opts.update ? "更新" : "安装";
+  const verb = action === "update" ? "更新" : action === "uninstall" ? "卸载" : "安装";
 
   // 同一应用已有任务在跑 → 直接复用
   for (const job of jobs.values()) {
@@ -128,7 +157,7 @@ function startJob(entry, opts = {}) {
   const id = `inst${jobSeq++}`;
   const job = {
     id, appId: entry.id, appName: entry.name,
-    action: opts.update ? "update" : "install",
+    action,
     method: picked.method, methodLabel: picked.label,
     command: picked.command,
     pid: null, running: true, exitCode: null,
@@ -292,6 +321,7 @@ export default function installRoutes(app) {
         installed,
         method: e.linkOnly ? "link" : (installed ? null : (picked ? picked.method : "manual")),
         methodLabel: e.linkOnly ? "官网" : (installed ? null : (picked ? picked.label : "手动")),
+        canUninstall: !e.linkOnly && !PROTECTED_UNINSTALL.has(e.id) && !!pickUninstallMethod(e),
       };
     });
     res.json({ brewAvailable: brewAvailable(), starter: STARTER_PATH, entries });
@@ -304,16 +334,25 @@ export default function installRoutes(app) {
     res.json(data);
   });
 
-  // 发起安装 / 更新（白名单 id，命令只来自目录常量，不接受任意用户输入）
+  // 发起安装 / 更新 / 卸载（白名单 id，命令只来自目录常量，不接受任意用户输入）
   app.post("/api/install", (req, res) => {
-    const { id, action } = req.body || {};
+    const { id } = req.body || {};
+    const action = req.body && req.body.action === "update" ? "update"
+      : req.body && req.body.action === "uninstall" ? "uninstall" : "install";
     const entry = getInstallEntry(id);
     if (!entry) return res.status(400).json({ error: `未知安装条目: ${id}` });
     if (entry.linkOnly) return res.status(400).json({ error: `${entry.name} 仅提供官网导航，请从官网获取` });
-    const updating = action === "update";
-    if (updating && !isInstalled(entry)) return res.status(400).json({ error: `${entry.name} 尚未安装，无需更新` });
-    if (!updating && isInstalled(entry)) return res.status(400).json({ error: `${entry.name} 已经安装` });
-    const result = startJob(entry, { update: updating });
+    if (action === "uninstall") {
+      if (PROTECTED_UNINSTALL.has(entry.id)) {
+        return res.status(400).json({ error: `${entry.name} 是驾驶舱运行的基础环境，不提供卸载` });
+      }
+      if (!isInstalled(entry)) return res.status(400).json({ error: `${entry.name} 尚未安装，无需卸载` });
+    } else if (action === "update") {
+      if (!isInstalled(entry)) return res.status(400).json({ error: `${entry.name} 尚未安装，无需更新` });
+    } else {
+      if (isInstalled(entry)) return res.status(400).json({ error: `${entry.name} 已经安装` });
+    }
+    const result = startJob(entry, { action });
     if (result.error) return res.status(400).json(result);
     res.json({ ok: true, ...result });
   });

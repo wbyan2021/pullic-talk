@@ -55,7 +55,7 @@ window.Installer = (() => {
   async function poll(jobId, opts) {
     let fails = 0;
     let finished = false;
-    const verb = opts.action === "update" ? "更新" : "安装";
+    const verb = opts.action === "update" ? "更新" : opts.action === "uninstall" ? "卸载" : "安装";
     // 新安装任务先清掉上一个轮询器，避免并发安装时旧定时器重复触发 onDone
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     const timer = setInterval(async () => {
@@ -91,7 +91,7 @@ window.Installer = (() => {
 
   async function install(id, opts) {
     opts = opts || {};
-    const verb = opts.action === "update" ? "更新" : "安装";
+    const verb = opts.action === "update" ? "更新" : opts.action === "uninstall" ? "卸载" : "安装";
     buildDom();
     overlay.classList.add("show");
     document.getElementById("inst-icon").textContent = opts.icon || "📦";

@@ -246,6 +246,7 @@ S05-A 总览保持只读，只显示“可恢复 / Recoverable”摘要并跳转
 | ✅ | 安装后刷新 | 自动刷新 Agent 可用性并重新扫描工具 |
 | ✅ | 版本与更新扫描 | 已安装条目显示真实版本号；扫描 `brew outdated` 与 `npm outdated -g` 标出可更新项（60 秒缓存）；结果含最新版本号 |
 | ✅ | 一键更新 | 可更新条目一键升级：brew upgrade / npm 重装 @latest / 官方脚本重跑；命令仍只来自目录常量；未安装与官网导航条目被拒绝 |
+| ✅ | 一键卸载 | 已安装条目可卸载（🗑 按钮，双击确认防误触）：CLI 按实际安装来源卸载（npm 装走 npm、brew 装走 brew，避免卸错）；Node.js / Homebrew / Git 为驾驶舱基础环境禁止卸载；脚本安装类无统一卸载渠道时隐藏按钮 |
 | 🟡 | 失败恢复 | 有超时和错误信息，但没有自动诊断、重试或回滚 |
 
 相关代码：[安装目录](../src/install-catalog.js)、[安装任务](../src/routes/install.js)、[安装弹窗](../public/js/installer.js)。

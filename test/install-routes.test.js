@@ -110,3 +110,39 @@ test("POST /api/install 的 update 动作有闸门：未安装/导航条目一�
   const installLink = await req("POST", "/api/install", { id: "site-deepseek" });
   assert.equal(installLink.status, 400);
 });
+
+test("卸载闸门：保护项拒绝、未安装拒绝、导航条目拒绝，绝不真卸载", async () => {
+  // 基础环境保护（驾驶舱自身依赖）
+  const node = await req("POST", "/api/install", { id: "node", action: "uninstall" });
+  assert.equal(node.status, 400);
+  assert.ok(node.data.error.includes("基础环境"), node.data.error);
+
+  const brew = await req("POST", "/api/install", { id: "homebrew", action: "uninstall" });
+  assert.equal(brew.status, 400);
+
+  const git = await req("POST", "/api/install", { id: "git", action: "uninstall" });
+  assert.equal(git.status, 400);
+
+  // 未安装条目不可卸载（qwen-code 本机未装）
+  const missing = await req("POST", "/api/install", { id: "qwen-code", action: "uninstall" });
+  assert.equal(missing.status, 400);
+  assert.ok(missing.data.error.includes("尚未安装"));
+
+  // 官网导航条目不可卸载
+  const link = await req("POST", "/api/install", { id: "site-openai", action: "uninstall" });
+  assert.equal(link.status, 400);
+});
+
+test("目录为已安装条目返回 canUninstall，保护项与导航条目恒为 false", async () => {
+  const { data } = await req("GET", "/api/install/catalog");
+  const byId = new Map(data.entries.map((e) => [e.id, e]));
+  for (const e of data.entries) {
+    assert.equal(typeof e.canUninstall, "boolean", `${e.id}: canUninstall must be boolean`);
+  }
+  for (const protectedId of ["node", "homebrew", "git"]) {
+    assert.equal(byId.get(protectedId).canUninstall, false, `${protectedId} 不可卸载`);
+  }
+  assert.equal(byId.get("site-deepseek").canUninstall, false, "导航条目不可卸载");
+  // 本机 npm 全局装的 pi 应可卸载（npmBinDir 兜底探测命中）
+  assert.equal(byId.get("pi-agent").canUninstall, true);
+});
