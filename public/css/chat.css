@@ -119,8 +119,12 @@
     }
     .agent-toggle:hover { background: var(--bg-hover); }
     .agent-toggle.active { color: var(--text); }
-    /* 固定发言顺序：协作模式显示序号徽标；可用卡片可拖拽排序 */
-    .agent-toggle[draggable="true"] { cursor: grab; }
+    /* 固定发言顺序：协作模式显示序号徽标；按住手柄 ⠿ 才可拖拽排序（保护普通点击） */
+    .drag-handle {
+      cursor: grab; opacity: .45; font-size: 10px; line-height: 1;
+      user-select: none; padding: 0 1px;
+    }
+    .drag-handle:hover { opacity: 1; }
     .agent-toggle.dragging { opacity: .45; border-style: dashed; }
     .agent-order-badge {
       display: none; position: absolute; top: -6px; left: -6px;

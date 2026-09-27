@@ -115,13 +115,22 @@
       const el = document.createElement("div");
       el.dataset.agent = key;
       el.className = "agent-toggle active";
-      el.title = "点击启用/停用；拖动调整发言顺序（协作模式按序发言）";
+      el.title = "点击启用/停用；按住左侧 ⠿ 拖动调整发言顺序";
       el.onclick = () => toggleAgent(key);
       el.innerHTML = `
         <div class="agent-toggle-row">
+          <span class="drag-handle" title="拖动调整发言顺序">⠿</span>
           <span class="agent-dot" style="background:${info.color}"></span> ${escapeHtml(info.avatar)}
         </div>
       `;
+      // 拖拽仅允许从手柄发起：卡片默认 draggable=false，
+      // 否则浏览器会把普通点击（按下+微动）判成拖拽而吞掉 click（选中失效）
+      const handle = el.querySelector(".drag-handle");
+      handle.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+        el.draggable = true;
+      });
+      handle.addEventListener("click", (e) => e.stopPropagation());
       el.appendChild(buildModelControl(key, info));
       if (positions.has(key)) {
         const badge = document.createElement("span");
@@ -132,13 +141,13 @@
       el.style.borderColor = info.color;
       el.style.color = info.color;
       el.style.background = hexToRgba(info.color, 0.08);
-      el.draggable = true;
       el.addEventListener("dragstart", (e) => {
         el.classList.add("dragging");
         try { e.dataTransfer.setData("text/plain", key); } catch {}
       });
       el.addEventListener("dragend", () => {
         el.classList.remove("dragging");
+        el.draggable = false;
         persistDomOrder();
         renderAgentToggles();
       });

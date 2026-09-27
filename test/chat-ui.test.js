@@ -203,7 +203,10 @@ test("Escape 关闭 mention 弹窗后点击输入框不再强行重开", () => {
 test("发言顺序：拖拽排序、序号徽标与持久化的静态合约", () => {
   assert.ok(CHAT_JS.includes('"tri-agent-order"'), "顺序须持久化到 localStorage");
   assert.ok(CHAT_JS.includes("normalizeAgentOrder"), "加载后须归一化顺序（新成员追加、失效成员剔除）");
-  assert.ok(CHAT_JS.includes('el.draggable = true'), "顶栏成员卡片须可拖拽");
+  // 拖拽只能从手柄发起：无条件 draggable 会把普通点击吞成拖拽（2026-09-24 实机回归）
+  assert.ok(CHAT_JS.includes('.drag-handle'), "成员卡片须有专用拖拽手柄");
+  assert.ok(CHAT_JS.includes("el.draggable = true") && CHAT_JS.includes("el.draggable = false"), "手柄 mousedown 启用、dragend/mouseup 关闭");
+  assert.ok(!/el\.draggable = true;\s*$/m.test(CHAT_JS.split("drag-handle")[0]), "卡片默认不得无条件 draggable");
   assert.ok(CHAT_JS.includes('persistDomOrder'), "拖拽结束须固化 DOM 顺序");
   assert.ok(CHAT_JS.includes("agent-order-badge"), "选中成员须有发言序号徽标");
   assert.ok(CHAT_JS.includes('classList.toggle("show-order", chatMode === "collaborate")'), "序号仅在协作模式显示");
