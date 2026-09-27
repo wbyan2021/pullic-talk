@@ -112,10 +112,13 @@
 
     for (const key of avail) {
       const info = AGENT_INFO[key];
+      const on = selectedAgents.has(key);
       const el = document.createElement("div");
       el.dataset.agent = key;
-      el.className = "agent-toggle active";
-      el.title = "点击启用/停用；按住左侧 ⠿ 拖动调整发言顺序";
+      el.className = "agent-toggle" + (on ? " active" : "");
+      el.title = on
+        ? "已启用 — 点击停用；按住左侧 ⠿ 拖动调整发言顺序"
+        : "已停用 — 点击启用；按住左侧 ⠿ 拖动调整发言顺序";
       el.onclick = () => toggleAgent(key);
       el.innerHTML = `
         <div class="agent-toggle-row">
@@ -132,15 +135,17 @@
       });
       handle.addEventListener("click", (e) => e.stopPropagation());
       el.appendChild(buildModelControl(key, info));
-      if (positions.has(key)) {
+      if (on && positions.has(key)) {
         const badge = document.createElement("span");
         badge.className = "agent-order-badge";
         badge.textContent = String(positions.get(key));
         el.appendChild(badge);
       }
-      el.style.borderColor = info.color;
-      el.style.color = info.color;
-      el.style.background = hexToRgba(info.color, 0.08);
+      if (on) {
+        el.style.borderColor = info.color;
+        el.style.color = info.color;
+        el.style.background = hexToRgba(info.color, 0.08);
+      }
       el.addEventListener("dragstart", (e) => {
         el.classList.add("dragging");
         try { e.dataTransfer.setData("text/plain", key); } catch {}

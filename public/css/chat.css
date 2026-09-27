@@ -119,6 +119,8 @@
     }
     .agent-toggle:hover { background: var(--bg-hover); }
     .agent-toggle.active { color: var(--text); }
+    /* 停用态：明显灰暗，与启用态一眼可辨 */
+    .agent-toggle:not(.active) { opacity: .45; filter: grayscale(.6); }
     /* 固定发言顺序：协作模式显示序号徽标；按住手柄 ⠿ 才可拖拽排序（保护普通点击） */
     .drag-handle {
       cursor: grab; opacity: .45; font-size: 10px; line-height: 1;
