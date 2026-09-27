@@ -82,7 +82,14 @@ window.Installer = (() => {
           if (ok && opts.onDone) opts.onDone();
         }
       } catch (e) {
-        if (++fails > 5) { finished = true; clearInterval(timer); if (pollTimer === timer) pollTimer = null; setState("err", "⚠️ 无法获取安装进度"); }
+        if (++fails > 5) {
+          finished = true; clearInterval(timer); if (pollTimer === timer) pollTimer = null;
+          setState("err", "⚠️ 无法获取安装进度（任务可能已中断，请重试）");
+          // 失败也要给出明确的退出按钮，不能让用户去找右上角的小 ✕
+          const btn = document.getElementById("inst-action");
+          btn.style.display = "inline-block";
+          btn.textContent = "关 闭";
+        }
       }
     }, 700);
     // 登记当前轮询器：缺失这一句会让归属检查恒假，弹窗永远停在「提交中…」

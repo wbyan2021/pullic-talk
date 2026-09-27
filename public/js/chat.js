@@ -454,7 +454,8 @@
     if (mentions.length === 0 || mentions.includes("all")) {
       targets = order.filter(k => selectedAgents.has(k));
     } else {
-      const mentioned = [...new Set(mentions)].filter(m => AGENT_INFO[m] && AGENT_INFO[m].available !== false);
+      // 已停用（灰显）的成员不响应 @ 定向，与「@all 只发已启用」语义一致
+      const mentioned = [...new Set(mentions)].filter(m => selectedAgents.has(m) && AGENT_INFO[m] && AGENT_INFO[m].available !== false);
       targets = order.filter(k => mentioned.includes(k));
     }
     return { cleaned, targets };

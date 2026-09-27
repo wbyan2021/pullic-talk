@@ -196,7 +196,7 @@ let installEntries = [];
 let updateMap = new Map(); // id -> { installed, version, updateAvailable, latest }
 let installFilter = "all"; // all | installed | updates | missing
 
-// 当前筛选下条目是否可见（「已安装」即集中管理视图：更新/卸载都在一个列表）
+// 当前筛选下条目是否可见（「已安装」= 版本与更新的集中查看视图；卸载入口在控制台）
 function visibleInstallEntry(e){
   if (installFilter === "installed") return e.installed;
   if (installFilter === "updates") return e.installed && !!(updateMap.get(e.id) && updateMap.get(e.id).updateAvailable);
@@ -234,6 +234,7 @@ async function loadInstallCatalog(){
     renderStarter(d.starter);
     renderInstallFilter();
     renderInstallGrid();
+    renderGrid(); // 控制台卡片依赖 canUninstall，目录到位后立即重绘（否则卸载按钮延迟到 30s 定时器才出现）
     loadUpdates();
   } catch(e){ toast("加载安装目录失败: "+e.message, true); }
 }
@@ -356,7 +357,12 @@ function installEntry(e, action){
   Installer.install(e.id, {
     action: updating ? "update" : undefined,
     name: e.name, icon: e.icon,
-    onDone: () => { loadInstallCatalog(); loadUpdates(); loadTools(); toast(`${e.name} ${updating ? "更新" : "安装"}完成，工具列表已刷新`); },
+    onDone: () => {
+      loadInstallCatalog(); loadUpdates(); loadTools();
+      // 工具清单由服务端在任务结束后异步重扫，延迟二刷才能看到新 CLI
+      setTimeout(loadTools, 2500);
+      toast(`${e.name} ${updating ? "更新" : "安装"}完成，正在刷新工具列表`);
+    },
   });
 }
 
@@ -382,8 +388,10 @@ async function refreshProcs(){
   } catch{}
 }
 async function killProc(id){
-  await OPS.api("/api/procs/kill",{method:"POST",json:{id}});
-  toast("已终止 "+id); refreshProcs();
+  const r = await OPS.api("/api/procs/kill",{method:"POST",json:{id}});
+  if (r.ok) toast("已终止 "+id);
+  else { const d = await r.json().catch(()=>({})); toast(d.error || "终止失败（进程可能已退出）", true); }
+  refreshProcs();
 }
 function togglePopover(e){ e.stopPropagation(); $("#popover").classList.toggle("show"); refreshProcs(); }
 document.addEventListener("click", e=>{ if(!$("#popover").contains(e.target) && e.target.id!=="procs-btn") $("#popover").classList.remove("show"); });

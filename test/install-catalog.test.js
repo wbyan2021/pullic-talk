@@ -200,3 +200,17 @@ test("控制台卡片卸载入口：共用双击确认 + installId 联动的静�
   const css = readFileSync(join(ROOT, "public/css/index.css"), "utf8");
   assert.ok(css.includes(".card-del") && css.includes(".card-del.armed"), "控制台卸载按钮样式存在");
 });
+
+test("全局审查轮修复的静态合约（2026-09-24 第二轮）", () => {
+  const route = readFileSync(join(ROOT, "src/routes/install.js"), "utf8");
+  assert.ok(route.includes("job.action !== action"), "任务复用必须区分 install/update/uninstall");
+  assert.ok(route.includes("function brewOwns"), "brew 卸载前必须验证归属");
+  assert.ok(route.includes("invalidateUpdates"), "任务完成后必须作废旧扫描代际");
+  assert.ok(route.includes("proc.kill(\"SIGKILL\")"), "任务超时须有 SIGKILL 升级");
+  const idx = readFileSync(join(ROOT, "public/js/index.js"), "utf8");
+  assert.ok(/loadInstallCatalog\(\); loadUpdates\(\); loadTools\(\);\s*\n\s*setTimeout\(loadTools, 2500\)/.test(idx), "安装/更新完成须延迟二刷工具列表");
+  const installer = readFileSync(join(ROOT, "public/js/installer.js"), "utf8");
+  assert.ok(/无法获取安装进度（任务可能已中断，请重试）/.test(installer), "轮询失败文案须提示重试");
+  const chat = readFileSync(join(ROOT, "public/js/chat.js"), "utf8");
+  assert.ok(chat.includes("selectedAgents.has(m) && AGENT_INFO[m]"), "@ 定向不得唤醒已停用成员");
+});

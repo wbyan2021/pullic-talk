@@ -107,8 +107,20 @@ function pickUpdateMethod(entry) {
   return null;
 }
 
+// 卸载归属验证：brew list 确认该 formula/cask 确实由 brew 管理，
+// 防止对官网 dmg 拖装的应用、系统自带命令执行必失败的 brew uninstall
+function brewOwns(name, isCask) {
+  if (!brewAvailable()) return false;
+  try {
+    const r = spawnSync(brewPath(), isCask ? ["list", "--cask", name] : ["list", name], { encoding: "utf-8", timeout: 10_000 });
+    return r.status === 0;
+  } catch {
+    return false;
+  }
+}
+
 // 卸载方式：CLI 按实际所属包管理器（npm 装的走 npm，brew 装的走 brew，避免卸错报错）；
-// 桌面应用走 cask。脚本安装的（brew/uv/openclaw 等）没有统一卸载渠道，返回 null 由前端隐藏按钮。
+// 桌面应用须 brew 归属验证通过。脚本安装的（brew/uv/openclaw 等）没有统一卸载渠道，返回 null 由前端隐藏按钮。
 function pickUninstallMethod(entry) {
   const cmd = (entry.detect?.commands || [])[0];
   if (cmd) {
@@ -121,10 +133,10 @@ function pickUninstallMethod(entry) {
       if (entry.brewCask) return { method: "brew", label: "brew cask", command: `brew uninstall --cask ${entry.brewCask}` };
       if (entry.brew) return { method: "brew", label: "brew", command: `brew uninstall ${entry.brew}` };
     }
+    return null; // 二进制来源不明（系统自带/手动安装）：不提供自动卸载
   }
-  if (entry.brewCask && brewAvailable()) return { method: "brew", label: "brew cask", command: `brew uninstall --cask ${entry.brewCask}` };
-  if (entry.brew && brewAvailable()) return { method: "brew", label: "brew", command: `brew uninstall ${entry.brew}` };
-  if (entry.npm) return { method: "npm", label: "npm -g", command: `npm uninstall -g ${entry.npm}` };
+  if (entry.brewCask && brewOwns(entry.brewCask, true)) return { method: "brew", label: "brew cask", command: `brew uninstall --cask ${entry.brewCask}` };
+  if (entry.brew && brewOwns(entry.brew, false)) return { method: "brew", label: "brew", command: `brew uninstall ${entry.brew}` };
   return null;
 }
 
@@ -149,9 +161,15 @@ function startJob(entry, opts = {}) {
   }
   const verb = action === "update" ? "更新" : action === "uninstall" ? "卸载" : "安装";
 
-  // 同一应用已有任务在跑 → 直接复用
+  // 同一应用已有任务在跑 → 同类动作直接复用；不同动作（如安装中又点卸载）拒绝，防止弹窗与实际执行不符
   for (const job of jobs.values()) {
-    if (job.appId === entry.id && job.running) return { jobId: job.id, reused: true };
+    if (job.appId === entry.id && job.running) {
+      if (job.action !== action) {
+        const runningVerb = job.action === "uninstall" ? "卸载" : job.action === "update" ? "更新" : "安装";
+        return { error: `${entry.name} 正在${runningVerb}中，请等它完成后再试` };
+      }
+      return { jobId: job.id, reused: true };
+    }
   }
 
   const id = `inst${jobSeq++}`;
@@ -186,6 +204,8 @@ function startJob(entry, opts = {}) {
   const killer = setTimeout(() => {
     pushLine(`\n⏰ ${verb}超时（${JOB_TIMEOUT_MS / 60000} 分钟），已终止`);
     try { proc.kill("SIGTERM"); } catch {}
+    // 忽略 SIGTERM 的进程 3 秒后强杀，避免 running 永远为 true 占住复用通道
+    setTimeout(() => { try { proc.kill("SIGKILL"); } catch {} }, 3000);
   }, JOB_TIMEOUT_MS);
 
   proc.stdout.on("data", (d) => pushLine(d.toString()));
@@ -204,8 +224,8 @@ function startJob(entry, opts = {}) {
       try { refreshAvailability(); } catch {}
       const scan = spawn("node", [join(ROOT, "scripts", "scan-tools.js")], { cwd: ROOT, stdio: "ignore" });
       scan.on("error", () => {});
-      // 让下一次更新扫描拿到新版本
-      _updatesCache = { at: 0, data: null, promise: null };
+      // 让下一次更新扫描拿到新版本（作废旧代际，防止 in-flight 扫描把旧数据写回缓存）
+      invalidateUpdates();
     } else {
       pushLine(`\n❌ ${verb}失败（退出码 ${code}）`);
       log(`📦 ✗ ${entry.name} ${verb}失败 code=${code} [${id}]`);
@@ -221,6 +241,7 @@ function startJob(entry, opts = {}) {
     job.exitCode = -1;
     job.finishedAt = Date.now();
     pushLine(`\n❌ 无法启动${verb}进程: ${err.message}`);
+    setTimeout(() => jobs.delete(id), 30 * 60_000).unref();
   });
 
   return { jobId: id };
@@ -230,6 +251,12 @@ function startJob(entry, opts = {}) {
 // 数据源：brew outdated --json=v2 与 npm outdated -g --json（只读查询，不改任何包）
 const UPDATES_TTL_MS = 60_000;
 let _updatesCache = { at: 0, data: null, promise: null };
+let _updatesGen = 0; // 任务成功后作废旧代际，in-flight 扫描结果不再写回缓存
+
+function invalidateUpdates() {
+  _updatesGen++;
+  _updatesCache = { at: 0, data: null, promise: null };
+}
 
 function runCapture(cmd, args, timeoutMs) {
   return new Promise((resolve) => {
@@ -301,9 +328,17 @@ function updatesSnapshot() {
     return Promise.resolve(_updatesCache.data);
   }
   if (!_updatesCache.promise) {
+    const gen = _updatesGen;
     _updatesCache.promise = collectUpdates()
-      .then((data) => { _updatesCache = { at: Date.now(), data, promise: null }; return data; })
-      .catch(() => { _updatesCache = { at: 0, data: null, promise: null }; return null; });
+      .then((data) => {
+        if (gen !== _updatesGen) return null; // 扫描期间有任务完成：本轮结果已过期
+        _updatesCache = { at: Date.now(), data, promise: null };
+        return data;
+      })
+      .catch(() => {
+        if (gen === _updatesGen) _updatesCache = { at: 0, data: null, promise: null };
+        return null;
+      });
   }
   return _updatesCache.promise;
 }
