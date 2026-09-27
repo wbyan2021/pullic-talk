@@ -8,9 +8,12 @@
       "grok-4.5",
       "deepseek-v4-pro-volc",
       "deepseek-v4-flash-volc",
+      "deepseek-v4-flash-official",
+      "deepseek-v4-pro-aliyun",
       "ark-code-latest",
       "doubao-seed-evolving",
-      "qwen3-8-max-preview"
+      "qwen3-8-max-preview",
+      "qwen3-8-max"
     ],
     "role": "技术主导·可派子代理",
     "persona": "你是群聊中的「技术主导」。你的能力：\n1. 你可以 spawn 子代理并行处理复杂任务（调研、实现、测试、审查）\n2. 擅长深度代码分析、架构设计、bug 排查\n3. 遇到大任务时主动拆解，可以分派子代理同时工作\n4. 对其他 AI 的代码方案做技术把关\n你是团队里唯一能多线程工作的，复杂任务由你主导。",
@@ -18,9 +21,25 @@
     "avatar": "G",
     "cli": {
       "command": "grok",
-      "args": ["-p", "{prompt}", "--model", "{model}", "--output-format", "streaming-json", "--yolo", "--max-turns", "3"],
+      "args": [
+        "-p",
+        "{prompt}",
+        "--model",
+        "{model}",
+        "--output-format",
+        "streaming-json",
+        "--yolo",
+        "--max-turns",
+        "3"
+      ],
       "thinkingFlag": "--reasoning-effort",
-      "thinkingMap": { "off": "none", "low": "low", "medium": "medium", "high": "high", "max": "max" },
+      "thinkingMap": {
+        "off": "none",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "max": "max"
+      },
       "parseMode": "ndjson",
       "textField": "data",
       "textType": "text",
@@ -33,6 +52,7 @@
     "models": [
       "deepseek/deepseek-v4-flash",
       "deepseek/deepseek-v4-pro",
+      "volcengine/ark-code-latest",
       "volcengine/glm-5.2",
       "volcengine/kimi-k3",
       "volcengine/doubao-seed-evolving",
@@ -44,9 +64,21 @@
     "avatar": "π",
     "cli": {
       "command": "pi",
-      "args": ["-p", "{prompt}", "--model", "{model}", "--no-session"],
+      "args": [
+        "-p",
+        "{prompt}",
+        "--model",
+        "{model}",
+        "--no-session"
+      ],
       "thinkingFlag": "--thinking",
-      "thinkingMap": { "off": "off", "low": "low", "medium": "medium", "high": "high", "max": "max" },
+      "thinkingMap": {
+        "off": "off",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "max": "max"
+      },
       "parseMode": "text",
       "stdio": "ignore"
     }
@@ -70,9 +102,24 @@
     "avatar": "OC",
     "cli": {
       "command": "openclaw",
-      "args": ["agent", "--agent", "main", "--message", "{prompt}", "--model", "{model}", "--json"],
+      "args": [
+        "agent",
+        "--agent",
+        "main",
+        "--message",
+        "{prompt}",
+        "--model",
+        "{model}",
+        "--json"
+      ],
       "thinkingFlag": "--thinking",
-      "thinkingMap": { "off": "off", "low": "low", "medium": "medium", "high": "high", "max": "high" },
+      "thinkingMap": {
+        "off": "off",
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "max": "high"
+      },
       "parseMode": "json-envelope",
       "jsonTextField": "result.payloads.0.text",
       "stdio": "ignore"
@@ -84,12 +131,12 @@
     "model": "opencode/big-pickle",
     "models": [
       "opencode/big-pickle",
-      "opencode/deepseek-v4-flash-free",
-      "opencode/ling-3.0-flash-free",
+      "opencode/hy3-free",
       "opencode/mimo-v2.5-free",
+      "opencode/muse-spark-1.2-contributor-free",
       "opencode/nemotron-3-ultra-free",
-      "opencode/north-mini-code-free",
-      "opencode/laguna-s-2.1-free",
+      "opencode/nemotron-3.5-lightning-free",
+      "opencode/x-preview-f-free",
       "lmstudio/ornith-1.0-35b-mtplx:2",
       "lmstudio/openai/gpt-oss-20b",
       "lmstudio/qwen/qwen3-30b-a3b-2507",
@@ -101,7 +148,14 @@
     "avatar": "OC",
     "cli": {
       "command": "opencode",
-      "args": ["run", "--model", "{model}", "--format", "json", "{prompt}"],
+      "args": [
+        "run",
+        "--model",
+        "{model}",
+        "--format",
+        "json",
+        "{prompt}"
+      ],
       "parseMode": "ndjson",
       "textField": "part.text",
       "textType": "text",
