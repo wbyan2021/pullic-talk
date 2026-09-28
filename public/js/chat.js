@@ -123,7 +123,8 @@
       el.innerHTML = `
         <div class="agent-toggle-row">
           <span class="drag-handle" title="拖动调整发言顺序">⠿</span>
-          <span class="agent-dot" style="background:${info.color}"></span> ${escapeHtml(info.avatar)}
+          <span class="agent-dot" style="background:${info.color}"></span>
+          <span class="agent-chip-name">${escapeHtml(info.name)}</span>
         </div>
       `;
       // 拖拽仅允许从手柄发起：卡片默认 draggable=false，
@@ -168,7 +169,7 @@
       el.title = `本机未安装 ${info.name} 的 CLI，点击安装`;
       el.innerHTML = `
         <div class="agent-toggle-row">
-          <span class="agent-dot"></span> ${escapeHtml(info.avatar)}
+          <span class="agent-chip-name">${escapeHtml(info.name)}</span>
         </div>
         <div class="model-badge missing">未安装 ⬇</div>
       `;

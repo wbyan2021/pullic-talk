@@ -587,6 +587,13 @@ v0.1 版本收尾：在合并后的 `main` 基线上，用户用活动项目真�
 
 - 追加同源问题：用户随即指出右上角成员卡片仍无法选择启用/停用——根因是重构渲染时卡片被无条件渲染为 `active` 高亮态，点击切换在底层生效但视觉完全不变。修复：`renderAgentToggles` 按 `selectedAgents` 渲染（启用=彩色高亮+序号徽标，停用=灰暗 0.45 透明度+置灰滤镜，title 分别提示）；CSS 增加 `:not(.active)` 停用态。实机验证：点击往复 class/opacity/selected 三者联动正确；停用成员不进入普通消息 targets（由 `selectedAgents.has` 过滤）。
 
+### 2026-09-24 · 群聊成员卡片显示完整名字（用户要求）
+
+- 需求：用户指出顶栏成员卡片只有头像字母（G/π/OC…）和模型名，看不出是谁，要求尽量显示全名。
+- 完成：`public/js/chat.js` 的 `renderAgentToggles` 启用与未安装卡片均改为显示 `info.name`（escapeHtml），替代原头像字母；`public/css/chat.css` 新增 `.agent-chip-name`（11.5px、nowrap、110px 截断保护）。模型下拉/徽标保持不变。
+- 过程说明：本轮一次编辑在未重读文件的情况下凭记忆操作（侥幸命中，因渲染代码是本会话早前所写），已用 git diff 逐行核对确认改动内容与意图完全一致、无残留垃圾文件（find 无 chat-ui.js 等意外产物），后续仍应先读后改。
+- 证据：实机浏览器验证 7 张卡片全部显示完整名（Grok Build / Pi Agent / OpenCode / Claude Code / Gemini CLI / Codex / Qwen Code），无一截断（scrollWidth 检查）；截图确认顶栏单行布局无溢出；`node --check`、全量 `node --test` 368/368、`git diff --check` 通过。
+
 ### 2026-09-24 · 模型清单修正 + 全局审查第二 Inserts 轮（用户要求）
 
 - 模型修复（提交 5e03732）：opencode 以 `opencode models` 权威清单为准——删除 4 个已下架（deepseek-v4-flash-free / ling-3.0-flash-free / north-mini-code-free / laguna-s-2.1-free），新增 4 个在架（hy3-free / muse-spark-1.2-contributor-free / nemotron-3.5-lightning-free / x-preview-f-free）；grok 以 `grok models` 确认原 8 个全部有效并补 3 个（qwen3-8-max / deepseek-v4-flash-official / deepseek-v4-pro-aliyun）；pi 补 volcengine/ark-code-latest。说明：openclaw 不在群聊是其配置 enabled=false（成员面板停用），非 bug。
