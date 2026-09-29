@@ -46,6 +46,18 @@ function changedCount(snapshot) {
     .reduce((sum, key) => sum + (Number.isInteger(counts[key]) && counts[key] >= 0 ? counts[key] : 0), 0);
 }
 
+// 改动内容摘要：只靠 changedCount 做指纹会留空洞——删一个文件同时加一个文件、
+// 或同一批文件被再次写入，数量不变但项目状态已不是用户预览时的那个。
+function pathsDigest(source) {
+  const entries = Array.isArray(source.entries) ? source.entries : [];
+  const pairs = entries
+    .map((entry) => (entry && typeof entry.path === "string" ? `${entry.path}\u0000${entry.status ?? ""}` : null))
+    .filter(Boolean)
+    .sort();
+  if (pairs.length === 0) return "none";
+  return createHash("sha256").update(JSON.stringify(pairs)).digest("hex").slice(0, 16);
+}
+
 function safeSnapshot(snapshot) {
   const source = snapshotData(snapshot);
   const count = changedCount(source);
@@ -54,12 +66,26 @@ function safeSnapshot(snapshot) {
     head: headOf(source),
     worktree: count > 0 ? "modified" : "clean",
     changedCount: count,
+    pathsDigest: pathsDigest(source),
     truncated: Boolean(source.truncated),
   };
 }
 
 function fingerprint(values) {
   return createHash("sha256").update(JSON.stringify(values)).digest("hex");
+}
+
+function fingerprintOf({ taskId, sourceProjectId, terminalSeq, active, current }) {
+  return fingerprint({
+    sourceTaskId: taskId,
+    sourceProjectId,
+    terminalSeq,
+    projectId: active.id,
+    branch: current.branch,
+    head: current.head,
+    changedCount: current.changedCount,
+    pathsDigest: current.pathsDigest,
+  });
 }
 
 function sourceDetails(record) {
@@ -105,6 +131,10 @@ export function createTaskRecovery({
   if (!taskEvidence) throw new TypeError("taskEvidence is required");
 
   const previews = new Map();
+  // 资格扫描的增量缓存（taskId -> 文件签名 + 解析结果）。
+  // 总览页可见时每 5 秒轮询一次 /api/overview，全量重读并逐行 parse 整个黑匣子
+  // 的代价会随历史增长单调变贵，而这里只需要"最近一条可恢复任务"。
+  let eligibilityCache = { projectId: null, byTask: new Map() };
 
   async function activeProject() {
     let status;
@@ -213,27 +243,27 @@ export function createTaskRecovery({
       projectId: active.id,
       before,
       current,
-      fingerprint: fingerprint({
-        sourceTaskId: taskId,
+      fingerprint: fingerprintOf({
+        taskId,
         sourceProjectId: source.details.sourceProjectId,
         terminalSeq: source.details.terminalSeq,
-        projectId: active.id,
-        branch: current.branch,
-        head: current.head,
-        changedCount: current.changedCount,
+        active,
+        current,
       }),
       previewId: makePreviewId(),
       expiresAt: new Date(now() + Math.max(1_000, Number(previewTtlMs) || DEFAULT_PREVIEW_TTL_MS)).toISOString(),
       task: source.details.task,
       used: false,
     };
-    previews.set(entry.previewId, entry);
-    while (previews.size > MAX_PREVIEWS) previews.delete(previews.keys().next().value);
+    // 先落审计事件，再登记句柄：顺序反过来时，审计写入失败会留下
+    // "可以消费但在黑匣子里查无此人"的预览句柄
     await appendSourceEvent(active, taskId, "recovery_previewed", {
       sourceState: entry.sourceState,
       reasonCode: entry.reasonCode,
       previewId: entry.previewId,
     });
+    previews.set(entry.previewId, entry);
+    while (previews.size > MAX_PREVIEWS) previews.delete(previews.keys().next().value);
     return previewPayload(entry);
   }
 
@@ -250,14 +280,12 @@ export function createTaskRecovery({
     const source = await readSource(active, taskId);
     if (await executionBusy()) throw new TaskRecoveryError("recovery_busy");
     const current = safeSnapshot(await currentSnapshot(active));
-    const currentFingerprint = fingerprint({
-      sourceTaskId: taskId,
+    const currentFingerprint = fingerprintOf({
+      taskId,
       sourceProjectId: source.details.sourceProjectId,
       terminalSeq: source.details.terminalSeq,
-      projectId: active.id,
-      branch: current.branch,
-      head: current.head,
-      changedCount: current.changedCount,
+      active,
+      current,
     });
     if (currentFingerprint !== entry.fingerprint) throw new TaskRecoveryError("recovery_preview_expired");
 
@@ -303,23 +331,54 @@ export function createTaskRecovery({
       throw error;
     }
     if (await executionBusy()) return { available: false, sourceTaskId: null, sourceState: null, reasonCode: null, state: "busy" };
-    let taskIds;
-    try { taskIds = await blackboxStore.listTasks({ projectId: active.id }); }
-    catch { throw new TaskRecoveryError("recovery_internal_error", { retryable: true }); }
+    if (eligibilityCache.projectId !== active.id) eligibilityCache = { projectId: active.id, byTask: new Map() };
+    // 存储不支持文件签名时退化为每次全量解析（正确性优先于省开销）
+    const canCache = typeof blackboxStore.describeTasks === "function";
+    let described;
+    try {
+      described = canCache
+        ? await blackboxStore.describeTasks({ projectId: active.id })
+        : (await blackboxStore.listTasks({ projectId: active.id })).map((taskId) => ({ taskId, sig: null }));
+    } catch {
+      throw new TaskRecoveryError("recovery_internal_error", { retryable: true });
+    }
+
+    const seen = new Set();
     const candidates = [];
-    for (const taskId of taskIds) {
+    for (const item of described) {
+      const { taskId } = item;
+      seen.add(taskId);
+      const sig = item.sig ?? `${item.mtimeMs}:${item.size}`;
+      const cached = canCache ? eligibilityCache.byTask.get(taskId) : undefined;
+      if (cached && cached.sig === sig) {
+        if (cached.summary) candidates.push(cached.summary);
+        continue;
+      }
+      let summary = null;
       try {
         const source = await readSource(active, taskId);
-        const terminalAt = source.details.terminal?.at ?? "";
-        candidates.push({ taskId, source, terminalAt });
-      } catch (error) {
-        if (error.code !== "recovery_not_eligible" && error.code !== "recovery_payload_unavailable" && error.code !== "recovery_task_not_found") throw error;
+        summary = {
+          taskId,
+          terminalAt: typeof source.details.terminal?.at === "string" ? source.details.terminal.at : "",
+          sourceState: source.details.state,
+          reasonCode: source.details.reasonCode,
+        };
+      } catch {
+        // 不合格、缺 payload，或这个任务文件本身读不动——都只跳过这一条。
+        // 单个坏文件不得屏蔽整个总览（2026-09-23 在 store 层做的隔离，此前在本层又聚合回了整页失败）
+        summary = null;
       }
+      if (canCache) eligibilityCache.byTask.set(taskId, { sig, summary });
+      if (summary) candidates.push(summary);
     }
+    for (const taskId of [...eligibilityCache.byTask.keys()]) {
+      if (!seen.has(taskId)) eligibilityCache.byTask.delete(taskId);
+    }
+
     candidates.sort((a, b) => a.terminalAt.localeCompare(b.terminalAt) || a.taskId.localeCompare(b.taskId));
     const latest = candidates.at(-1);
     return latest
-      ? { available: true, sourceTaskId: latest.taskId, sourceState: latest.source.details.state, reasonCode: latest.source.details.reasonCode, state: "previewable" }
+      ? { available: true, sourceTaskId: latest.taskId, sourceState: latest.sourceState, reasonCode: latest.reasonCode, state: "previewable" }
       : { available: false, sourceTaskId: null, sourceState: null, reasonCode: null, state: "not_available" };
   }
 

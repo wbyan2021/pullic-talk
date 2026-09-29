@@ -6,6 +6,7 @@ import {
   mkdir,
   readFile,
   readdir,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
@@ -95,6 +96,7 @@ export function createBlackboxStore({
     mkdir: fsImpl.mkdir ?? mkdir,
     readFile: fsImpl.readFile ?? readFile,
     readdir: fsImpl.readdir ?? readdir,
+    stat: fsImpl.stat ?? stat,
     writeFile: fsImpl.writeFile ?? writeFile,
   };
   const locks = new Map();
@@ -219,6 +221,21 @@ export function createBlackboxStore({
       .slice(0, 200);
   }
 
+  // 便宜的“哪些任务文件变过”签名。调用方（恢复资格扫描）据此缓存解析结果，
+  // 否则总览页每 5 秒轮询就要把整个黑匣子重读并逐行 JSON.parse 一遍。
+  async function describeTasks({ projectId } = {}) {
+    const ids = await listTasks({ projectId });
+    const described = await Promise.all(ids.map(async (taskId) => {
+      try {
+        const info = await fs.stat(fileFor(projectId, taskId));
+        return { taskId, mtimeMs: Math.round(info.mtimeMs), size: info.size };
+      } catch {
+        return null; // 列目录后被删除：跳过
+      }
+    }));
+    return described.filter(Boolean);
+  }
+
   async function recoverIncomplete() {
     let projectEntries;
     try {
@@ -268,5 +285,5 @@ export function createBlackboxStore({
     return recovered;
   }
 
-  return { beginTask, appendEvent, closeTask, readTask, listTasks, recoverIncomplete };
+  return { beginTask, appendEvent, closeTask, readTask, listTasks, describeTasks, recoverIncomplete };
 }

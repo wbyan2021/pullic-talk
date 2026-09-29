@@ -224,3 +224,108 @@ test("status returns a safe stale state when no active project is selected", asy
     state: "stale",
   });
 });
+
+// ===== 2026-09-30 排查项的回归 =====
+
+function failedTaskEvents(taskId = "task_old") {
+  return [
+    { seq: 1, type: "task_created", at: "2026-09-01T00:00:00.000Z", data: { task: "把文档同步一次", projectId: "project_001" } },
+    { seq: 2, type: "failed", at: "2026-09-01T00:05:00.000Z", data: { code: "pi_exit_1" } },
+  ];
+}
+
+test("一个读不动的任务文件不再屏蔽整个总览", async () => {
+  let appended = 0;
+  const store = {
+    async listTasks() { return ["task_broken", "task_good"]; },
+    async readTask({ taskId }) {
+      if (taskId === "task_broken") throw new Error("磁盘读坏了");
+      return { projectId: "project_001", taskId, events: failedTaskEvents(taskId) };
+    },
+    async appendEvent() { appended += 1; },
+  };
+  const recovery = createTaskRecovery({
+    projectBoundary: makeBoundary(),
+    blackboxStore: store,
+    taskEvidence: { async captureSnapshot() { return snapshot(); }, async getStatus() { return { state: "idle" }; } },
+  });
+
+  // 旧实现：readSource 抛出的非"不合格"错误会一路上抛 → /api/overview 500 → 整页不可用
+  const status = await recovery.getStatus();
+  assert.equal(status.available, true, "坏文件旁边的可恢复任务仍应被找到");
+  assert.equal(status.sourceTaskId, "task_good");
+  assert.equal(status.state, "previewable");
+});
+
+test("总览轮询不重复解析未变化的任务文件", async () => {
+  let parses = 0;
+  const files = [
+    { taskId: "task_a", mtimeMs: 1000, size: 200 },
+    { taskId: "task_b", mtimeMs: 1100, size: 240 },
+  ];
+  const store = {
+    async listTasks() { return files.map((f) => f.taskId); },
+    async describeTasks() { return files.map((f) => ({ ...f })); },
+    async readTask({ taskId }) {
+      parses += 1;
+      return { projectId: "project_001", taskId, events: failedTaskEvents(taskId) };
+    },
+    async appendEvent() {},
+  };
+  const recovery = createTaskRecovery({
+    projectBoundary: makeBoundary(),
+    blackboxStore: store,
+    taskEvidence: { async captureSnapshot() { return snapshot(); }, async getStatus() { return { state: "idle" }; } },
+  });
+
+  await recovery.getStatus();
+  assert.equal(parses, 2, "首轮需要解析全部任务");
+  await recovery.getStatus();
+  await recovery.getStatus();
+  assert.equal(parses, 2, "文件签名未变时不得再读盘解析");
+
+  files[1] = { ...files[1], mtimeMs: 9999, size: 400 };
+  await recovery.getStatus();
+  assert.equal(parses, 3, "只有变化的那个任务文件需要重新解析");
+});
+
+test("确认恢复能察觉“改动文件数相同、内容不同”的项目状态", async () => {
+  const store = {
+    async listTasks() { return ["task_old"]; },
+    async readTask() { return { projectId: "project_001", taskId: "task_old", events: failedTaskEvents() }; },
+    async appendEvent() {},
+  };
+  // 两次快照：counts 完全一样，被改的文件从 src/a.js 换成 src/b.js
+  const wrap = (overrides) => ({
+    projectId: "project_001",
+    repoRoot: "/tmp/project",
+    snapshot: snapshot(overrides),
+  });
+  const snapshots = [
+    wrap({ counts: { staged: 0, unstaged: 1, untracked: 0, conflicted: 0 }, entries: [{ status: " M", path: "src/a.js" }] }),
+    wrap({ counts: { staged: 0, unstaged: 1, untracked: 0, conflicted: 0 }, entries: [{ status: " M", path: "src/b.js" }] }),
+  ];
+  let capture = 0;
+  const recovery = createTaskRecovery({
+    projectBoundary: makeBoundary(),
+    blackboxStore: store,
+    taskEvidence: {
+      async captureSnapshot() { return snapshots[Math.min(capture++, snapshots.length - 1)]; },
+      async getStatus() { return { state: "idle" }; },
+    },
+  });
+
+  const preview = await recovery.preview({ taskId: "task_old" });
+  assert.equal(preview.eligible, true);
+  assert.equal(preview.changedCount, 1, "两次的项目状态改动数量相同");
+
+  await assert.rejects(
+    () => recovery.start({ taskId: "task_old", previewId: preview.previewId, confirmed: true }),
+    (error) => {
+      assert.ok(error instanceof TaskRecoveryError);
+      assert.equal(error.code, "recovery_preview_expired");
+      return true;
+    },
+    "仅靠 changedCount 兜不住的改动必须让预览失效",
+  );
+});
