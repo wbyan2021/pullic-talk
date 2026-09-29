@@ -61,7 +61,7 @@ function brewBinDir() {
   return _brewBinDir;
 }
 
-function isInstalled(entry) {
+export function isInstalled(entry) {
   const det = entry.detect || {};
   const cmds = det.commands || [];
   for (const cmd of cmds) {
@@ -149,6 +149,7 @@ let jobSeq = 1;
 
 function startJob(entry, opts = {}) {
   const action = opts.action || (opts.update ? "update" : "install");
+  const spawnFn = opts.spawnImpl || spawn;
   const picked = action === "update" ? pickUpdateMethod(entry)
     : action === "uninstall" ? pickUninstallMethod(entry)
     : pickMethod(entry);
@@ -195,7 +196,8 @@ function startJob(entry, opts = {}) {
   log(`📦 开始${verb} ${entry.name} [${id}] (${picked.label}): ${picked.command}`);
   pushLine(`$ ${picked.command}`);
 
-  const proc = spawn("/bin/zsh", ["-lc", picked.command], {
+  // spawnImpl 可注入：测试必须能在结构上不可能启动真实包管理器进程
+  const proc = spawnFn("/bin/zsh", ["-lc", picked.command], {
     cwd: process.env.HOME, env: process.env, stdio: ["ignore", "pipe", "pipe"],
   });
   job.pid = proc.pid;
@@ -222,7 +224,7 @@ function startJob(entry, opts = {}) {
       log(`📦 ✓ ${entry.name} ${verb}完成 [${id}]`);
       // 成功：刷新 agent 可用性 + 后台重扫工具清单
       try { refreshAvailability(); } catch {}
-      const scan = spawn("node", [join(ROOT, "scripts", "scan-tools.js")], { cwd: ROOT, stdio: "ignore" });
+      const scan = spawnFn("node", [join(ROOT, "scripts", "scan-tools.js")], { cwd: ROOT, stdio: "ignore" });
       scan.on("error", () => {});
       // 让下一次更新扫描拿到新版本（作废旧代际，防止 in-flight 扫描把旧数据写回缓存）
       invalidateUpdates();
@@ -343,11 +345,15 @@ function updatesSnapshot() {
   return _updatesCache.promise;
 }
 
-export default function installRoutes(app) {
+// deps 可注入（测试用）：spawnImpl 让测试结构上无法启动真实包管理器进程，
+// isInstalledImpl 让闸门分支不依赖开发机上恰好装了哪些软件。
+export default function installRoutes(app, deps = {}) {
+  const { spawnImpl = spawn, isInstalledImpl = isInstalled } = deps;
+
   // 安装目录（含已安装状态 + 推荐安装方式 + 新手推荐顺序）
   app.get("/api/install/catalog", (req, res) => {
     const entries = INSTALL_CATALOG.map((e) => {
-      const installed = isInstalled(e);
+      const installed = isInstalledImpl(e);
       const picked = pickMethod(e);
       return {
         id: e.id, name: e.name, kind: e.kind, group: e.group,
@@ -381,13 +387,13 @@ export default function installRoutes(app) {
       if (PROTECTED_UNINSTALL.has(entry.id)) {
         return res.status(400).json({ error: `${entry.name} 是驾驶舱运行的基础环境，不提供卸载` });
       }
-      if (!isInstalled(entry)) return res.status(400).json({ error: `${entry.name} 尚未安装，无需卸载` });
+      if (!isInstalledImpl(entry)) return res.status(400).json({ error: `${entry.name} 尚未安装，无需卸载` });
     } else if (action === "update") {
-      if (!isInstalled(entry)) return res.status(400).json({ error: `${entry.name} 尚未安装，无需更新` });
+      if (!isInstalledImpl(entry)) return res.status(400).json({ error: `${entry.name} 尚未安装，无需更新` });
     } else {
-      if (isInstalled(entry)) return res.status(400).json({ error: `${entry.name} 已经安装` });
+      if (isInstalledImpl(entry)) return res.status(400).json({ error: `${entry.name} 已经安装` });
     }
-    const result = startJob(entry, { action });
+    const result = startJob(entry, { action, spawnImpl });
     if (result.error) return res.status(400).json(result);
     res.json({ ok: true, ...result });
   });

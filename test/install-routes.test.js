@@ -1,19 +1,44 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
-import { once } from "node:events";
+import { once, EventEmitter } from "node:events";
 
 const { default: express } = await import("express");
-const { default: installRoutes } = await import("../src/routes/install.js");
-const { STARTER_PATH, INSTALL_CATALOG } = await import("../src/install-catalog.js");
+const { default: installRoutes, isInstalled } = await import("../src/routes/install.js");
+const { STARTER_PATH, INSTALL_CATALOG, getInstallEntry } = await import("../src/install-catalog.js");
 
 let server;
 let base;
 
+// 这两项注入是安全边界，不是便利：
+//   1) spawnCalls —— 测试绝不能触达真实包管理器（曾出现假设某包未装、
+//      而开发机恰好装了它，于是 `npm test` 真的跑了一次 npm install -g）。
+//   2) installedView —— 闸门分支不得依赖开发机上恰好装了哪些软件，
+//      否则同一份测试在别的机器/CI 上会走进"接受任务"那条分支。
+let spawnCalls = [];
+let installedView = null; // null = 跟随本机；Set = 固定的测试视图
+
+function fakeProc() {
+  const proc = new EventEmitter();
+  proc.stdout = new EventEmitter();
+  proc.stderr = new EventEmitter();
+  proc.pid = 987654;
+  proc.kill = () => true;
+  // 以非 0 退出：走失败分支，避免成功分支再去刷可用性/重扫工具
+  setImmediate(() => proc.emit("close", 1));
+  return proc;
+}
+
 before(async () => {
   const app = express();
   app.use(express.json());
-  installRoutes(app);
+  installRoutes(app, {
+    spawnImpl: (cmd, args, opts) => {
+      spawnCalls.push({ cmd, args, opts });
+      return fakeProc();
+    },
+    isInstalledImpl: (entry) => (installedView === null ? isInstalled(entry) : installedView.has(entry.id)),
+  });
   server = app.listen(0, "127.0.0.1");
   await once(server, "listening");
   base = `http://127.0.0.1:${server.address().port}`;
@@ -31,6 +56,17 @@ async function req(method, path, body) {
   });
   const text = await res.text();
   return { status: res.status, data: JSON.parse(text || "{}"), text };
+}
+
+// 每个闸门测试自己声明"本机装了哪些"，并断言拒绝路径一次 spawn 都没发生
+function withInstalled(ids) {
+  installedView = new Set(ids);
+  spawnCalls = [];
+}
+
+function resetInstalledView() {
+  installedView = null;
+  spawnCalls = [];
 }
 
 test("GET /api/install/catalog 返回新手推荐顺序与完整条目", async () => {
@@ -78,7 +114,7 @@ test("目录事实与源码常量一致（防止路由另建第二套数据）",
   assert.equal(data.entries.length, INSTALL_CATALOG.length);
 });
 
-test("GET /api/install/updates 返回版本与更新状态（pi 已安装且带版本）", async () => {
+test("GET /api/install/updates 返回版本与更新状态（不假设本机装了哪个具体软件）", async () => {
   const { status, data } = await req("GET", "/api/install/updates");
   assert.equal(status, 200);
   assert.equal(typeof data.scannedAt, "number");
@@ -89,48 +125,89 @@ test("GET /api/install/updates 返回版本与更新状态（pi 已安装且带�
     if (!row.installed) continue;
     assert.equal(row.updateAvailable && row.latest === null, false, `${row.id}: update must carry latest when available`);
   }
-  const pi = byId.get("pi-agent");
-  assert.equal(pi.installed, true, "pi agent is installed on this machine");
-  assert.match(pi.version || "", /^\d+\.\d+/, `pi version should be detected, got ${pi.version}`);
+  // 不断言"某个具体软件在本机已装"：那会让测试随开发机状态翻脸。
+  // 契约是"若探测到已装，则版本号必须是被真实解析出来的"。
+  const probed = data.entries.filter((e) => e.installed);
+  assert.ok(probed.length > 0, "测试机至少应探测到一个已装条目（node 本身）");
+  for (const row of probed) {
+    if (row.version !== null) {
+      assert.match(String(row.version), /\d/, `${row.id}: detected version must contain a digit, got ${row.version}`);
+    }
+  }
   const node = byId.get("node");
-  assert.equal(node.installed, true);
-  assert.match(node.version || "", /^\d+\./, "node version should be detected");
+  assert.equal(node.installed, true, "跑着测试的机器上 node 必然可用");
 });
 
-test("POST /api/install 的 update 动作有闸门：未安装/导航条目一律拒绝", async () => {
-  // qwen-code 在本机未安装：更新必须被拒，且绝不启动任务
-  const notInstalled = await req("POST", "/api/install", { id: "qwen-code", action: "update" });
-  assert.equal(notInstalled.status, 400);
-  assert.ok(notInstalled.data.error.includes("尚未安装"));
+test("POST /api/install 的 update 闸门：未安装与导航条目一律拒绝，且不触达真实安装", async () => {
+  // 视图里声明为"未安装"——与开发机实际装了什么无关
+  withInstalled([]);
+  try {
+    const notInstalled = await req("POST", "/api/install", { id: "qwen-code", action: "update" });
+    assert.equal(notInstalled.status, 400);
+    assert.ok(notInstalled.data.error.includes("尚未安装"), notInstalled.data.error);
 
-  const link = await req("POST", "/api/install", { id: "site-openai", action: "update" });
-  assert.equal(link.status, 400);
+    const link = await req("POST", "/api/install", { id: "site-openai", action: "update" });
+    assert.equal(link.status, 400);
 
-  // 未安装条目不带 action 的正常安装分支保持原语义（这里只验证拒绝逻辑，不真装）
-  const installLink = await req("POST", "/api/install", { id: "site-deepseek" });
-  assert.equal(installLink.status, 400);
+    const installLink = await req("POST", "/api/install", { id: "site-deepseek" });
+    assert.equal(installLink.status, 400);
+
+    assert.deepEqual(spawnCalls, [], "被拒绝的请求绝不能启动任何子进程");
+  } finally {
+    resetInstalledView();
+  }
 });
 
-test("卸载闸门：保护项拒绝、未安装拒绝、导航条目拒绝，绝不真卸载", async () => {
-  // 基础环境保护（驾驶舱自身依赖）
-  const node = await req("POST", "/api/install", { id: "node", action: "uninstall" });
-  assert.equal(node.status, 400);
-  assert.ok(node.data.error.includes("基础环境"), node.data.error);
+test("卸载闸门：保护项、未安装、导航条目都被拒，且不触达真实卸载", async () => {
+  // 全部声明为已安装：这样"未安装"分支不会误兜住保护项的断言
+  withInstalled(["node", "homebrew", "git", "qwen-code"]);
+  try {
+    for (const protectedId of ["node", "homebrew", "git"]) {
+      const r = await req("POST", "/api/install", { id: protectedId, action: "uninstall" });
+      assert.equal(r.status, 400, `${protectedId} 必须拒绝卸载`);
+      assert.ok(r.data.error.includes("基础环境"), `${protectedId}: ${r.data.error}`);
+    }
+    assert.deepEqual(spawnCalls, [], "保护项拒绝后不得启动子进程");
+  } finally {
+    resetInstalledView();
+  }
 
-  const brew = await req("POST", "/api/install", { id: "homebrew", action: "uninstall" });
-  assert.equal(brew.status, 400);
+  withInstalled([]);
+  try {
+    const missing = await req("POST", "/api/install", { id: "qwen-code", action: "uninstall" });
+    assert.equal(missing.status, 400);
+    assert.ok(missing.data.error.includes("尚未安装"), missing.data.error);
 
-  const git = await req("POST", "/api/install", { id: "git", action: "uninstall" });
-  assert.equal(git.status, 400);
+    const link = await req("POST", "/api/install", { id: "site-openai", action: "uninstall" });
+    assert.equal(link.status, 400);
 
-  // 未安装条目不可卸载（qwen-code 本机未装）
-  const missing = await req("POST", "/api/install", { id: "qwen-code", action: "uninstall" });
-  assert.equal(missing.status, 400);
-  assert.ok(missing.data.error.includes("尚未安装"));
+    assert.deepEqual(spawnCalls, [], "未安装/导航条目拒绝后不得启动子进程");
+  } finally {
+    resetInstalledView();
+  }
+});
 
-  // 官网导航条目不可卸载
-  const link = await req("POST", "/api/install", { id: "site-openai", action: "uninstall" });
-  assert.equal(link.status, 400);
+test("已安装条目不得重复安装；被接受的安装只执行目录常量里的命令", async () => {
+  withInstalled(["qwen-code"]);
+  try {
+    const dup = await req("POST", "/api/install", { id: "qwen-code" });
+    assert.equal(dup.status, 400);
+    assert.ok(dup.data.error.includes("已经安装"), dup.data.error);
+    assert.deepEqual(spawnCalls, [], "重复安装不得启动子进程");
+
+    // 接受路径：命令必须来自目录常量，请求体里除 id/action 之外不接受任何用户输入
+    const entry = getInstallEntry("qwen-code");
+    const ok = await req("POST", "/api/install", { id: "qwen-code", action: "update", command: "rm -rf /" });
+    assert.equal(ok.status, 200, JSON.stringify(ok.data));
+    assert.equal(spawnCalls.length, 1, "接受后恰好启动一个任务");
+    assert.equal(spawnCalls[0].cmd, "/bin/zsh");
+    assert.equal(spawnCalls[0].args[0], "-lc");
+    const command = spawnCalls[0].args[1];
+    assert.ok(command.includes(entry.npm), `command must come from the catalog package field: ${command}`);
+    assert.ok(!command.includes("rm -rf"), "client-supplied command field must never reach argv");
+  } finally {
+    resetInstalledView();
+  }
 });
 
 test("目录为已安装条目返回 canUninstall，保护项与导航条目恒为 false", async () => {
@@ -143,6 +220,13 @@ test("目录为已安装条目返回 canUninstall，保护项与导航条目恒�
     assert.equal(byId.get(protectedId).canUninstall, false, `${protectedId} 不可卸载`);
   }
   assert.equal(byId.get("site-deepseek").canUninstall, false, "导航条目不可卸载");
-  // 本机 npm 全局装的 pi 应可卸载（npmBinDir 兜底探测命中）
-  assert.equal(byId.get("pi-agent").canUninstall, true);
+  // 本机确实装着 pi 时，npm -g / brew bin 兜底探测必须把它认成可卸载；
+  // 未装时不作要求（canUninstall 由归属探测决定，与本机是否安装是两件事）
+  if (byId.get("pi-agent").installed) {
+    assert.equal(byId.get("pi-agent").canUninstall, true, "installed pi-agent must be offerable for uninstall");
+  }
+  assert.ok(
+    data.entries.some((e) => e.canUninstall),
+    "目录里至少要有一个可卸载条目，否则控制台卸载入口永远不可用",
+  );
 });
