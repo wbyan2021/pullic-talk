@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -223,4 +223,55 @@ test("readSummary never reads records or writes files", async (t) => {
   assert.equal(summary.state, "ready");
   assert.equal(summary.nextAction, "[withheld_sensitive]");
   assert.ok(accessed.every((filePath) => !filePath.includes(`${join("docs", "ai-ops", "records")}`)));
+});
+
+// 写入失败时不得把 .tmp 留在用户仓库里：本产品自己会用 Git 快照统计未跟踪改动，
+// 残留的临时文件会混进 changedPaths，污染它要交付的“文件变化证据”（2026-09-30 排查发现）。
+test("发布失败时清理临时文件，不在目标项目里留下残骸", async (t) => {
+  const root = makeRoot(t);
+  const broken = createAiHandoff({
+    fsImpl: { rename: async () => { throw Object.assign(new Error("cross-device"), { code: "EXDEV" }); } },
+  });
+
+  await assert.rejects(() => broken.writeCurrent(baseInput(root)), (error) => {
+    assert.equal(error.code, "io_error");
+    return true;
+  });
+
+  const nowPath = join(root, "docs", "ai-ops");
+  const leftovers = existsSync(nowPath)
+    ? readdirSync(nowPath).filter((name) => name.includes(".tmp-"))
+    : [];
+  assert.deepEqual(leftovers, [], "no *.tmp-* may survive a failed publish");
+});
+
+// 历史记录“不可覆盖”必须是发布动作本身的性质，不能只靠 exists() 预检——
+// 预检与发布之间的窗口里并发写入会静默覆盖掉已有历史。
+test("历史记录的发布是不可覆盖的：link 报 EEXIST 时拒绝而非盖掉", async (t) => {
+  const root = makeRoot(t);
+  const recordsDir = join(root, "docs", "ai-ops", "records");
+  mkdirSync(recordsDir, { recursive: true });
+  const sentinel = join(recordsDir, "task_race.md");
+  writeFileSync(sentinel, "已有的历史记录，绝不能被覆盖\n", "utf8");
+
+  let linked = false;
+  const racing = createAiHandoff({
+    fsImpl: {
+      // 预检看到的是"不存在"，发布时才撞上另一个写入者
+      access: async (filePath) => {
+        if (filePath === sentinel && !linked) throw Object.assign(new Error("missing"), { code: "ENOENT" });
+        return undefined;
+      },
+      link: async () => {
+        linked = true;
+        throw Object.assign(new Error("already exists"), { code: "EEXIST" });
+      },
+    },
+  });
+
+  const code = await rejectCode(racing.writeRecord(baseInput(root, "task_race")));
+  assert.equal(code, "write_conflict");
+  assert.equal(readFileSync(sentinel, "utf8"), "已有的历史记录，绝不能被覆盖\n");
+  const leftovers = readdirSync(recordsDir).filter((name) => name.includes(".tmp-"));
+  assert.deepEqual(leftovers, [], "失败的记录发布同样不得留下临时文件");
 });

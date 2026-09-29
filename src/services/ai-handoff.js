@@ -2,14 +2,16 @@
 
 import {
   access,
+  link,
   mkdir,
   readFile,
   rename,
+  unlink,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
 
-import { REDACTION_MARKER, redactText as defaultRedactText } from "./safe-redactor.js";
+import { REDACTION_MARKER, SENSITIVE_KEY_NAME_PATTERN, redactText as defaultRedactText } from "./safe-redactor.js";
 
 const MANAGED_MARKER = "<!-- ai-ops-managed:v1 -->";
 const POINTER_BEGIN = "<!-- AI-OPS-COCKPIT:BEGIN -->";
@@ -17,7 +19,8 @@ const POINTER_END = "<!-- AI-OPS-COCKPIT:END -->";
 const MAX_VALUE_BYTES = 8 * 1024;
 const MAX_SUMMARY_STATUS_CHARS = 64;
 const MAX_SUMMARY_ACTION_CHARS = 300;
-const SENSITIVE_KEY = /(?:api[-_]?key|token|password|secret|private[-_]?key|authorization)/i;
+// 键名表与 safe-redactor 共用单一来源，避免两处规则各自漂移
+const SENSITIVE_KEY = SENSITIVE_KEY_NAME_PATTERN;
 
 export class AiHandoffError extends Error {
   constructor(code, { retryable = false } = {}) {
@@ -155,9 +158,11 @@ function initialHandoffInput() {
 export function createAiHandoff({ now = () => Date.now(), fsImpl = {}, redactText = defaultRedactText } = {}) {
   const fs = {
     access: fsImpl.access ?? access,
+    link: fsImpl.link ?? link,
     mkdir: fsImpl.mkdir ?? mkdir,
     readFile: fsImpl.readFile ?? readFile,
     rename: fsImpl.rename ?? rename,
+    unlink: fsImpl.unlink ?? unlink,
     writeFile: fsImpl.writeFile ?? writeFile,
   };
 
@@ -181,13 +186,25 @@ export function createAiHandoff({ now = () => Date.now(), fsImpl = {}, redactTex
     }
   }
 
-  async function atomicWrite(filePath, content) {
+  async function atomicWrite(filePath, content, { noReplace = false } = {}) {
     const tempPath = `${filePath}.tmp-${process.pid}-${now().toString(36)}`;
+    let published = false;
     try {
       await fs.mkdir(path.dirname(filePath), { recursive: true });
       await fs.writeFile(tempPath, content, { encoding: "utf8", flag: "wx" });
-      await fs.rename(tempPath, filePath);
+      if (noReplace) {
+        // link() 在目标已存在时以 EEXIST 失败，是原子的“绝不覆盖”发布：
+        // exists() 预检与 rename 之间的竞态窗口被关闭，历史记录不可覆盖才是硬承诺
+        await fs.link(tempPath, filePath);
+        await fs.unlink(tempPath).catch(() => {});
+      } else {
+        await fs.rename(tempPath, filePath);
+      }
+      published = true;
     } catch (error) {
+      // 未发布的临时文件必须清掉：它留在用户仓库里会被本产品自己的 Git 快照
+      // 当作未跟踪改动计进 changedPaths，污染它要交付的“文件变化证据”
+      if (!published) await fs.unlink(tempPath).catch(() => {});
       throw new AiHandoffError(error?.code === "EEXIST" ? "write_conflict" : "io_error", { retryable: true });
     }
   }
@@ -215,7 +232,8 @@ export function createAiHandoff({ now = () => Date.now(), fsImpl = {}, redactTex
     const target = path.join(paths.records, `${input.taskId}.md`);
     if (await exists(target)) throw new AiHandoffError("record_exists");
     const content = renderDocument({ ...input, updatedAt: now() }, redactText, { record: true });
-    await atomicWrite(target, content);
+    // noReplace：预检通过后仍可能有并发写入，发布本身必须不可覆盖
+    await atomicWrite(target, content, { noReplace: true });
     return { status: "written", path: `docs/ai-ops/records/${input.taskId}.md` };
   }
 
