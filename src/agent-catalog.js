@@ -120,9 +120,11 @@ export const AGENT_CATALOG = {
     color: "#4285f7",
     avatar: "✦",
     persona: "你是群聊中的 Gemini 代理。擅长快速给出多方案对比与综合建议，信息面广。",
+    model: "gemini-3.8-flash",
+    models: ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-pro"],
     cli: {
       command: "gemini",
-      args: ["-p", "{prompt}"],
+      args: ["-m", "{model}", "-p", "{prompt}"],
       parseMode: "text",
       stdio: "ignore",
       timeoutMs: 300000,
