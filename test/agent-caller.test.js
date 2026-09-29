@@ -137,8 +137,13 @@ test("api.js 不把空回复或错误提示塞进下一轮讨论上下文", asyn
   assert.ok(src.includes('p.kill("SIGKILL")'), "断开清理必须有 SIGKILL 升级");
 });
 
-test("config watcher 在配置文件缺失时降级监听父目录", async () => {
+test("config watcher 始终监听父目录，并按 basename 过滤而非硬编码文件名", async () => {
   const { readFile } = await import("node:fs/promises");
   const src = await readFile(new URL("../src/config.js", import.meta.url), "utf8");
-  assert.ok(src.includes("watch(dirname(CONFIG_PATH)"), "配置不存在时应监听父目录等待创建");
+  // 监听文件本身会在 tmp+rename 之后失联（inode 变了）：目录监听必须是常态，
+  // 而不是只在"文件不存在"时降级启用——外部原子保存的编辑器也走这条路。
+  assert.ok(src.includes("attachWatcher(dirname(CONFIG_PATH)"), "必须始终监听父目录");
+  assert.ok(src.includes("attachWatcher(CONFIG_PATH"), "同时监听文件本身，覆盖就地写入");
+  assert.ok(src.includes("filename === CONFIG_BASENAME"), "目录事件必须按实际配置文件名过滤");
+  assert.ok(!src.includes('filename === "agents.config.json"'), "目录事件过滤不得硬编码文件名（CONFIG_PATH 可被注入覆盖）");
 });

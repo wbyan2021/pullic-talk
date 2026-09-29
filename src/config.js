@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, renameSync, watch } from "fs";
-import { join, dirname } from "path";
+import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
 import { spawnSync } from "child_process";
 import { log } from "./utils/log.js";
@@ -129,26 +129,32 @@ const scheduleReload = () => {
     _reloadTimer = null;
   }, 300);
 };
-try {
-  const watcher = watch(CONFIG_PATH, scheduleReload);
-  watcher.on("error", (e) => log(`⚠️ config watcher 错误: ${e.message}`));
-  // unref：不让 watcher 独自撑住事件循环（服务器由 HTTP 监听保活，热加载不受影响；
-  // 测试进程 import 本模块后也能正常退出）
-  watcher.unref();
-} catch (e) {
-  // 配置文件尚不存在（首次运行）：监听父目录的创建/改名事件，
-  // 之后手工创建 agents.config.json 也能触发热加载
+
+// 文件 + 目录双监听：
+//   writeUserConfig 用 tmp + rename 换掉 inode，只监听文件的 watcher 会在第一次
+//   内部写盘后永久失联（同一缺陷已在 server.js 的 HTML 热加载上修过，这里此前漏改）。
+//   目录监听按 basename 严格过滤，避免 tools.json / .token 等同目录改动触发无谓重建。
+//   scheduleReload 本身有 300ms 去抖，两个 watcher 同时命中是无害的。
+const CONFIG_BASENAME = basename(CONFIG_PATH);
+
+function attachWatcher(target, describe) {
   try {
-    const dirWatcher = watch(dirname(CONFIG_PATH), (event, filename) => {
-      if (filename === "agents.config.json") scheduleReload();
-    });
-    dirWatcher.on("error", () => {});
-    dirWatcher.unref();
-    log("ℹ️ agents.config.json 尚不存在，已监听其目录等待创建");
-  } catch {
-    log(`⚠️ 无法监听 agents.config.json: ${e.message}`);
+    const watcher = watch(target, describe);
+    watcher.on("error", (e) => log(`⚠️ config watcher 错误: ${e.message}`));
+    // unref：不让 watcher 独自撑住事件循环（服务器由 HTTP 监听保活；
+    // 测试进程 import 本模块后也能正常退出）
+    watcher.unref();
+    return true;
+  } catch (e) {
+    log(`⚠️ 无法监听 ${target}: ${e.message}`);
+    return false;
   }
 }
+
+attachWatcher(CONFIG_PATH, scheduleReload);
+attachWatcher(dirname(CONFIG_PATH), (_event, filename) => {
+  if (filename === CONFIG_BASENAME) scheduleReload();
+});
 
 // 启动时探测一次
 refreshAvailability();

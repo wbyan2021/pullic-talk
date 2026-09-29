@@ -1,6 +1,7 @@
 "use strict";
 
 import { spawn } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { realpath } from "node:fs/promises";
 import path from "node:path";
 
@@ -127,9 +128,11 @@ export function createValidationRunner({
     let stdout = "";
     let withheld = false;
     let truncated = false;
+    // 增量解码：验收命令输出中文时，跨 chunk 边界的多字节字符不应变成替换符
+    const outDecoder = new StringDecoder("utf8");
     const appendOutput = (chunk) => {
       if (task.settled || truncated) return;
-      const excerpt = safeExcerpt(chunk.toString("utf8"), boundedOutput);
+      const excerpt = safeExcerpt(outDecoder.write(chunk), boundedOutput);
       withheld ||= excerpt.withheld;
       truncated ||= excerpt.truncated;
       const remaining = boundedOutput - Buffer.byteLength(stdout, "utf8");
@@ -154,6 +157,7 @@ export function createValidationRunner({
         clearTimeout(timer);
         clearTimeout(task.killTimer);
         const finishedAtMs = now();
+        stdout += outDecoder.end(); // 收尾：吐出还欠在解码器里的尾字节
         const finalExcerpt = safeExcerpt(stdout, boundedOutput);
         withheld ||= finalExcerpt.withheld;
         truncated ||= finalExcerpt.truncated;
