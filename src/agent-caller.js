@@ -11,6 +11,17 @@ export function getNestedValue(obj, path) {
   return path.split(".").reduce((o, k) => o?.[isNaN(k) ? k : parseInt(k)], obj);
 }
 
+// 子进程被显式给了 TERM/COLORTERM（部分 CLI 只看这两个环境变量就决定上色），
+// 而页面渲染的是 Markdown/纯文本：转义序列既不可读又可能破坏 DOM，一律在进入输出流前去掉。
+const ANSI_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g;
+export function stripAnsi(value) {
+  return value.includes("\x1b") ? value.replace(ANSI_RE, "") : value;
+}
+
+// 上游 CLI 的启动噪声不是失败原因。此前这三条硬编码在两个结算分支里各写一遍；
+// 收敛成一处，并允许成员配置用 cli.stderrIgnore 覆盖（字符串=行首前缀，RegExp=自定义匹配）。
+const DEFAULT_STDERR_IGNORE = ["Warning:", "Skill conflict", "Ripgrep"];
+
 // ===== 通用 Agent 调用器 =====
 export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverride) {
   const agent = AGENTS[agentKey];
@@ -18,6 +29,14 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
 
   const cli = agent.cli;
   const stdioMode = cli.stdio === "ignore" ? ["ignore", "pipe", "pipe"] : ["pipe", "pipe", "pipe"];
+  const ignore = (Array.isArray(cli.stderrIgnore) ? cli.stderrIgnore : DEFAULT_STDERR_IGNORE)
+    .map((entry) => (entry instanceof RegExp
+      ? { re: entry }
+      : (typeof entry === "string" ? { prefix: entry } : null)))
+    .filter(Boolean);
+  const isNoise = (line) => ignore.some((rule) => (rule.prefix ? line.startsWith(rule.prefix) : rule.re.test(line)));
+  // 去掉启动噪声后若什么都不剩，就回退到原文：宁可啰嗦，也不吞掉真实错误
+  const usefulError = (text) => stripAnsi(text.split("\n").filter((line) => !isNoise(line)).join("\n").trim() || text);
 
   const modelValue = modelOverride || agent.model || "";
   // {prompt} 在模板中是否为位置参数（前一元素不是选项）：位置参数且 prompt 以 - 开头时
@@ -45,7 +64,11 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
   }
 
   return new Promise((resolve) => {
-    const env = { ...process.env };
+    const env = {
+      ...process.env,
+      TERM: "xterm-256color",
+      COLORTERM: "truecolor",
+    };
     if (cli.env) Object.assign(env, cli.env);
 
     let proc;
@@ -110,12 +133,16 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
         text = text || evt.text || evt.data || "";
         if (text) {
           if (typeof text !== "string") text = JSON.stringify(text); // 结构化值转 JSON，不产出 [object Object]
+          text = stripAnsi(text);
+          if (!text) return;
           fullText += text;
           onChunk(text);
         }
       } catch {
-        fullText += trimmed;
-        onChunk(trimmed + "\n");
+        const plain = stripAnsi(trimmed);
+        if (!plain) return;
+        fullText += plain;
+        onChunk(plain + "\n");
       }
     };
 
@@ -132,10 +159,13 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
           buffer = lines.pop() || "";
           for (const line of lines) consumeNdjsonLine(line);
           break;
-        case "text":
-          fullText += raw;
-          onChunk(raw);
+        case "text": {
+          const plain = stripAnsi(raw);
+          if (!plain) break;
+          fullText += plain;
+          onChunk(plain);
           break;
+        }
         case "json-envelope":
           buffer += raw;
           break;
@@ -160,12 +190,15 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
         if (timedOut) { onChunk(`\n⚠️ ${agent.name} 响应超时（${timeoutMs / 1000}s），已截断\n`); return settle(""); }
         try {
           const evt = JSON.parse(buffer.trim());
-          const text = getNestedValue(evt, cli.jsonTextField) || evt.text || "";
+          const text = stripAnsi(getNestedValue(evt, cli.jsonTextField) || evt.text || "");
           if (text) { onChunk(text); settle(text); }
           else { onChunk("⚠️ 未返回文本\n"); settle(""); }
         } catch {
-          if (buffer.trim()) { onChunk(buffer); settle(buffer); }
-          else { onChunk(`⚠️ ${agent.name} 错误: ${stderrText.slice(0, 200)}\n`); settle(""); }
+          if (buffer.trim()) { const raw = stripAnsi(buffer); onChunk(raw); settle(raw); }
+          else {
+            onChunk(`⚠️ ${agent.name} 错误: ${usefulError(stderrText).slice(0, 300)}\n`);
+            settle("");
+          }
         }
       } else {
         if (outputExceeded) {
@@ -177,7 +210,7 @@ export function callAgent(agentKey, prompt, onChunk, thinking, procs, modelOverr
         } else if (timedOut && !fullText) {
           onChunk(`⚠️ ${agent.name} 响应超时（${timeoutMs / 1000}s）\n`);
         } else if (!fullText && stderrText) {
-          onChunk(`⚠️ ${agent.name} 错误: ${stderrText.slice(0, 200)}\n`);
+          onChunk(`⚠️ ${agent.name} 错误: ${usefulError(stderrText).slice(0, 300)}\n`);
         }
         settle(fullText);
       }
@@ -213,11 +246,17 @@ export function sanitizeChatRequest(body) {
     return { error: `消息过长（>${LIMITS.messageMaxLen} 字符）` };
   }
 
-  let targets = Array.isArray(body.targets) ? body.targets : [];
-  targets = [...new Set(targets)]
-    .filter((t) => typeof t === "string" && Object.prototype.hasOwnProperty.call(AGENTS, t))
+  const requested = [...new Set(Array.isArray(body.targets) ? body.targets : [])]
+    .filter((t) => typeof t === "string");
+  let targets = requested
+    .filter((t) => Object.prototype.hasOwnProperty.call(AGENTS, t))
     .slice(0, LIMITS.maxTargets);
-  if (targets.length === 0) targets = Object.keys(AGENTS);
+  if (targets.length === 0) {
+    // 客户端确实点了名、却一个都不认识（成员刚被停用 / 配置改了 / 页面状态过期）：
+    // 必须报错。静默退化成"向本机全部 CLI 广播"会悄悄烧掉最多 8 个账号的额度。
+    if (requested.length > 0) return { error: "targets 里没有可用的成员，请刷新页面后重试" };
+    targets = Object.keys(AGENTS); // 没点名 = 按产品语义发给所有可用成员
+  }
   if (targets.length === 0) return { error: "当前没有可用的 agent" };
 
   const thinking = VALID_THINKING.has(body.thinking) ? body.thinking : "medium";
