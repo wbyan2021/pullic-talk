@@ -34,11 +34,18 @@ export default function secretsRoutes(app) {
       if (typeof v !== "string" || v.length > 2000) {
         return res.status(400).json({ error: `${k} 的值必须是 ≤2000 的字符串` });
       }
-      if (v === MASKED_VALUE) {
+      // key/token 不应带首尾空白；粘贴时带来的首尾换行在这里就消掉，不算错误
+      const trimmed = v.trim();
+      if (trimmed === MASKED_VALUE) {
         // 掩码值不是真实凭据：拒绝回传掩码，防止把真值覆盖成 "••••••••"
         return res.status(400).json({ error: `${k} 的值是掩码占位符，请输入真实值（留空 = 保持不变）` });
       }
-      clean[k] = v.trim(); // key/token 不应包含首尾空白
+      if (/[\r\n\u0000]/.test(trimmed)) {
+        // 文件是“一行一个 export KEY=值”的格式：值里带内部换行会让写入后的续行脱离
+        // 解析（该键既不进快照也不被启动加载），删除它还会留下悬空引号破坏 source
+        return res.status(400).json({ error: `${k} 的值不能包含内部换行（每个 Key 必须是单行值）` });
+      }
+      clean[k] = trimmed;
     }
 
     try {
