@@ -65,7 +65,7 @@ updated: 2026-09-30
 |---|---|---|---|
 | macOS 钥匙串 | 系统授权策略与 `security` 的 TTY 行为可能因本机环境不同 | 11 项默认测试与 12/12 无写入 macOS 探针验证固定条目、受控 PTY 提示、幂等删除、无明文回退和超时回收；首次真实保存发现并修复普通 stdin 缺陷 | 用户刷新修复后的网页，完成一次保存、替换、删除，并在 Keychain Access 核对固定条目 |
 | DeepSeek API | 错误协议、模型可用性和真实网络状态可能变化 | 13 项 Provider 测试已覆盖成功、401/402/429/5xx、网络、超时和非法响应；均为假 Key/Mock | 用户用自己的 Key 完成连接检测和一次真实护航回复 |
-| Pi CLI | 登录、模型配置、输出格式和停止行为可能变化 | 当前代码能发现 CLI，但未形成受控任务契约 | S03 前固定版本并做最小真实调用 |
+| Pi CLI | 登录、**provider 目录**、模型名、输出格式和停止行为都随上游变化 | S03/S04/S05 已验收（cwd=活动项目、`-p <task> --no-session --mode json`、SIGTERM 停止）；**本条风险已在 2026-09-30 兑现**：pi 升到 0.87.x 后 `aliyun-token-plan`/`volcengine` 从 provider 目录消失，启动方式 `PI_AUTH_PROVIDER=aliyun-token-plan` 失效，表现为 `provider_not_found` 而不是"没登录" | 启动方式改用仍存在的 provider（本机 `bigmodel`/`qianfan`/`lm-studio`/`deepseek` 均 ready）；把 provider/模型可用性做成只读探测并在页面上显示"provider 已不存在"与可选值，而不是等用户点启动才失败 |
 | 本机 Shell 与子进程 | 继承当前用户权限，不是真正沙箱 | 当前已有 node-pty 和命令启动能力 | 明确工作目录、子进程归属、暂停与终止语义 |
 | Git 工作区 | 用户可能已有分支、未提交改动和未跟踪文件 | 当前仓库本身已有未知改动 | S02 先验证只读识别和保护策略 |
 | 自动化验证 | 暂无 CI 和 lint，外部服务不能由 Mock 代替 | 当前工作树 `node --test` **388/388** 通过（2026-09-30）；逐文件语法、`git diff --check` 与 strict 结构校验通过；含失败/服务重启中断恢复、来源关联、敏感字段排除与**凭据形态 fixture**、恢复资格增量与指纹回归、无 Git 回退、快捷安装目录/路由回归（安装路由已改为可注入 spawn/installed，测试结构上无法启动真实包管理器） | S05-A/S05-B 用户页面验收已通过（2026-08-28）；后续版本再评估 CI |
@@ -486,12 +486,18 @@ S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求—证据映�
 
 ## 阻塞
 
-- **新发现（2026-09-30）**：`pi auth check --provider aliyun-token-plan` 返回 `not_ready / provider_not_found`（本机 pi 已 0.87.x，历史验收记录里该 provider 曾为 ready）。这挡住 v0.1 版本收尾那一项"用户真实完成一条任务"。属于用户本机的 pi 登录/配置，AI 不擅自改动。代码侧无实现阻塞。
-- （历史记录：S04 曾在 DoR 前被限制修改产品代码，该切片现已 done。）
+- **Pi 的 provider 目录随升级变了（2026-09-30 已定位根因，非推测）**：
+  - `pi list` → `No packages installed`；`~/.pi/agent/extensions` 为空目录。
+  - `~/.pi/agent/models.json` 现在只有 4 个 provider：`bigmodel`（glm-5.3-flash / glm-5.3）、`deepseek`（仅 deepseek-v4.1-flash-expires-on-0910）、`qianfan`（ernie-5.1）、`lm-studio`（2 个本地模型）。`aliyun-token-plan` 与 `volcengine` **都不再存在** → `pi auth check --provider aliyun-token-plan --json` 返回 `provider_not_found`。
+  - 因此**文档里的启动方式已失效**：`PI_AUTH_PROVIDER=aliyun-token-plan` 会让 PiExecutor 的 auth 闸门直接拒绝（`pi_not_authenticated` 一类），S03/S04/S05 的历史验收记录里它是 ready。
+  - 只读探测（`--no-refresh`）显示这 4 个 provider 都是 `ready`（authType api_key）；`google` 是 `credentials_not_configured`。**所以改用 `PI_AUTH_PROVIDER=bigmodel`（或 qianfan / lm-studio / deepseek）即可让 Pi 受控运行重新可用**。
+  - 群聊的 pi 成员同样受影响：默认模型 `deepseek/deepseek-v4-flash`，可选列表含 `volcengine/*` 与 `aliyun-token-plan/qwen3.8-max`，按当前目录都可能不再存在。选哪个 provider/模型涉及用户的账号与额度，**AI 未擅自改写 `agents.config.json`**，等用户决定。
+  - 取证过程中只读了 provider 与模型**名称**，从未读取 `~/.pi/agent/auth.json` 或任何凭据值。
+- 代码侧无实现阻塞。（历史记录：S04 曾在 DoR 前被限制修改产品代码，该切片现已 done。）
 
 ## 唯一下一步
 
-1. **先修 Pi 起不来的问题（新的阻塞）**：`pi auth check --provider aliyun-token-plan --json` 现在返回 `not_ready / provider_not_found`，而 2026-08-26、08-28 的验收记录里它是 `ready`；本机 pi 已升到 0.87.x，provider 标识或配置很可能随升级变了。这直接挡在下面第 2 项前面，且涉及用户的 pi 登录与配置（AI 不擅自改），需要用户在本机重新确认 provider 名或登录状态。
+1. **让 Pi 重新可用（已定位，一行改动）**：把启动方式从 `PI_AUTH_PROVIDER=aliyun-token-plan` 换成仍然存在的 provider——本机现在 `bigmodel`、`qianfan`、`lm-studio`、`deepseek` 四个都是 ready。例如 `PI_AUTH_PROVIDER=bigmodel npm start`。随后确认群聊 pi 成员与 Pi 面板要用的模型名（`agents.config.json` 里当前是 `deepseek/deepseek-v4-flash`，列表含已不存在的 `volcengine/*`、`aliyun-token-plan/*`）——这一步需要用户按自己的账号与额度选，AI 不代为决定。
 2. **v0.1 版本收尾**：Pi 可用后，用户在已推送的 `main` 上用活动项目真实完成一条任务的全流程（启动、观察、证据核对、黑匣子与恢复），随后收口版本。这是版本验收标准里唯一还空着的实质项。
 3. **已完成的收口动作（无需再做）**：S06 已标 done、工作分支已合并并删除、`main` 已推送至 `origin/main`（同为 `864f5ca`）。
 4. **保留项，按用户决定**：旧分支 `codex/v0.1-s04-ai-handoff-blackbox` 与 `backup/pre-cleanup-778319b` 不删。
@@ -605,7 +611,7 @@ S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求—证据映�
 - **Keyring 跟进项目目录的问题已收口（同日追加）**：`secrets-env` 现在登记"由 Keyring 供给"的**键名**集合（启动加载进来的 + 面板写入过的；值从不登记），新增 `scrubManagedSecrets()`；Pi 任务与验收命令这两类**在活动项目目录里执行**的子进程改用剥除后的环境。动手前先探测：带不带那 8 个键，`pi auth check` 的结果完全一致，证明 Pi 的认证与 Keyring 无关，剥除不会弄坏它。群聊成员、终端、启动、安装**保留**完整继承——成员本来需要自家厂商 Key，收掉即不可用。证据：`test/secret-env-scope.test.js` 4 项，其中一项真的起了一个假 pi 进程、把它自身环境 dump 出来，验证 Keyring 键不在其中、而 PATH 与用户显式导出的变量仍在。顺带修正一处注释与实现矛盾：pi-executor 文件头写着 D1"不传递任何凭据"，而 `env: process.env` 其实把全部 Keyring 都递了进去。全量 388/388。仍开放：逐成员声明所需环境变量（要用户提供每个 CLI 的真实依赖，AI 单方面收紧会打断正在用的成员）；CI/lint 接入仍未做。
 - 证据：全量 `node --test` **388/388**（净新增 20 项回归）；`git ls-files '*.js' | xargs -n1 node --check` 通过；`git diff --check` 通过；`validate-project-state.mjs . --strict` PASS；隔离端口 `43212`（`PI_AUTH_PROVIDER=aliyun-token-plan`）健康 200、未带 Token `/api/secrets` 401、伪造 Host 403、首页 200、启动日志仍只报"加载 8 个环境变量"数量。验证实例已单独关闭，用户 3210 上的服务未受影响。**未发起任何真实 Pi 任务或计费请求**（只跑了产品本来每次启动都会跑的 `pi auth check` 只读探测）。
 - 收口与推送：9 个提交 fast-forward 合并入 `main` 后删分支；**首次推送被 GitHub 的 push protection 拒绝**，拦下的正是我给 Stripe/GitLab 写的测试夹具——我直接用了 Stripe 文档示例 key 的字面量，扫描器无法区分它和真的 `sk_live_` 生产密钥。改法是把夹具值在运行时拼装出来（形状仍被同一条正则命中，但仓库文本里不再存在一个看起来可用的凭据），并重写那 9 个**尚未推送**的本地提交把该 blob 从历史里去掉（`git reset --soft` 后按原文件分组逐个 `git commit -C` 重建，与重写前逐文件对比只有夹具那一个文件不同）。推送成功，`main` 与 `origin/main` 同为 `864f5ca`。
-- **顺带发现（未修，属用户账号侧）**：`pi auth check --provider aliyun-token-plan --json` 现在返回 `{"status":"not_ready","reason":"provider_not_found"}`，而 2026-08-26/28 的记录写的是 `ready`；本机 pi 已是 0.87.x。这意味着 Pi 受控运行大概起不来，而"用户真实完成一条任务"正是 v0.1 版本验收仅剩的那一项。涉及用户的 pi 登录与配置，AI 未擅自改动。
+- **顺带发现并当场定位（未修，属用户账号侧）**：Pi 的 provider 目录随升级变了。`pi list` 显示 `No packages installed`、`~/.pi/agent/extensions` 为空，`models.json` 只剩 `bigmodel / deepseek / qianfan / lm-studio` 四个 provider，`aliyun-token-plan` 与 `volcengine` 都不复存在——这解释了为什么 8 月 26/28 验收时 ready 的 provider 现在返回 `provider_not_found`，也就解释了它为什么挡住 v0.1 仅剩的那项版本验收（详见「阻塞」）。改用仍然存在的 provider 即可恢复，例如 `PI_AUTH_PROVIDER=bigmodel npm start`；选哪个以及配套模型名涉及用户的账号与额度，AI 未擅自改 `agents.config.json`。取证只读名称，从未读 `auth.json`。
 - 覆盖度声明：本轮为直读审计（4 个并行子代理因额度中断）。已逐行覆盖 `agent-caller`、`config`、`auth`、`secrets-env`、`secrets` 路由、`install` 路由、`server` 装配顺序、`safe-redactor`、`validation-runner`、`ai-handoff`、`task-recovery`、`blackbox-store` 关键路径；`task-evidence`、`credential-store`、`project-boundary`、`overview`/`evidence` 路由与前端 `execution.js`/`project.js`/`index.js`/chat.js 其余部分只做了模式扫描（定时器、监听器、innerHTML 三类）。
 
 
