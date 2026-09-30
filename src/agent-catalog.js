@@ -90,7 +90,7 @@ export const AGENT_CATALOG = {
     persona: "你是群聊中的 OpenAI Codex 代理。擅长按规范完成编码任务，输出简洁、可直接采用的方案与代码。",
     cli: {
       command: "codex",
-      args: ["exec", "--json", "--skip-git-repo-check", "{prompt}"],
+      args: ["exec", "--json", "--skip-git-repo-check", "-m", "{model}", "{prompt}"],
       parseMode: "ndjson",
       textType: ["agent_message", "message", "item.completed"],
       textFields: ["message", "item.text"],
