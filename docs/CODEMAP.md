@@ -3,7 +3,7 @@ type: codemap
 project: AI·OPS COCKPIT
 status: active
 workflow_version: 4
-updated: 2026-09-23
+updated: 2026-09-30
 ---
 
 # AI·OPS COCKPIT · 代码地图
@@ -22,8 +22,8 @@ updated: 2026-09-23
 - Agent 流式协议：SSE；终端协议：WebSocket
 - 包管理器：npm；锁文件：`package-lock.json`
 - 稳定分支：`main`
-- 稳定基线：`a19f146`
-- 当前验证基线：依赖完整；`node --test` 367/367 通过；逐文件语法、差异和 strict 结构检查通过。S04 用户功能验收已于 2026-08-26 确认；S05-A 只读总览与 S05-B 安全恢复已于 2026-08-28 通过用户页面验收并收口为 done；S06 网页 Key 管理加固已实现并通过自动化验证，用户真实验收待完成；2026-09-23 完成全项目缺陷排查与修复插播（并发竞态、事件队列自愈、脱敏加宽、fail-closed 渲染等，详见 NOW.md）与快捷安装模块优化插播（基础环境、热门 Agent、新手推荐路径、大模型官网导航、版本与更新扫描）。文件回退与多任务并行仍未实现。没有 lint、CI 或 build 脚本。
+- 稳定基线：`7df3249`（S01–S06 全部切片 + 三轮排查插播；此前记录值 `a19f146` 已过期，2026-09-30 合并前的真实 main 是 `8983e3d`）
+- 当前验证基线：依赖完整；`node --test` 384/384 通过；逐文件语法、`git diff --check` 和 strict 结构检查通过；隔离端口 `43212` 健康 200、未带 Token `/api/secrets` 401、伪造 Host 403、首页 200。S04 用户功能验收已于 2026-08-26 确认；S05-A 只读总览与 S05-B 安全恢复已于 2026-08-28 通过用户页面验收并收口为 done；S06 网页 Key 管理加固已实现并通过自动化验证，用户于 2026-09-30 表示功能测试完成、无问题。2026-09-30 完成第三轮全局排查与修复（凭据脱敏形态加宽、安装测试不再能启动真实安装、恢复指纹含改动内容、黑匣子轮询增量化、交接临时文件不残留、secrets 单行值约束、config watcher 补漏），详见 [NOW.md](NOW.md) 会话记录。文件回退与多任务并行仍未实现。没有 lint、CI 或 build 脚本。
 
 ## 关键路径
 
@@ -53,10 +53,10 @@ updated: 2026-09-23
 | `public/js/project.js`、`public/css/project.css` | 多项目列表、活动项目切换，以及单一 Pi 面板的项目卡片挂载 | 项目表现层 |
 | `public/js/execution.js`、`public/css/execution.css` | 项目 view 内 Pi 运行面板：风险确认、流式输出、停止、状态灯，并随活动项目变化刷新边界 | 执行表现层 |
 | `public/js/overview.js`、`public/css/overview.css` | 顶层只读总览四卡片、双语状态映射、可见时轮询和项目页跳转 | 总览表现层 |
-| `src/services/safe-redactor.js` | Key、Token、密码、私钥、Bearer 和环境变量形态的统一脱敏 | 安全边界 |
-| `src/services/blackbox-store.js` | 项目外追加式 JSONL 事件、终态、恢复和截断行容错 | 黑匣子领域层 |
+| `src/services/safe-redactor.js` | Key、Token、密码、私钥、Bearer、环境变量、**供应商 token 前缀**（ghp_/github_pat_/AKIA/AIza/xoxb-/glpat-/npm_/sk_live_…）与 URL 内嵌 basic-auth 凭据的统一脱敏；键名表由本文件单一来源导出 | 安全边界 |
+| `src/services/blackbox-store.js` | 项目外追加式 JSONL 事件、终态、恢复和截断行容错；`describeTasks` 提供按文件签名的廉价列举，供恢复资格增量扫描 | 黑匣子领域层 |
 | `src/services/task-evidence.js` | Pi 生命周期、Git 前后快照、文件变化分类、验证和验收状态协调 | 黑匣子领域层 |
-| `src/services/task-recovery.js` | 失败/中断任务资格判断、短时预览指纹、二次确认、新批次重启编排与旧记录追加关联 | 高风险恢复领域层 |
+| `src/services/task-recovery.js` | 失败/中断任务资格判断、短时预览指纹（分支/HEAD/改动数/**改动路径摘要**）、二次确认、新批次重启编排与旧记录追加关联；资格结果按任务文件签名缓存，单个坏文件不屏蔽总览 | 高风险恢复领域层 |
 | `src/services/validation-runner.js` | 用户批准的结构化 executable + argv 验收命令；shell=false、活动项目 cwd、超时和输出上限 | 高风险适配层 |
 | `src/services/ai-handoff.js` | 目标项目 `docs/ai-ops/` 当前交接与一次性历史记录的脱敏原子写入，以及只读摘要解析 | AI 交接适配层 |
 | `src/routes/evidence.js` | 证据状态、验收命令预览/执行、accepted/needs_review 收口契约 | 黑匣子应用层 |
@@ -89,7 +89,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 | 扫描工具 | `npm run scan` | 本轮未执行；会更新本地 `tools.json` |
 | 完整安装引导 | `npm run setup` | 本轮未执行；包含环境检查、安装和扫描 |
 | JavaScript 语法检查 | `git ls-files '*.js' | xargs -n1 node --check` | 初始化 28 个文件通过；S01 新增/装配文件再次通过 |
-| 自动化测试 | `npm test` | 367 项定义；本轮 `node --test` 367/367；含 S06 掩码快照、无明文断言、启动加载、UI 静态合约、2026-09-23 缺陷修复回归与快捷安装目录/路由回归 |
+| 自动化测试 | `npm test` | 384 项定义；本轮 `node --test` 384/384；含 S06 掩码快照、无明文断言、启动加载、UI 静态合约、凭据形态 fixture、恢复资格增量与指纹回归、快捷安装目录/路由回归 |
 | lint | 未配置 | 不可用 |
 | build | 无需前端构建，且未配置 build 脚本 | 不适用 |
 
@@ -100,6 +100,7 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 - S01 起新增：Node.js 原生 test runner；优先测试纯适配器与服务边界，不为一个切片引入大型测试框架。
 - 外部系统或真实凭据不能只靠 Mock 宣称完成；DeepSeek 和 Keychain 必须保留一条不暴露秘密的本机人工验收路径。
 - 完成结论必须能追溯到 [NOW.md](NOW.md) 的“需求—证据映射”；结构校验通过不等于产品行为通过。
+- **测试不得改变本机**：任何可能触达包管理器、钥匙串、真实 CLI 或网络的分支，都必须通过依赖注入（`spawnImpl` / `isInstalledImpl` / `fsImpl`）在结构上不可达；拒绝类断言要同时验证"一次子进程都没起"。测试也不得断言"某个具体软件在本机未装/已装"——那会让同一份测试随开发机状态翻脸，甚至反过来在已装时走进"接受任务"分支真的执行安装（2026-09-30 实例：`npm test` 真的跑了一次 `npm install -g @qwen-code/qwen-code@latest`）。
 
 ## 版本控制边界
 
@@ -107,7 +108,8 @@ S01 的护航控制面独立于 `src/agent-caller.js` 与现有 CLI 群聊：Pro
 
 - 远程仓库：`origin` → `git@github.com:wbyan2021/pullic-talk.git`
 - 稳定分支：`main`
-- S01–S05 工作分支均已 fast-forward 合并入 `main`（当前基线 `a19f146`）并删除；S04 用户已确认功能验收通过（2026-08-26）；S05-A/S05-B 用户页面验收已于 2026-08-28 通过；文件回退与多任务并行不在范围内。
+- S01–S06 工作分支均已 fast-forward 合并入 `main`（当前基线 `7df3249`）；S04 用户已确认功能验收通过（2026-08-26）；S05-A/S05-B 用户页面验收已于 2026-08-28 通过；S06 由用户于 2026-09-30 确认功能测试完成并合并收口；文件回退与多任务并行不在范围内。
+- 遗留不一致（2026-09-30 观察到，未擅自处理）：仓库仍有 `codex/v0.1-s04-ai-handoff-blackbox`（`b71bb50`）与 `backup/pre-cleanup-778319b` 两个旧分支，与"同一时间只保留一个产品工作分支"的约定不符；`origin/main` 落后本地 37 个提交，推送与否是单独授权事项。
 - 当前唯一保留为未提交用户资产的是 `.gitignore` 中的 `.superpowers/` 规则，不覆盖、不暂存、不丢弃。
 - 产品代码使用 `codex/<版本>-<切片>-<短名称>`；同一时间只保留一个产品工作分支。
 
@@ -157,10 +159,10 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 | `src/terminal.js` | 提供当前 macOS 用户权限下的完整 Shell | Origin、Token、输入上限、确认与退出清理 |
 | `src/routes/launch.js` | 可以启动应用和本机命令 | 参数边界、危险模式、用户确认和进程回收 |
 | `src/routes/install.js`、`src/install-catalog.js` | 调用包管理器和外部安装源 | 白名单、来源、超时、重复任务和失败提示 |
-| `src/agent-caller.js` | CLI 在用户主目录运行并继承环境变量 | 工作目录、参数注入、输出上限、超时和停止 |
+| `src/agent-caller.js` | CLI 在用户主目录运行并继承**完整** `process.env`（含启动加载进来的全部本机 Key）；所有 spawn 点同此 | 工作目录、参数注入、输出上限、超时和停止；ANSI 已在进入输出流前剥离。**待办：per-agent env 白名单**（见 NOW 阻塞/下一步） |
 | `src/utils/auth.js`、`src/server.js` | 本地控制面的认证与暴露边界 | Token、Origin、监听地址、CSP、速率限制 |
 | `src/services/credential-store.js` | 接触真实 Provider Key 与系统钥匙串 | 绝对命令路径、shell 禁用、受控 PTY 固定提示、输出边界、超时回收、无明文回退 |
-| `src/routes/secrets.js`、`src/utils/secrets-env.js`、`public/js/secrets.js` | 网页管理本地 Key 文件，启动时自动加载进服务进程 | 认证闸门、变量名/长度白名单、原子写入、0600、浏览器只见掩码（D1）、掩码值回传被拒绝；只用于群聊成员/自定义 CLI Key，不作 S01 级别凭据路径 |
+| `src/routes/secrets.js`、`src/utils/secrets-env.js`、`public/js/secrets.js` | 网页管理本地 Key 文件，启动时自动加载进服务进程 | 认证闸门、变量名/长度白名单、**值不得含内部换行**（文件是"一行一条 export"，跨行值会脱离解析且删除时留下悬空引号）、原子写入、0600、浏览器只见掩码（D1）、掩码值回传被拒绝；只用于群聊成员/自定义 CLI Key，不作 S01 级别凭据路径 |
 | `src/routes/members.js`、`src/config.js`、`public/js/members.js` | 修改 Agent 成员和模型配置并热加载 | 字段白名单、原子写入、禁用/自定义语义、配置损坏回退和并发写入审查 |
 | `src/providers/deepseek.js`、`src/routes/escort.js` | 付费外部请求与错误/秘密泄露 | 超时、单并发、频率、状态字段白名单、原始错误不透传 |
 | `src/services/git-inspector.js`、`src/routes/project.js` | 任意路径输入与 Git 子进程 | 只读命令白名单、无 shell、超时、输出截断、realpath 校验、禁止根 |
@@ -173,14 +175,16 @@ S01 使用的固定 Keychain 标识为 service `com.ai-ops.cockpit.provider.deep
 
 ## 已知工程缺口
 
-- 已有 322 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但还没有 CI、lint 和全产品回归测试；2026-09-23 的全项目缺陷排查插播修复了并发启动竞态、事件队列中毒、脱敏遗漏形态、DOMPurify fail-open、spawn error 崩溃、Host 重新绑定等缺陷（提交 6ed5a4c…9f38e4f）。
-- `public/js/chat.js` 体量较大，修改容易产生跨功能回归。
-- Agent 默认工作目录是用户主目录，不具备项目级 Workspace 边界。
+- 已有 384 项默认自动化测试和一个需显式启用的 macOS 无写入 PTY 探针，但**还没有 CI、lint 和全产品回归测试**；回归靠人工触发 `npm test`。三轮排查（2026-09-23、2026-09-24、2026-09-30）修复的缺陷清单见 [NOW.md](NOW.md) 会话记录。
+- **测试仍有一部分依赖开发机状态**：`/api/install/updates` 与目录接口直接读本机探测结果（已改为"只断言契约、不断言某个具体软件已装"），但 `isInstalled` 的真实实现未被注入时仍会跑 `which`。接 CI 之前，这类测试在干净机器上的覆盖强度与本机不同。
+- **未实现的最小权限边界**：所有子进程（群聊 CLI、Pi、验收命令、终端、安装）都继承完整 `process.env`，而服务启动会把 `~/.secrets.env` 全部键灌进去。结果是"在克隆来的仓库里点一次验收命令"就能读到整机所有厂商 Key。修法是按 agent 声明 env 白名单；需要用户确认每个 CLI 真正需要哪些键，因此本轮未单方面改动。
+- `public/js/chat.js` 体量较大（约 950 行），修改容易产生跨功能回归。
+- Agent 默认工作目录是用户主目录，不具备项目级 Workspace 边界（Pi 有，群聊/终端/启动/验收命令没有）。
 - 默认端口 `3210` 曾被早于 S01 的旧实例占用；2026-08-06 已查明并经用户授权结束，现运行 S01 合并后的代码。
-- DeepSeek 与 macOS Keychain 的真实验收尚未完成；Mock 证据不能替代用户自己的 Key 和本机授权策略。
-- 网页 Key 管理（S06）已完成掩码快照与启动自动加载的自动化验证，但用户假 Key 全流程验收尚未完成；`~/.secrets.env` 本身仍是本机明文文件，只用于群聊成员/自定义 CLI Key。
-- 成员/模型维护已能写回配置并热加载，但尚未完成用户页面验收；`agents.config.json` 中的本机启用/停用状态不是产品基线。
-- 已接受的取舍：`reloadConfig` 的写后校验只检测“合并后无任何 agent”，单条无效成员配置不会触发回滚；`credential-store` 的输出累积仍按 chunk 解码（密钥通常为 ASCII，非 ASCII 密钥理论上有乱码风险）；`members.js` 等前端内联事件插值依赖 key 白名单正则保证安全。
+- S01 的 DeepSeek 与 macOS Keychain 真实验收已完成；网页 Key 管理（S06）由用户于 2026-09-30 表示功能测试完成、无问题。`~/.secrets.env` 本身仍是本机明文文件，只用于群聊成员/自定义 CLI Key。
+- 成员/模型维护已能写回配置并热加载；`agents.config.json` 中的本机启用/停用状态不是产品基线。
+- 已接受的取舍：`reloadConfig` 的写后校验只检测"合并后无任何 agent"，单条无效成员配置不会触发回滚；`credential-store` 的输出累积仍按 chunk 解码（密钥通常为 ASCII，非 ASCII 密钥理论上有乱码风险）；`members.js` 等前端内联事件插值依赖 key 白名单正则保证安全（`color` 由路由的 `#RRGGBB` 校验兜底，属纵深防御而非本地过滤）。
+- 脱敏是**模式匹配**，不是保证：不在前缀表里的新式 token 仍可能穿透。项目侧的防线是"值只在 0600 文件与钥匙串里，交接记录只写掩码"；新增供应商时应同步 `PROVIDER_SECRET_FIXTURES`。
 
 ## 维护规则
 

@@ -5,7 +5,7 @@ status: active
 workflow_version: 4
 baseline_status: accepted
 baseline_accepted_at: 2026-08-05
-updated: 2026-09-23
+updated: 2026-09-30
 ---
 
 # AI·OPS COCKPIT 产品文档
@@ -517,11 +517,16 @@ flowchart TB
 - `/api/members` 与 `/api/secrets` 也位于认证闸门之后；成员配置和本地 Key 文件写入使用原子替换，Key 文件设置为 `0600`。
 - `/api/secrets` 只向浏览器返回掩码值（`••••••••`），不返回明文；页面采用「留空 = 保持不变」的覆盖式编辑，没有明文回显（S06/ADR-004）。
 - 服务启动时自动加载 `~/.secrets.env`，但不覆盖启动命令已显式设置的同名变量；加载日志只报数量不报值（S06/D2）。
+- Key 面板拒绝含内部换行的值（首尾换行会被 trim 掉，不算错误）：`~/.secrets.env` 是"一行一条 export"的格式，跨行值写完即隐身、删除时还会留下悬空引号让 `source` 报错（2026-09-30）。
+- 脱敏除"键名 + 值"形态外，覆盖无标签的供应商 token 前缀（GitHub `ghp_`/`github_pat_`、AWS `AKIA`/`ASIA`、Google `AIza`、Slack `xox?-`、GitLab `glpat-`、npm、Stripe `sk_live_`、Hugging Face、DigitalOcean）与 `scheme://user:password@host` 内嵌凭据；键名表与项目交接的字段遮蔽共用同一份定义，避免两处规则各自漂移。这些形态由 `test/safe-redactor.test.js` 的 fixture 表守护。
+- CLI 输出在进入流式与结算文本之前一律剥离 ANSI 转义，因此即便子进程被显式给了 `TERM`/`COLORTERM` 也不会把转义序列送进页面 DOM。
+- 群聊请求中"点名的成员一个都不存在"时返回错误，而不是静默退化成向本机全部 CLI 广播（后者会悄悄消耗最多 8 个账号的额度）。
+- AI 交接的历史记录发布是不可覆盖的（`link()` 原子创建），写失败时不向目标项目残留 `*.tmp-*`；恢复预览的指纹包含改动路径摘要，不只是文件数量。
 
 ### 9.2 仍需明确的风险
 
 1. **终端不是沙箱。** 一旦用户确认，命令拥有当前 macOS 用户的完整权限。
-2. **Agent 也不是沙箱。** CLI 子进程继承本机环境变量，并以用户主目录作为工作目录。
+2. **Agent 也不是沙箱，而且 Keyring 是共享的。** 每个 CLI 子进程（群聊、Pi、验收命令、终端、安装）都继承**完整** `process.env`，工作目录仍是用户主目录（Pi 与验收命令限定在活动项目内）。S06/D2 的启动自动加载把这一点放大：服务启动即把 `~/.secrets.env` 的全部键灌进进程环境，于是"在一个克隆来的仓库里点一次确认执行验收命令"就可能让该仓库的测试脚本读到**所有厂商**的 Key，而不只是它自己那一家。收缩办法是按成员声明 env 白名单；因需要逐 CLI 确认其真实所需变量，尚未单方面改动（见 [CODEMAP](CODEMAP.md) 已知工程缺口）。
 3. **Token 只保护本地 Web 接口。** 它不是多用户身份系统，也不防同权限本机进程。
 4. **安装会执行包管理器命令和官方脚本。** 白名单减少了输入注入，但无法消除上游供应链风险。
 5. **DOMPurify 缺失时 Markdown 按纯文本转义渲染。** 渲染路径 fail-closed：消毒库不可用时直接转义输出原文，绝不把 marked 原始 HTML 注入页面（2026-09-23 修复）。
@@ -576,7 +581,7 @@ flowchart TB
 
 | 优先级 | 问题 | 建议 |
 |---|---|---|
-| P1 | 已有 322 项 Node 原生测试覆盖核心服务与路由，但仍无 CI 和 lint，回归靠手动触发 | 引入最小 CI（安装依赖 + `npm test` + 结构校验）后此风险降级 |
+| P1 | 已有 384 项 Node 原生测试覆盖核心服务与路由，但仍无 CI 和 lint，回归靠手动触发；且部分测试的覆盖强度仍与开发机状态相关（安装路由已改为可注入，`/api/install/updates` 的真机探测未注入） | 引入最小 CI（安装依赖 + `npm test` + 结构校验）后此风险降级 |
 | P1 | CLI 适配依赖第三方命令参数和输出格式 | 加版本探测、契约测试和兼容性矩阵 |
 | P1 | `public/js/chat.js` 单文件约 700 行，状态与 DOM 操作耦合 | 按 store、session、render、transport、mentions 拆模块 |
 | P1 | CSP 仍需要 `unsafe-inline` | 移除 HTML 内联事件，统一用事件监听器 |

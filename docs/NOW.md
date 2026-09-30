@@ -4,14 +4,14 @@ project: AI·OPS COCKPIT
 workflow_version: 4
 milestone: v0.1-first-controlled-mission
 status: active
-stage: build
+stage: release
 current_slice: S06-web-key-management
-slice_status: active
-work_branch: codex/v0.1-s06-web-key-management
-base_commit: a48a2cf
+slice_status: done
+work_branch: none
+base_commit: 7df3249
 risk_level: high
-last_verified_commit: 9f38e4f
-updated: 2026-09-23
+last_verified_commit: 7df3249
+updated: 2026-09-30
 ---
 
 # 当前版本：v0.1 · 第一次可控任务
@@ -68,10 +68,10 @@ updated: 2026-09-23
 | Pi CLI | 登录、模型配置、输出格式和停止行为可能变化 | 当前代码能发现 CLI，但未形成受控任务契约 | S03 前固定版本并做最小真实调用 |
 | 本机 Shell 与子进程 | 继承当前用户权限，不是真正沙箱 | 当前已有 node-pty 和命令启动能力 | 明确工作目录、子进程归属、暂停与终止语义 |
 | Git 工作区 | 用户可能已有分支、未提交改动和未跟踪文件 | 当前仓库本身已有未知改动 | S02 先验证只读识别和保护策略 |
-| 自动化验证 | 暂无 CI 和 lint，外部服务不能由 Mock 代替 | 当前候选实现 `node --test` 368/368 通过；逐文件语法、`git diff --check` 与 strict 结构校验通过；含失败/服务重启中断恢复、来源关联、敏感字段排除、无 Git 回退、2026-09-23 缺陷修复回归测试与快捷安装目录/路由回归 | S05-A/S05-B 用户页面验收已通过（2026-08-28）；后续版本再评估 CI |
+| 自动化验证 | 暂无 CI 和 lint，外部服务不能由 Mock 代替 | 当前工作树 `node --test` **384/384** 通过（2026-09-30）；逐文件语法、`git diff --check` 与 strict 结构校验通过；含失败/服务重启中断恢复、来源关联、敏感字段排除与**凭据形态 fixture**、恢复资格增量与指纹回归、无 Git 回退、快捷安装目录/路由回归（安装路由已改为可注入 spawn/installed，测试结构上无法启动真实包管理器） | S05-A/S05-B 用户页面验收已通过（2026-08-28）；后续版本再评估 CI |
 | S04 项目交接写入与验收命令 | high | 已实现显式启用、脱敏原子写入、追加黑匣子、Git 前后快照、Pi 生命周期、argv-only 验收命令、失败/恢复和安全路由；用户已于 2026-08-26 确认功能验收通过 | 切片已 done；后续只处理发现的缺陷，不重新扩大 S04 范围 |
 | S05 恢复与总览闭环 | high | 总览只读聚合、恢复资格/预览/二次确认、新批次来源关联、脱敏和稳定错误码已实现；299/299 自动化通过；用户已于 2026-08-28 完成页面验收 | 切片已 done；后续只处理发现的缺陷，不重新扩大 S05 范围 |
-| 网页 Key 管理（S06） | high | 掩码快照 + 覆盖式编辑 + 启动自动加载已实现；`npm test` 308/308 含响应无明文与 UI 静态断言；隔离端口健康 200、未授权 401、启动加载日志只报数量（2026-09-23） | 用户按设计稿 §7 完成假 Key 全流程验收；不能与 S01 Keychain 证据混用 |
+| 网页 Key 管理（S06） | high | 掩码快照 + 覆盖式编辑 + 启动自动加载已实现；`npm test` 384/384 含响应无明文与 UI 静态断言、Key 值单行约束回归；隔离端口健康 200、未授权 401、启动加载日志只报数量（2026-09-23 加固，2026-09-30 复查） | 用户 2026-09-30 表示功能测试完成、无问题（`user_confirmed`；§7 逐项清单未走查，自动化已覆盖浏览器/响应无明文）；不能与 S01 Keychain 证据混用 |
 | 群聊成员/模型维护 | medium | 成员路由、配置合并/热加载和静态 UI 测试已加入当前分支 | 用户页面验收启用/停用、模型编辑、自定义成员增删；本机配置状态不等于产品基线 |
 | 默认端口 3210 | 曾被 7 月 31 日的旧实例占用 | 2026-08-06 经用户授权结束旧实例（PID 25068），S01 合并后的服务已在 3210 正常运行 | 无需进一步处理 |
 
@@ -90,7 +90,7 @@ updated: 2026-09-23
 - [ ] 用户可观察状态，并能安全暂停、继续和终止执行。
 - [ ] 完成结果包含文件变化、命令或测试等可检查证据。
 - [x] 任务全过程生成脱敏记录，并可从失败/中断任务的明确恢复预览重启新批次（2026-08-28 用户页面验收通过）。
-- [x] 用户可在网页安全管理本机 CLI Key，且不引入超出已确认边界的凭据暴露（S06 已实现并通过自动化验证；浏览器只见掩码、启动自动加载；用户假 Key 真实验收待完成后收口）。
+- [x] 用户可在网页安全管理本机 CLI Key，且不引入超出已确认边界的凭据暴露（S06 已实现并通过自动化验证；浏览器只见掩码、启动自动加载；用户于 2026-09-30 表示"这个项目的功能我测完了，没有问题了"，记为 `user_confirmed`，见下方会话记录 provenance 说明）。
 - [ ] 用户实际完成一条真实任务，而不只是看到功能演示。
 
 ## 计划切片
@@ -103,23 +103,23 @@ updated: 2026-09-23
 | S03 | Pi 受控运行    | Pi 只在活动项目内启动，并可暂停、继续、终止        | done   |
 | S04 | 证据与黑匣子     | 可查看状态时间线、文件变化和验收证据           | done   |
 | S05 | 恢复与总览闭环    | 可恢复到检查点，并从总仪表完成整条任务          | done（2026-08-28 用户页面验收通过）   |
-| S06 | 网页 Key 管理纳入 v0.1 | 网页 Key 面板按确认的安全边界完成加固并通过真实验收 | build（2026-09-23 设计批准并完成实现与自动化验证，待用户假 Key 真实验收） |
+| S06 | 网页 Key 管理纳入 v0.1 | 网页 Key 面板按确认的安全边界完成加固并通过真实验收 | done（实现与自动化验证 2026-09-23；用户验收 2026-09-30 确认为 `user_confirmed`；同日 fast-forward 合并入 `main` 并删除工作分支） |
 
 ## 代码工作区
 
 - 代码地图：[CODEMAP.md](CODEMAP.md)
 - 稳定分支：`main`
-- 稳定基线：`a19f146`（S01 + S02 + S02b + S03 + S04 + S05 均已 fast-forward 合并入 main）
-- 产品工作分支：无（`codex/v0.1-s05-overview-readonly` 已于 2026-08-28 fast-forward 合并入 `main` 并删除）
+- 稳定基线：`7df3249`（S01–S06 全部切片，含 2026-09-23、09-24、09-30 三轮排查插播，已 fast-forward 合并入 main；此前的记录值 `a19f146` 已过期，合并前的真实 main 是 `8983e3d`）
+- 产品工作分支：无（`codex/v0.1-s06-web-key-management` 已于 2026-09-30 fast-forward 合并入 `main` 并删除；分支尖 `7df3249` 即当前 main，删除不丢任何提交）
 - 依赖检查：`npm ls --depth=0`
 - 语法检查：`git ls-files '*.js' | xargs -n1 node --check`
 - 自动化测试：`npm test`
 - 健康检查：`PORT=43211 npm start` 后访问 `/api/health`
-- 当前状态：S04 与 S05 均已通过用户功能/页面验收并收口为 done（S05 于 2026-08-28）。2026-09-23：S06 网页 Key 管理安全加固已在工作分支 `codex/v0.1-s06-web-key-management` 完成实现与自动化验证——掩码快照（D1）、启动自动加载（D2）、边界文案（D3）；全量 `node --test` 308/308，逐文件语法、`git diff --check` 与 strict 结构校验通过；隔离端口 `43211` 健康 200、未带 Token `/api/secrets` 401。当前唯一下一步是用户按设计稿 §7 完成假 Key 真实验收，验收通过前不合并、不标 done。
+- 当前状态：S04 与 S05 均已通过用户功能/页面验收并收口为 done（S05 于 2026-08-28）。2026-09-23：S06 网页 Key 管理安全加固已在工作分支 `codex/v0.1-s06-web-key-management` 完成实现与自动化验证——掩码快照（D1）、启动自动加载（D2）、边界文案（D3）；全量 `node --test` 308/308，逐文件语法、`git diff --check` 与 strict 结构校验通过；隔离端口 `43211` 健康 200、未带 Token `/api/secrets` 401。当前唯一下一步是用户按设计稿 §7 完成假 Key 真实验收，验收通过前不合并、不标 done。2026-09-30：用户表示功能测试完成、无问题，S06 按 `user_confirmed` 记账；同日在**同一工作分支**上做第三轮全局排查与修复（7 组，含 2 项 HIGH 凭据/测试安全缺陷），全量 `node --test` 由 366 pass/2 fail 修复并增至 **384/384**。这 20 个改动路径已于同日按逻辑拆成 8 个提交（脱敏+交接写入、安装测试注入、恢复资格、群聊调用器、config watcher、secrets 单行、gemini 模型、文档同步），随后随分支一起 fast-forward 合并入 `main`。详见"会话记录 · 2026-09-30"。
 
 ## 当前切片
 
-### S06 · 网页 Key 管理纳入 v0.1（build，2026-09-23 实现与自动化验证完成，待用户真实验收）
+### S06 · 网页 Key 管理纳入 v0.1（done，2026-09-30 用户确认功能测试完成并合并收口）
 
 ### 目标
 
@@ -134,8 +134,8 @@ updated: 2026-09-23
 | D2 启动自动加载 | `secrets-env.js` 的 `loadSecretsIntoProcess`（不覆盖已显式设置的变量、跳过空值/回退行、日志只报数量）；`src/server.js` 启动装配一行；`test/secrets-env.test.js` 覆盖加载/不覆盖/跳过/缺文件；隔离端口启动日志实测「加载 8 个环境变量」 | 自动化 verified |
 | D3 使用边界文案 | `public/chat.html` 面板描述「仅管理群聊成员 / 自定义 CLI 的本机 Key；DeepSeek 护航 Key 存于 macOS 钥匙串」；保存提示按 D2 改写；UI 测试断言「macOS 钥匙串」与「重启服务后会自动加载」文案 | 自动化 verified |
 | 文档对齐 | `docs/PRODUCT.md`（5.3/7.3/9.1/9.2/11.1）、`docs/CODEMAP.md`、`README.md` 按 D1–D3 事实改写 | 已完成 |
-| 全量回归 | `npm test` 308/308；逐文件 `node --check`、`git diff --check`、strict 结构校验通过；隔离端口 `43211`（`PI_AUTH_PROVIDER=aliyun-token-plan`）健康 200、未带 Token `/api/secrets` 401、首页 200 | 自动化 verified |
-| 用户真实验收（D4） | 假 Key 全流程 + 浏览器/磁盘/日志/Git 四处无明文核对，由用户按设计稿 §7 执行 | 待用户验收 |
+| 全量回归 | 收口时 `npm test` 308/308；2026-09-30 复查为 **384/384**（含 S06 掩码/无明文/启动加载与 Key 值单行约束回归）；逐文件 `node --check`、`git diff --check`、strict 结构校验通过；隔离端口 `43211`/`43212`（`PI_AUTH_PROVIDER=aliyun-token-plan`）健康 200、未带 Token `/api/secrets` 401、首页 200 | 自动化 verified |
+| 用户真实验收（D4） | 假 Key 全流程 + 浏览器/磁盘/日志/Git 四处无明文核对；用户 2026-09-30 表示"这个项目的功能我测完了，没有问题了"（§7 逐项清单未走查，自动化侧已覆盖浏览器与响应体无明文） | user_confirmed（含 provenance 说明） |
 
 实现提交：`fa92b08`（掩码工具与启动加载，测试先行）、`b314fe9`（路由掩码契约）、`5c4110f`（启动装配）、`61e8b55`（前端掩码编辑流与边界文案）。
 
@@ -155,7 +155,7 @@ updated: 2026-09-23
 
 ### 唯一下一步
 
-用户按设计稿 §7 完成假 Key 全流程验收（真实验收是收口闸门）；通过后 S06 标 done，fast-forward 合并入 `main` 并删除工作分支，随后进入 v0.1 版本收尾（用户真实完成一条任务全流程）。
+用户已于 2026-09-30 表示项目功能测试完成、无问题，S06 的真实验收按 `user_confirmed` 记账（**provenance 说明**：这是用户的一句话确认，设计稿 §7 的"假 Key 全流程 + 浏览器/磁盘/日志/Git 四处无明文"逐项清单未被逐条走查；自动化侧的无明文断言已覆盖浏览器与响应体）。剩余动作是**收口仪式**：已于 2026-09-30 完成——工作分支 fast-forward 合并入 `main`，分支用 `git branch -d`（git 自行验证已合并后才删）移除，分支尖 `7df3249` 即当前 main，无提交丢失。下一步转入 v0.1 版本收尾。
 
 ### S05 · 恢复与总览闭环（done，S05-A/S05-B 于 2026-08-28 用户页面验收通过）
 
@@ -490,7 +490,9 @@ S01、S02 均已合并入 `main`（基线 `be2b595`）；其需求—证据映�
 
 ## 唯一下一步
 
-v0.1 版本收尾：在合并后的 `main` 基线上，用户用活动项目真实完成一条任务的全流程（启动、观察、证据核对、黑匣子与恢复），随后收口版本。
+1. **v0.1 版本收尾**：在已合并的 `main`（`7df3249`）上，用户用活动项目真实完成一条任务的全流程（启动、观察、证据核对、黑匣子与恢复），随后收口版本。这是版本验收标准里唯一还空着的实质项。
+2. **需要用户输入才能继续的安全收缩项**：per-agent 环境变量白名单。现在每个子进程都继承完整 `process.env`，叠加 S06/D2 的启动自动加载，等于任何子进程（含克隆仓库里的验收命令）都能看到全部本机 Key。建议做成成员面板里的"该成员需要哪些环境变量"勾选，用户自己在浏览器填，AI 不经手任何键名或值。
+3. **两件待用户表态的收尾杂项**：`origin/main` 落后 37 个提交，是否推送由用户决定（本项目推送从来是单独授权）；仓库里还留着 `codex/v0.1-s04-ai-handoff-blackbox` 与 `backup/pre-cleanup-778319b` 两个旧分支，与"同一时间只保留一个产品工作分支"的记录不符，是否清理由用户决定。
 
 ## 最近交接
 
@@ -584,6 +586,23 @@ v0.1 版本收尾：在合并后的 `main` 基线上，用户用活动项目真�
 - 若要改动 S01，只限于已发现缺陷并补回归测试。
 
 ## 会话记录
+
+### 2026-09-30 · 第三轮全局排查与修复（用户要求：全局检查分析、找 bug、给方向）
+
+- 用户决定：项目功能已测完、无问题；未提交的 `src/agent-caller.js` / `src/agent-catalog.js` 改动**保留**；授权"按 AI 最优建议执行，改完同步文档"。
+- **发现的事实源失真**：进入本会话时 `node --test` 实际是 **366 pass / 2 fail**，而 NOW 写 368/368、CODEMAP 一处 367/367 一处 322 项、S06 段写 308/308。根因不是代码坏了，是测试假设"qwen-code 本机未安装"，而本机装了 `qwen` → `POST /api/install {action:"update"}` 走过闸门返回 200，**`npm test` 真的执行了一次 `npm install -g @qwen-code/qwen-code@latest`**（测试文件注释写着"绝不真装"）。
+- 第①轮修复（本轮，7 组）：
+  1. **凭据脱敏加宽**（HIGH）：原实现只认 `sk-`/`rk-` 前缀，实测 11 个真实形态里 **7 个穿透**——GitHub PAT、AWS Access Key（含 `AWS_ACCESS_KEY_ID=` 这类键名）、Slack、Google、GitLab、Stripe `sk_live_`、以及 `https://user:pass@host` 内嵌凭据。这些值会进黑匣子与**目标项目的 `docs/ai-ops/records/`**（可能被用户 push 出去）。新增供应商前缀表 + URL userinfo 规则；键名表改为 safe-redactor 单一来源导出，`ai-handoff` 的 `SENSITIVE_KEY` 复用它（此前是两份独立定义，已漂移）。以 15 例"必须遮蔽"+ 8 例"不得过度脱敏"的 fixture 锁住。
+  2. **测试不再能改本机**：`installRoutes(app, { spawnImpl, isInstalledImpl })` 依赖注入，闸门测试改为声明式安装视图（不再赌本机装了什么）+ 断言"拒绝路径一次子进程都没起"；新增"被接受的安装其命令只能来自目录常量、客户端提交的 command 字段进不了 argv"。`/api/install/updates` 与 `canUninstall` 的"某软件必然已装/未装"断言改为契约断言。
+  3. **恢复资格扫描的性能与爆炸半径**（MED）：`getStatus()` 原先每次调用都重读并逐行 `JSON.parse` 活动项目的**全部**黑匣子任务，而总览页可见时每 5 秒轮询一次 → O(任务×事件) 的周期性开销随历史单调变贵。改为按任务文件 `(mtime,size)` 签名增量缓存（`blackboxStore.describeTasks`）；同层循环此前会把任何非"不合格"错误一路上抛 → 一个读不动的任务文件就让 `/api/overview` 500、整页"暂时不可用"（2026-09-23 在 store 层做的隔离在本层又被聚合回了整页失败），现在单文件故障只跳过该条。
+  4. **恢复指纹补强**（MED）：指纹只含 `changedCount`（改动文件**数量**），所以"删一个加一个"或同批文件再被改一次都能通过，与文档"确认时重新校验项目/任务指纹"的强度不符。并入改动路径摘要（`path:status` 排序后 sha256）。另：预览句柄改为**先落审计事件再登记**，避免"可消费但黑匣子查无此人"的句柄。
+  5. **AI 交接的两处写入缺陷**（MED）：`atomicWrite` 在 `rename` 失败时不清理 `*.tmp-*`，残留文件会被本产品自己的 Git 快照当未跟踪改动计进 `changedPaths`，**污染它要交付的文件变化证据**；历史记录"不可覆盖"此前只靠 `exists()` 预检 + `rename`（可覆盖），改为 `link()` 原子创建。
+  6. **secrets 跨行值损坏**（MED）：值里的内部换行会写出跨物理行的 `export KEY='…`，`EXPORT_RE` 只认首行 → 该键在面板里隐身、启动不加载，删除它还会留下悬空引号让 `source ~/.secrets.env` 报错。路由改为拒绝**内部**换行、容忍首尾换行（粘贴常见）。
+  7. **agent-caller 三处**：全仓无任何 ANSI 剥离逻辑却被显式注入 `COLORTERM=truecolor`（部分 CLI 只看环境变量就上色）→ 在输出流入口统一剥离，把风险从"依赖上游不发色"变成"到了这里一定干净"；stderr 噪声过滤从两个结算分支里的硬编码 `startsWith` 收敛为一处、可用 `cli.stderrIgnore` 覆盖（字符串=前缀，RegExp 亦可）；`targets` 全部无效时从"静默向所有 agent 广播"（最多 8 个账号被消耗）改为返回错误。
+- **本轮明确未做**（需要用户输入或属产品级决定，见"唯一下一步"）：per-agent 环境变量白名单——所有 spawn 点（群聊 CLI / Pi / 验收命令 / 终端 / 安装）都继承完整 `process.env`，叠加 S06/D2 的启动加载等于"任何子进程都能看到全部厂商 Key"；已在 PRODUCT 9.2 与 CODEMAP 缺口里写明，但不单方面改，否则会打断正在可用的成员。CI/lint 接入仍未做。
+- 证据：全量 `node --test` **384/384**（净新增 16 项回归）；`git ls-files '*.js' | xargs -n1 node --check` 通过；`git diff --check` 通过；`validate-project-state.mjs . --strict` PASS（20 changed paths）；隔离端口 `43212`（`PI_AUTH_PROVIDER=aliyun-token-plan`）健康 200、未带 Token `/api/secrets` 401、伪造 Host 403、首页 200、启动日志仍只报"加载 8 个环境变量"数量。验证实例已单独关闭，用户 3210 上的服务未受影响。**未发起任何真实 CLI 调用或计费请求**。
+- 覆盖度声明：本轮为直读审计（4 个并行子代理因额度中断）。已逐行覆盖 `agent-caller`、`config`、`auth`、`secrets-env`、`secrets` 路由、`install` 路由、`server` 装配顺序、`safe-redactor`、`validation-runner`、`ai-handoff`、`task-recovery`、`blackbox-store` 关键路径；`task-evidence`、`credential-store`、`project-boundary`、`overview`/`evidence` 路由与前端 `execution.js`/`project.js`/`index.js`/chat.js 其余部分只做了模式扫描（定时器、监听器、innerHTML 三类）。
+
 
 - 追加同源问题：用户随即指出右上角成员卡片仍无法选择启用/停用——根因是重构渲染时卡片被无条件渲染为 `active` 高亮态，点击切换在底层生效但视觉完全不变。修复：`renderAgentToggles` 按 `selectedAgents` 渲染（启用=彩色高亮+序号徽标，停用=灰暗 0.45 透明度+置灰滤镜，title 分别提示）；CSS 增加 `:not(.active)` 停用态。实机验证：点击往复 class/opacity/selected 三者联动正确；停用成员不进入普通消息 targets（由 `selectedAgents.has` 过滤）。
 
