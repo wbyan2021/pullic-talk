@@ -5,7 +5,8 @@
 //
 // 约束:
 // - 唯一接触 Pi 子进程的地方；无 shell、参数数组、cwd = 活动项目 repoRoot；
-// - 不传 --api-key、不读取或传递任何凭据（D1）；
+// - 不传 --api-key；子进程环境剥除网页 Keyring 的键（D1，2026-09-30 起强制执行），
+//   Pi 用自身认证体系，启动命令显式导出的变量不受影响；
 // - auth 检查 `pi auth check --provider <P> --json`，P = authProvider 选项
 //   > env PI_AUTH_PROVIDER > env PI_PROVIDER > "google"（D7，0.84.1 要求带 provider）；
 // - 边界来自 ProjectBoundary v2 的活动（ACTIVE）项目（D8）；
@@ -16,6 +17,7 @@ import { spawn } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 
 import { activeProcs } from "../utils/process-registry.js";
+import { scrubManagedSecrets } from "../utils/secrets-env.js";
 
 const TASK_MAX_LENGTH = 4000;
 const STDERR_CAP = 64 * 1024;
@@ -87,6 +89,7 @@ export function createPiExecutor({
       try {
         proc = spawnImpl(piBinary, ["auth", "check", "--provider", provider, "--json"], {
           shell: false,
+          env: scrubManagedSecrets(process.env).env,
           stdio: ["ignore", "pipe", "ignore"],
         });
       } catch {
@@ -200,7 +203,9 @@ export function createPiExecutor({
     try {
       proc = spawnImpl(piBinary, ["-p", task, "--no-session", "--mode", "json"], {
         cwd: active.repoRoot,
-        env: process.env,
+        // D1 要求"不传递任何凭据"：Pi 有自己的认证体系，网页 Keyring 不该跟着
+        // 走进活动项目（那可能是克隆来的仓库）。用户在启动命令里显式导出的变量保留。
+        env: scrubManagedSecrets(process.env).env,
         shell: false,
         stdio: ["ignore", "pipe", "pipe"],
       });

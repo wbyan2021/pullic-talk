@@ -1,4 +1,4 @@
-import { getMaskedSnapshot, writeSecretsFile, SECRETS_ENV_PATH, KEY_RE, MASKED_VALUE } from "../utils/secrets-env.js";
+import { getMaskedSnapshot, writeSecretsFile, registerManagedSecretNames, SECRETS_ENV_PATH, KEY_RE, MASKED_VALUE } from "../utils/secrets-env.js";
 
 // 网页端管理 ~/.secrets.env（S06/D1：浏览器永不接收明文值）：
 // GET /api/secrets   -> 掩码快照：键名可见，值一律 ••••••••
@@ -59,6 +59,9 @@ export default function secretsRoutes(app) {
       if (v === "") delete process.env[k];
       else process.env[k] = v;
     }
+    // 这些键从此属于"网页 Keyring"：进入他人代码的子进程（项目内的 Pi 任务、
+    // 验收命令）会把它们剥掉，网页面板存的整机凭据不该跟着走进克隆来的仓库
+    registerManagedSecretNames(Object.keys(clean));
 
     res.json({ ok: true, path: SECRETS_ENV_PATH, vars: getMaskedSnapshot() });
   });

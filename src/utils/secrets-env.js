@@ -94,6 +94,35 @@ export function getMaskedSnapshot() {
   return masked;
 }
 
+// 由"本机 Keyring"供给的键名集合（启动加载进来的 + 网页面板写入过的）。
+// 这些名字本身不是秘密，值才是要紧的东西，所以这里只记名字，从不记录值。
+const managedSecretNames = new Set();
+
+export function getManagedSecretNames() {
+  return [...managedSecretNames];
+}
+
+export function registerManagedSecretNames(names) {
+  for (const name of names || []) {
+    if (typeof name === "string" && name) managedSecretNames.add(name);
+  }
+}
+
+// 交给"会进入他人代码"的子进程（活动项目里的 Pi 任务、验收命令）的环境副本。
+// 只剥掉 Keyring 供给的那批键：用户在启动命令里显式导出的变量一律保留，
+// 所以这不是"限制用户"，只是不让网页面板存的整机 Keyring 跟着走进克隆来的仓库。
+export function scrubManagedSecrets(env = process.env) {
+  const copy = { ...env };
+  let removed = 0;
+  for (const name of managedSecretNames) {
+    if (Object.prototype.hasOwnProperty.call(copy, name)) {
+      delete copy[name];
+      removed++;
+    }
+  }
+  return { env: copy, removed };
+}
+
 // S06/D2：服务启动时加载 secrets 文件到 process.env。
 // 只填充缺失键；启动命令已显式设置的同名变量不覆盖；空值与 ${VAR:-…} 回退写法跳过。
 // 返回 { loaded, skipped }，日志只报数量不报值。
@@ -115,6 +144,7 @@ export function loadSecretsIntoProcess(path = SECRETS_ENV_PATH, env = process.en
       continue;
     }
     env[p.key] = value;
+    managedSecretNames.add(p.key);
     loaded++;
   }
   log(`✓ 已从 ${path} 加载 ${loaded} 个环境变量（跳过 ${skipped} 个已设置或空值条目）`);

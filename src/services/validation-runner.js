@@ -6,6 +6,7 @@ import { realpath } from "node:fs/promises";
 import path from "node:path";
 
 import { REDACTION_MARKER, redactText } from "./safe-redactor.js";
+import { scrubManagedSecrets } from "../utils/secrets-env.js";
 
 const MAX_EXECUTABLE_LENGTH = 256;
 const MAX_ARGS = 64;
@@ -183,7 +184,8 @@ export function createValidationRunner({
         task.proc = spawnImpl(input.executable, [...input.args], {
           cwd,
           shell: false,
-          env: process.env,
+          // 验收命令在活动项目（可能是克隆来的仓库）里执行：不得带走网页 Keyring 的凭据
+          env: scrubManagedSecrets(process.env).env,
           stdio: ["ignore", "pipe", "pipe"],
         });
       } catch {
